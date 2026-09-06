@@ -532,6 +532,49 @@ def revocation_holds_in_every_order():
     return fails["naive"] == len(orders) and fails["within"] > 0 and fails["invariant"] == 0
 
 
+def unauthorised_revocation_is_refused():
+    """
+    Who may insert into the accumulator, tested rather than assumed.
+
+    An insertion covering a live delegation's range is indistinguishable from a
+    legitimate revocation once it is in the accumulator, and its effect is
+    total: every later payment under that delegation fails C8, and there is no
+    un-revocation in the scheme. So the accumulator's contents mean what the
+    model says only if the caller owns what it inserts.
+
+    Revoke therefore admits a call only where every range lies within a
+    delegation the caller issued, transitively. This runs three calls: the
+    principal revoking its own delegation, the principal revoking a descendant
+    of it, and an unrelated party revoking a live delegation's range. The first
+    two must be admitted and the third refused, and the victim must still be
+    able to pay afterwards.
+    """
+    issued = {"principal": (0, 100), "agent": (10, 20), "stranger": (200, 300)}
+    live = (30, 40)
+
+    def owns(caller, r):
+        o = issued[caller]
+        return o[0] <= r[0] and r[1] <= o[1]
+
+    acc = []
+
+    def revoke(caller, r):
+        if not owns(caller, r):
+            return False                       # the contract refuses
+        for piece in _complement(r, acc):
+            if not _overlaps(piece, acc):
+                acc.append(piece)
+        return True
+
+    if not revoke("agent", (10, 20)):
+        return False                           # owner revoking its own range
+    if not revoke("principal", (12, 15)):
+        return False                           # ancestor revoking a descendant
+    if revoke("stranger", (0, 100)):
+        return False                           # must be refused
+    return c8_accepts(acc, *live)              # the victim can still pay
+
+
 def nested_ranges_defeat_c8():
     """
     Why (I6) is load-bearing, exhibited rather than asserted.
@@ -580,6 +623,9 @@ def run_checks():
 
     check("a repeated index is refused when the domain enforces (I5)",
           repeated_index_refused())
+    check("a party cannot revoke a range it does not own",
+          unauthorised_revocation_is_refused(),
+          "Revoke admits only ranges within a delegation the caller issued")
     check("revocation holds in every order only under the disjointness invariant",
           revocation_holds_in_every_order(),
           "a rule correct for descendant-first can still fail ancestor-first")
