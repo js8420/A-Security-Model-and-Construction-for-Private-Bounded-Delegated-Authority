@@ -5,6 +5,7 @@ extractor. Produces the positive and negative test vectors the circuit is
 checked against.
 """
 
+from itertools import permutations
 import hashlib
 import json
 import sys
@@ -454,6 +455,83 @@ def c8_accepts(acc, lo, hi):
     return False
 
 
+def _overlaps(r, acc):
+    return any(not (r[1] < s or e < r[0]) for s, e in acc)
+
+
+def _complement(r, against):
+    """r minus the union of `against`, as disjoint pieces."""
+    pieces = [r]
+    for s, e in sorted(against):
+        nxt = []
+        for a, b in pieces:
+            if e < a or s > b:
+                nxt.append((a, b))
+                continue
+            if a < s:
+                nxt.append((a, s - 1))
+            if b > e:
+                nxt.append((e + 1, b))
+        pieces = nxt
+    return pieces
+
+
+def revocation_holds_in_every_order():
+    """
+    (I6) tested against every order revocations can arrive in, not one.
+
+    C8 exhibits a single revoked range, which is sound only while the
+    accumulator's entries are disjoint. Whether they stay disjoint depends on
+    the rule for inserting them AND on the order revocations happen in, and a
+    rule can be correct for one order and wrong for another. So this enumerates
+    all of them over a three-deep chain and checks, after each revocation, that
+    no delegation already revoked can still produce a passing run.
+
+    Three rules are compared:
+
+      naive      publish the range as it stands
+      within     publish it minus the ranges already revoked INSIDE it
+      invariant  the accumulator admits an insertion only where it overlaps
+                 nothing, so a revoker publishes the range minus everything
+                 already revoked, in either direction of containment
+
+    Only the third survives every order, and that is the one the construction
+    requires. The second is the trap: it is correct whenever a descendant is
+    revoked before its ancestor, which is the order one naturally tests.
+    """
+    chain = {"parent": (0, 100), "child": (10, 20), "grandchild": (12, 15)}
+    runs = {"parent": (30, 40), "child": (16, 18), "grandchild": (13, 14)}
+
+    def contained(inner, outer):
+        return outer[0] <= inner[0] and inner[1] <= outer[1]
+
+    def trial(order, rule):
+        acc, revoked = [], set()
+        for who in order:
+            r = chain[who]
+            if rule == "naive":
+                pieces = [r]
+            elif rule == "within":
+                pieces = _complement(
+                    r, [chain[o] for o in revoked if contained(chain[o], r)])
+            else:
+                pieces = _complement(r, acc)
+            for piece in pieces:
+                if rule == "invariant" and _overlaps(piece, acc):
+                    continue                      # the accumulator refuses it
+                acc.append(piece)
+            revoked.add(who)
+            for v in revoked:
+                if c8_accepts(acc, *runs[v]):
+                    return False
+        return True
+
+    orders = list(permutations(chain))
+    fails = {rule: sum(1 for o in orders if not trial(o, rule))
+             for rule in ("naive", "within", "invariant")}
+    return fails["naive"] == len(orders) and fails["within"] > 0 and fails["invariant"] == 0
+
+
 def nested_ranges_defeat_c8():
     """
     Why (I6) is load-bearing, exhibited rather than asserted.
@@ -502,6 +580,9 @@ def run_checks():
 
     check("a repeated index is refused when the domain enforces (I5)",
           repeated_index_refused())
+    check("revocation holds in every order only under the disjointness invariant",
+          revocation_holds_in_every_order(),
+          "a rule correct for descendant-first can still fail ancestor-first")
     check("nested revoked ranges defeat C8; disjoint ones do not",
           nested_ranges_defeat_c8(),
           "(I6) is what makes the single-exhibit argument sound")
