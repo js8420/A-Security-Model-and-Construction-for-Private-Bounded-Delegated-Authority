@@ -543,12 +543,16 @@ def unauthorised_revocation_is_refused():
     model says only if the caller owns what it inserts.
 
     Revoke therefore admits a call only where every range lies within a
-    delegation the caller issued, transitively. This runs three calls: the
-    principal revoking its own delegation, the principal revoking a descendant
-    of it, and an unrelated party revoking a live delegation's range. The first
-    two must be admitted and the third refused, and the victim must still be
-    able to pay afterwards.
+    delegation the caller issued, transitively. The reserve can evaluate that
+    because Open records the padded range, which is why it does: a record
+    holding only the commitment holds a commitment to the quantity the check
+    needs rather than the quantity. This runs three calls: the issuer revoking
+    its own delegation, an ancestor revoking a descendant of it, and an
+    unrelated party revoking a live delegation's range. The first two must be
+    admitted and the third refused, and the victim must still be able to pay
+    afterwards.
     """
+    # The reserve's record, as Open fixes it: each delegation's padded range.
     issued = {"principal": (0, 100), "agent": (10, 20), "stranger": (200, 300)}
     live = (30, 40)
 
