@@ -395,16 +395,17 @@ fn build_nonmembership<const R: usize, const DEPTH: usize>(
 /// parent's. The two Merkle paths carry the child's allowlist roots up to the
 /// parent's.
 /// The two policies the containment proof opens, laid out in absorption order.
-/// The parent holds [0, 49152) and keeps 32768 units for itself, so grants are
-/// cut from [32768, 49152). The child is granted [36864, 45056), commits 4096
-/// units of that and keeps 2048. At a unit of 4 the two budgets are 196608 and
-/// 16384, and the two self-regions 131072 and 8192.
+/// The child was granted 8192 indices, commits 4096 of them, keeps 1024 for
+/// itself and publishes a block of 1024 at offset 2048 for its own grants. At a
+/// unit of 4 that is a budget of 16384 and a self-region of 4096. The parent's
+/// own boundaries appear nowhere: a grant is checked against the parent's
+/// published block by the reserve, in public.
 const CT_UNIT: u64 = 4;
 const CT_PARENT: [u64; 7] = [196608, 200, 1000, 9000, 5, 100, 131072];
-const CT_CHILD: [u64; 7] = [16384, 50, 1500, 8000, 2, 100, 8192];
+const CT_CHILD: [u64; 7] = [16384, 50, 1500, 8000, 2, 100, 4096];
 const CT_BLIND: [u64; 2] = [4242, 4243];
-const CT_COUNTS: [u64; 4] = [49152, 32768, 4096, 2048];
-const CT_RANGES: [u64; 3] = [0, 36864, 45056];
+const CT_COUNTS: [u64; 2] = [4096, 1024];
+const CT_BLOCK: [u64; 3] = [8192, 2048, 1024];
 
 fn containment_policies<const R: usize, const DEPTH: usize>(
     path: &RowMajorMatrix<F>,
@@ -438,8 +439,8 @@ pub fn containment_public_values<const R: usize, const DEPTH: usize>() -> Vec<F>
         let out = perm_output::<R>(perms.last().expect("sponge produced no permutation"));
         pv.extend_from_slice(&out[..DIGEST]);
     }
-    for r in CT_RANGES {
-        pv.push(F::from_u64(r));
+    for b in CT_BLOCK {
+        pv.push(F::from_u64(b));
     }
     pv
 }
@@ -451,9 +452,9 @@ pub fn containment_trace<const R: usize, const DEPTH: usize>(rows: usize) -> Row
     let (parent, child) = containment_policies::<R, DEPTH>(&path);
 
     let policy_cols = parent.len();
-    let value_cols = 2 * policy_cols + 8;
+    let value_cols = 2 * policy_cols + 6;
     let perms_n = policy_cols.div_ceil(4);
-    let gaps_n = 8;
+    let gaps_n = 7;
     let width = value_cols + 2 * pw + 2 * perms_n * bw + gaps_n * RANGE_BITS;
 
     let gaps = [
@@ -461,10 +462,9 @@ pub fn containment_trace<const R: usize, const DEPTH: usize>(rows: usize) -> Row
         CT_PARENT[3] - CT_CHILD[3],
         CT_PARENT[1] - CT_CHILD[1],
         CT_PARENT[4] - CT_CHILD[4],
-        CT_RANGES[1] - (CT_RANGES[0] + CT_COUNTS[1]),
-        (CT_RANGES[0] + CT_COUNTS[0]) - CT_RANGES[2],
-        (CT_RANGES[2] - CT_RANGES[1]) - CT_COUNTS[2],
-        CT_COUNTS[2] - CT_COUNTS[3],
+        CT_BLOCK[0] - CT_COUNTS[0],
+        CT_BLOCK[1] - CT_COUNTS[1],
+        CT_COUNTS[0] - CT_BLOCK[1] - CT_BLOCK[2],
     ];
 
     let sponges: Vec<Vec<Vec<F>>> = [&parent, &child]
@@ -486,8 +486,8 @@ pub fn containment_trace<const R: usize, const DEPTH: usize>(rows: usize) -> Row
         for (i, c) in CT_COUNTS.iter().enumerate() {
             row[b + 1 + i] = F::from_u64(*c);
         }
-        for (i, x) in CT_RANGES.iter().enumerate() {
-            row[b + 5 + i] = F::from_u64(*x);
+        for (i, x) in CT_BLOCK.iter().enumerate() {
+            row[b + 3 + i] = F::from_u64(*x);
         }
 
         let p = &path.values[r * pw..(r + 1) * pw];

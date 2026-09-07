@@ -21,6 +21,9 @@ Four candidates are enumerated over every small chain shape.
   disjoint    spendable, and sibling grants may not overlap
   partition   disjoint, and each delegation commits g <= m: it may spend
               [0, g) itself and may grant only from [g, m)
+  block       partition, but the grantable part is a single published block
+              [p, p + 2^j) with g <= p and p + 2^j <= m. The block is public,
+              so the reserve checks a grant against it without reading g or m.
 
 Every quantity here is combinatorial. One run is the measurement.
 
@@ -38,18 +41,20 @@ def padded(m):
 
 
 class Node:
-    __slots__ = ("lo", "hi", "m", "g", "children")
+    __slots__ = ("lo", "hi", "m", "g", "p", "blk", "children")
 
-    def __init__(self, lo, hi, m, g):
+    def __init__(self, lo, hi, m, g, p=0, blk=0):
         self.lo = lo          # first index of the granted range
         self.hi = hi          # one past the last index of the granted range
         self.m = m            # committed spendable count
         self.g = g            # self-region size under the partition rule
+        self.p = p            # offset of the published grant block
+        self.blk = blk        # length of the published grant block
         self.children = []
 
     def own_region(self, rule):
         """The indices this delegation's own circuit will let it consume."""
-        n = self.g if rule == "partition" else self.m
+        n = self.g if rule in ("partition", "block") else self.m
         return set(range(self.lo, self.lo + n))
 
     def grant_region(self, rule):
@@ -58,6 +63,8 @@ class Node:
             return set(range(self.lo, self.lo + padded(self.m)))
         if rule == "partition":
             return set(range(self.lo + self.g, self.lo + self.m))
+        if rule == "block":
+            return set(range(self.lo + self.p, self.lo + self.p + self.blk))
         return set(range(self.lo, self.lo + self.m))
 
 
@@ -78,8 +85,23 @@ def audit(root, rule):
     return total
 
 
-def child_specs(node, rule, taken, partition):
-    """Every grant the rule would admit from this node, as (lo, hi, m, g)."""
+def blocks(w):
+    """Published grant blocks a delegation of w units could declare, as
+    (g, p, blk): self-region g, block at p of power-of-two length blk, with
+    g <= p and p + blk <= w. The empty block is (g, w, 0)."""
+    out = []
+    for g in range(0, w + 1):
+        out.append((g, w, 0))
+        j = 1
+        while j <= w:
+            for p in range(g, w - j + 1):
+                out.append((g, p, j))
+            j *= 2
+    return out
+
+
+def child_specs(node, rule, taken):
+    """Every grant the rule would admit from this node, as (lo, hi, m, g, p, blk)."""
     region = sorted(node.grant_region(rule))
     if not region:
         return []
@@ -93,9 +115,14 @@ def child_specs(node, rule, taken, partition):
             if rule in ("disjoint", "partition") and rng & taken:
                 continue
             w = hi - lo
-            gs = range(0, w + 1) if partition else [w]
-            for g in gs:
-                out.append((lo, hi, w, g))
+            if rule == "block":
+                for (g, p, blk) in blocks(w):
+                    out.append((lo, hi, w, g, p, blk))
+            elif rule == "partition":
+                for g in range(0, w + 1):
+                    out.append((lo, hi, w, g, 0, 0))
+            else:
+                out.append((lo, hi, w, w, 0, 0))
     return out
 
 
@@ -105,19 +132,18 @@ def trees(node, rule, taken, depth, max_depth, max_children):
     yield None
     if depth >= max_depth:
         return
-    partition = rule == "partition"
-    specs = child_specs(node, rule, taken, partition)
+    specs = child_specs(node, rule, taken)
     for n_kids in range(1, max_children + 1):
         for combo in itertools.combinations(specs, n_kids):
             local = set(taken)
             kids, ok = [], True
-            for (lo, hi, m, g) in combo:
+            for (lo, hi, m, g, p, blk) in combo:
                 rng = set(range(lo, hi))
-                if rule in ("disjoint", "partition") and rng & local:
+                if rule in ("disjoint", "partition", "block") and rng & local:
                     ok = False
                     break
                 local |= rng
-                kids.append(Node(lo, hi, m, g))
+                kids.append(Node(lo, hi, m, g, p, blk))
             if not ok:
                 continue
             node.children = kids
@@ -140,31 +166,37 @@ def expand(kids, rule, taken, depth, max_depth, max_children):
 
 def shapes(m_root, rule, max_children, max_depth):
     out = []
-    root_gs = range(0, m_root + 1) if rule == "partition" else [m_root]
-    for g in root_gs:
-        root = Node(0, padded(m_root), m_root, g)
+    if rule == "block":
+        root_specs = blocks(m_root)
+    elif rule == "partition":
+        root_specs = [(g, 0, 0) for g in range(0, m_root + 1)]
+    else:
+        root_specs = [(m_root, 0, 0)]
+    for (g, p, blk) in root_specs:
+        root = Node(0, padded(m_root), m_root, g, p, blk)
         for _ in trees(root, rule, set(), 0, max_depth, max_children):
             out.append(clone(root))
     return out
 
 
 def clone(node):
-    c = Node(node.lo, node.hi, node.m, node.g)
+    c = Node(node.lo, node.hi, node.m, node.g, node.p, node.blk)
     c.children = [clone(k) for k in node.children]
     return c
 
 
 def describe(node, indent=0):
     pad = "  " * indent
-    s = "%srange [%d,%d)  m=%d  g=%d\n" % (pad, node.lo, node.hi, node.m, node.g)
+    s = "%srange [%d,%d)  m=%d  g=%d  block [%d,%d)\n" % (
+        pad, node.lo, node.hi, node.m, node.g, node.p, node.p + node.blk)
     for k in node.children:
         s += describe(k, indent + 1)
     return s
 
 
 def main():
-    rules = ["padded", "spendable", "disjoint", "partition"]
-    max_m = 6
+    rules = ["padded", "spendable", "disjoint", "partition", "block"]
+    max_m = 5
     max_children = 2
     max_depth = 2
 

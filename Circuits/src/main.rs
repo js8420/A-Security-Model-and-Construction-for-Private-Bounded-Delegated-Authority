@@ -282,7 +282,7 @@ fn main() {
 
     println!();
     println!();
-    println!("SUB-DELEGATION CONTAINMENT: TWO POLICY OPENINGS, TWO ALLOWLIST INCLUSIONS, EIGHT COMPARISONS");
+    println!("SUB-DELEGATION CONTAINMENT: TWO POLICY OPENINGS, TWO ALLOWLIST INCLUSIONS, SEVEN COMPARISONS");
     println!("{}", "=".repeat(78));
     println!("  {:<30} {:>10} {:>14} {:>7}", "allowlist depth", "width", "constraints", "degree");
     println!("  {:<30} {:>10} {:>14} {:>7}", "-".repeat(30), "-".repeat(10), "-".repeat(14), "-".repeat(7));
@@ -401,12 +401,11 @@ fn main() {
     check("  ... parent blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(15)), false);
     check("  ... child blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(31)), false);
     check("  ... child allowlist root not the node proved", prover::roundtrip_containment::<1, 8>(64, Some(23)), false);
-    check("  ... parent holding enlarged", prover::roundtrip_containment::<1, 8>(64, Some(33)), false);
-    check("  ... parent self-region enlarged past the grant boundary", prover::roundtrip_containment::<1, 8>(64, Some(34)), false);
-    check("  ... child commits more units than it was granted", prover::roundtrip_containment::<1, 8>(64, Some(35)), false);
-    check("  ... child self-region exceeds its unit count", prover::roundtrip_containment::<1, 8>(64, Some(36)), false);
-    check("  ... granted range moved below the grant boundary", prover::roundtrip_containment::<1, 8>(64, Some(38)), false);
-    check("  ... granted range extended past the parent's units", prover::roundtrip_containment::<1, 8>(64, Some(39)), false);
+    check("  ... child commits more units than it was granted", prover::roundtrip_containment::<1, 8>(64, Some(33)), false);
+    check("  ... child self-region overlaps its published block", prover::roundtrip_containment::<1, 8>(64, Some(34)), false);
+    check("  ... granted length overstated", prover::roundtrip_containment::<1, 8>(64, Some(35)), false);
+    check("  ... published block moved below the self-region", prover::roundtrip_containment::<1, 8>(64, Some(36)), false);
+    check("  ... published block extended past the units held", prover::roundtrip_containment::<1, 8>(64, Some(37)), false);
     let pl = spend_trace::PAYLOAD;
     check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<1, 16, 14>(64, None, pl), true);
     for (label, b) in [

@@ -25,9 +25,10 @@ type F = Goldilocks;
 /// ranges does not prevent one, and neither does forbidding siblings to
 /// overlap, since the parent goes on spending its whole range after granting.
 ///
-/// So each delegation commits g <= m and spends only [base, base + g). Grants
-/// are cut from [base + g, base + m), and the reserve refuses a registration
-/// whose range overlaps one already recorded. Every delegation's spendable set
+/// So each delegation commits g <= m, spends only [base, base + g), and
+/// publishes a block [base + p, base + p + 2^j) with g <= p and p + 2^j <= m
+/// from which its grants are cut. The reserve refuses a registration whose
+/// range leaves the issuer's published block or overlaps one already recorded. Every delegation's spendable set
 /// is then disjoint from every other's, the chain's total is bounded by the
 /// root's m, and an overspend has to be one delegation colliding with itself,
 /// which is the case the tag scheme detects.
@@ -36,6 +37,17 @@ type F = Goldilocks;
 /// absorbed by its own sponge and the two outputs are public, so the values
 /// compared below are the values the two records commit to. Without that the
 /// comparisons relate columns the prover chooses.
+///
+/// What is NOT here is any comparison against the parent's own boundaries. A
+/// grant is checked against the parent's published grant block, which is public,
+/// so the reserve decides it synchronously without reading a committed value --
+/// a reserve refusing at a boundary derived from a hidden budget would be a
+/// refusal at a hidden threshold, and the paper's own criterion says such a
+/// threshold is recoverable by probing. What this circuit establishes instead is
+/// that the CHILD's own block is well formed against the child's committed
+/// policy: it begins at or after the child's self-region and ends within what
+/// the child holds. Applied at every registration, that is what makes the
+/// published blocks down a chain describe disjoint spendable regions.
 ///
 /// Allowlist containment is one Merkle inclusion of the child's root under the
 /// parent's, with the path's root bound to the parent's committed root and its
@@ -73,22 +85,20 @@ const PARENT: usize = 0;
 const CHILD: usize = POLICY_COLS;
 /// The canonical unit, which turns the two committed values into unit counts.
 const C_UNIT: usize = 2 * POLICY_COLS;
-const C_PM: usize = C_UNIT + 1;
-const C_PG: usize = C_PM + 1;
-const C_CM: usize = C_PG + 1;
+const C_CM: usize = C_UNIT + 1;
 const C_CG: usize = C_CM + 1;
-/// The ranges, which are public: the parent's base and the two ends of what it
-/// granted. These are what the reserve records and checks a revocation against.
-const C_PBASE: usize = C_CG + 1;
-const C_LO: usize = C_PBASE + 1;
-const C_HI: usize = C_LO + 1;
-const VALUE_COLS: usize = C_HI + 1;
+/// Public, from the child's record: the length of the range it was granted, and
+/// the offset and length of the block it publishes for its own sub-delegations.
+const C_LEN: usize = C_CG + 1;
+const C_P: usize = C_LEN + 1;
+const C_BLK: usize = C_P + 1;
+const VALUE_COLS: usize = C_BLK + 1;
 
-/// Windows, caps, counts, the grant boundary, the spendable prefix, and the
-/// child's two counts.
-pub const GAPS: usize = 8;
+/// Windows, caps, counts, the units the child may commit, and the two ends of
+/// the block it publishes.
+pub const GAPS: usize = 7;
 
-/// Both commitments, then the parent's base and the two ends of the grant.
+/// Both commitments, then the granted length and the child's published block.
 pub const PUBLIC_VALUES: usize = 2 * DIGEST + 3;
 
 impl<const R: usize, const DEPTH: usize> ContainmentAir<R, DEPTH> {
@@ -199,12 +209,7 @@ where
         // by the unit, which is the binding the composed circuit makes for one
         // delegation and this one makes for both.
         let u = row[C_UNIT].clone();
-        for (count, value) in [
-            (C_PM, PARENT + P_B),
-            (C_PG, PARENT + P_G),
-            (C_CM, CHILD + P_B),
-            (C_CG, CHILD + P_G),
-        ] {
+        for (count, value) in [(C_CM, CHILD + P_B), (C_CG, CHILD + P_G)] {
             builder.assert_eq(
                 u.clone().into() * row[count].clone().into(),
                 row[value].clone().into(),
@@ -214,8 +219,9 @@ where
         // Equal windows, so N' <= N compares rates rather than counts.
         builder.assert_eq(row[PARENT + P_W].clone(), row[CHILD + P_W].clone());
 
-        // The ranges are the ones the record carries.
-        for (k, col) in [C_PBASE, C_LO, C_HI].into_iter().enumerate() {
+        // The granted length and the published block are the ones the record
+        // carries and the reserve checked.
+        for (k, col) in [C_LEN, C_P, C_BLK].into_iter().enumerate() {
             builder.assert_eq(row[col].clone().into(), pv[2 * DIGEST + k].clone());
         }
 
@@ -224,14 +230,12 @@ where
             row[PARENT + P_TEXP].clone().into() - row[CHILD + P_TEXP].clone().into(),
             row[PARENT + P_C].clone().into() - row[CHILD + P_C].clone().into(),
             row[PARENT + P_N].clone().into() - row[CHILD + P_N].clone().into(),
-            // The grant begins at or after the parent's own units end.
-            row[C_LO].clone().into() - row[C_PBASE].clone().into() - row[C_PG].clone().into(),
-            // And ends inside what the parent actually holds.
-            row[C_PBASE].clone().into() + row[C_PM].clone().into() - row[C_HI].clone().into(),
-            // The child cannot commit more units than it was granted,
-            row[C_HI].clone().into() - row[C_LO].clone().into() - row[C_CM].clone().into(),
-            // nor keep more for itself than it committed.
-            row[C_CM].clone().into() - row[C_CG].clone().into(),
+            // The child cannot commit more units than it was granted.
+            row[C_LEN].clone().into() - row[C_CM].clone().into(),
+            // Its published block begins at or after its own units end,
+            row[C_P].clone().into() - row[C_CG].clone().into(),
+            // and ends inside what it holds.
+            row[C_CM].clone().into() - row[C_P].clone().into() - row[C_BLK].clone().into(),
         ];
         for (g, gap) in gaps.into_iter().enumerate() {
             let start = g0 + g * RANGE_BITS;
