@@ -44,7 +44,6 @@ mod whole;
 mod prover;
 mod trace;
 mod gen;
-mod containment;
 mod spend;
 mod spend_trace;
 mod composed;
@@ -97,7 +96,6 @@ fn emit_verify_table() {
                 "policy composed with C9" => "Policy clauses with C9",
                 "merkle inclusion" => "Merkle inclusion",
                 "non-revocation" => "C8 non-revocation",
-                "containment" => "Sub-delegation containment",
                 "spend component" => "Spend",
                 "second-invocation nullifier" => "Spend, second invocation",
                 "COMPOSED CIRCUIT" => "Composed circuit",
@@ -282,14 +280,6 @@ fn main() {
 
     println!();
     println!();
-    println!("SUB-DELEGATION CONTAINMENT: TWO POLICY OPENINGS, TWO ALLOWLIST INCLUSIONS, SEVEN COMPARISONS");
-    println!("{}", "=".repeat(78));
-    println!("  {:<30} {:>10} {:>14} {:>7}", "allowlist depth", "width", "constraints", "degree");
-    println!("  {:<30} {:>10} {:>14} {:>7}", "-".repeat(30), "-".repeat(10), "-".repeat(14), "-".repeat(7));
-    for (label, (w, n, d)) in [("8", containment::measure::<1, 8>()), ("16", containment::measure::<1, 16>())] {
-        println!("  {:<30} {:>10} {:>14} {:>7}", label, w, n, d);
-    }
-
     println!();
     println!("SPEND COMPONENT: unit run, per-slot key derivation, shares and nullifiers");
     println!("THE WIDTH LAW IS 172 + 187c: NO TERM IN THE TREE DEPTH SURVIVES RESERVING");
@@ -395,17 +385,6 @@ fn main() {
     ] {
         check(label, prover::roundtrip_nonmembership::<1, 8>(64, Some(b)), false);
     }
-    check("containment, depth 8, 64 rows", prover::roundtrip_containment::<1, 8>(64, None), true);
-    check("  ... sub-delegation cap raised above parent", prover::roundtrip_containment::<1, 8>(64, Some(17)), false);
-    check("  ... velocity windows made unequal", prover::roundtrip_containment::<1, 8>(64, Some(21)), false);
-    check("  ... parent blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(15)), false);
-    check("  ... child blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(31)), false);
-    check("  ... child allowlist root not the node proved", prover::roundtrip_containment::<1, 8>(64, Some(23)), false);
-    check("  ... child commits more units than it was granted", prover::roundtrip_containment::<1, 8>(64, Some(33)), false);
-    check("  ... child self-region overlaps its published block", prover::roundtrip_containment::<1, 8>(64, Some(34)), false);
-    check("  ... granted length overstated", prover::roundtrip_containment::<1, 8>(64, Some(35)), false);
-    check("  ... published block moved below the self-region", prover::roundtrip_containment::<1, 8>(64, Some(36)), false);
-    check("  ... published block extended past the units held", prover::roundtrip_containment::<1, 8>(64, Some(37)), false);
     let pl = spend_trace::PAYLOAD;
     check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<1, 16, 14>(64, None, pl), true);
     for (label, b) in [

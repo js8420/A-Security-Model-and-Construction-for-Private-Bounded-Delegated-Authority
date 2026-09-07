@@ -17,14 +17,13 @@ use rand_core::{Infallible, SeedableRng, TryCryptoRng, TryRng};
 
 use crate::air::{PolicyAir, ALL_CLAUSES};
 use crate::hash::new_hash_air;
-use crate::containment::ContainmentAir;
 use crate::full::FullAir;
 use crate::composed::ComposedAir;
 use crate::vacuous::VacuousAir;
 use crate::whole::WholeAir;
 use crate::merkle::MerkleAir;
 use crate::revocation::NonMembershipAir;
-use crate::trace::{full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_composed_air, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, containment_public_values, containment_trace, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
+use crate::trace::{full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_composed_air, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
 type Val = Goldilocks;
@@ -303,17 +302,6 @@ pub fn roundtrip_nonmembership<const R: usize, const DEPTH: usize>(
 }
 
 
-pub fn roundtrip_containment<const R: usize, const DEPTH: usize>(rows: usize, bad: Option<usize>) -> bool {
-    let air = ContainmentAir::<R, DEPTH>::new();
-    let cfg = config();
-    let t = containment_trace::<R, DEPTH>(rows);
-    let t = match bad { None => t, Some(c) => corrupt(t, c) };
-    let pv = containment_public_values::<R, DEPTH>();
-    verify(&cfg, &air, &prove(&cfg, &air, t, &pv), &pv).is_ok()
-}
-
-/// Prove and verify the whole circuit at full parameters, and time it. This is
-/// the figure Section VII projects rather than measures.
 pub fn roundtrip_whole<const R: usize>(rows: usize, bad: Option<usize>) -> (bool, u128) {
     let air = WholeAir::<R, 16, 32>::new();
     let cfg = config();
