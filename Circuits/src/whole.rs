@@ -115,7 +115,7 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
     /// policy columns optionally omitted. `bind_policy = false` is not a
     /// configuration anyone should deploy; it exists so the evaluation can
     /// measure what a circuit missing that one binding proves, which is the
-    /// claim \cref{sec:conclusion} rests on and which no cost table can show.
+    /// claim about vacuous constraints rests on and which no cost table can show.
     pub(crate) fn constrain_with<AB>(&self, builder: &mut AB, base: usize, bind_policy: bool)
     where
         AB: AirBuilder<F = F>,

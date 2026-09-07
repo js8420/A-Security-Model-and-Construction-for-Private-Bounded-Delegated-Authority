@@ -409,7 +409,7 @@ pub fn whole_trace_amount<const R: usize, const MD: usize, const RD: usize>(
 
 /// The whole-circuit trace with the cap in the policy columns chosen
 /// separately from the cap the commitment opens to. They agree everywhere
-/// except in the vacuity demonstration of \cref{sec:eval:vacuity}, where a
+/// except in the vacuity demonstration, where a
 /// payment of $10$ complies with a cap of $1000$ in the columns while the
 /// commitment carries $200$ --- a policy the principal never signed.
 pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
@@ -588,7 +588,7 @@ pub enum ComposedBreak {
     /// The amount exceeds what the charged units buy.
     AmountRaised,
     /// The amount is low enough that one fewer unit would have covered it, so
-    /// the rounding is not the upward rounding of Section VI-A.
+    /// the rounding is not the upward rounding a payment's amount requires.
     AmountLowered,
     /// The witnessed unit size does not divide the committed budget.
     UnitSizeWrong,

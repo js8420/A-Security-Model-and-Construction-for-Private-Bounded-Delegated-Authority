@@ -434,7 +434,7 @@ fn main() {
     check("  ... a payment field altered, digest not recomputed", badpl, false);
     println!();
     println!("  Whole circuit proved and verified in {} ms at 32 rows, against the", ms32);
-    println!("  554 ms Section VII projects from a per-cell rate.");
+    println!("  554 ms projected from a per-cell rate, not measured.");
     println!();
     println!("  {} controls, every one rejected; {} positive checks, every one holding.",
              CONTROLS.load(Ordering::Relaxed), POSITIVES.load(Ordering::Relaxed));

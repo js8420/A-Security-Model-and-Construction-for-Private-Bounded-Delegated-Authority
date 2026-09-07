@@ -131,8 +131,8 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
     /// The same constraints, with the nullifier optionally left to the caller.
     /// `external_nullifier = true` omits only the equality tying a slot's
     /// nullifier to a spare lane of the permutation that produced its key, so
-    /// the variant of \cref{sec:eval:secondinv} can derive it from a second
-    /// invocation instead and be measured against this one.
+    /// the second-invocation variant can derive it from a second invocation
+    /// instead and be measured against this one.
     pub(crate) fn constrain_with<AB>(&self, builder: &mut AB, base: usize, external_nullifier: bool)
     where
         AB: AirBuilder<F = F>,

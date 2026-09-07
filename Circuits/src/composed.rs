@@ -24,11 +24,12 @@ type F = Goldilocks;
 /// must be the units the spend component consumes, so the glue columns carrying
 /// the run's endpoints are tied to the spend component's own.
 ///
-/// THE UNITS. Proposition 8's pigeonhole needs the units a payment accounts for
+/// THE UNITS. The overdraft argument needs the units a payment accounts for
 /// to be at least the units its amount buys. The unit size u satisfies
 /// u * m = B for the committed budget and the committed unit count. The charged
 /// count then satisfies (units - 1) * u < amount <= units * u, which is the
-/// upward rounding of Section VI-A stated as two comparisons. Without it an
+/// upward rounding of a payment's amount to whole units, stated as two
+/// comparisons. Without it an
 /// agent settles any amount while accounting one unit.
 ///
 /// An earlier form tied u to the padded tree, u * 2^DEPTH = B, which said every
