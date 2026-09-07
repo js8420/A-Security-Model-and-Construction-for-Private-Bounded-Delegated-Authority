@@ -282,7 +282,7 @@ fn main() {
 
     println!();
     println!();
-    println!("SUB-DELEGATION CONTAINMENT: TWO ALLOWLIST INCLUSIONS, SIX COMPARISONS");
+    println!("SUB-DELEGATION CONTAINMENT: TWO POLICY OPENINGS, TWO ALLOWLIST INCLUSIONS, EIGHT COMPARISONS");
     println!("{}", "=".repeat(78));
     println!("  {:<30} {:>10} {:>14} {:>7}", "allowlist depth", "width", "constraints", "degree");
     println!("  {:<30} {:>10} {:>14} {:>7}", "-".repeat(30), "-".repeat(10), "-".repeat(14), "-".repeat(7));
@@ -292,7 +292,7 @@ fn main() {
 
     println!();
     println!("SPEND COMPONENT: unit run, per-slot key derivation, shares and nullifiers");
-    println!("THE WIDTH LAW IS 131 + 187c: NO TERM IN THE TREE DEPTH SURVIVES RESERVING");
+    println!("THE WIDTH LAW IS 172 + 187c: NO TERM IN THE TREE DEPTH SURVIVES RESERVING");
     println!("{}", "=".repeat(78));
     println!("  {:<26} {:>8} {:>12} {:>7}", "depth / cover / registers", "width", "constraints", "degree");
     println!("  {:<26} {:>8} {:>12} {:>7}", "-".repeat(26), "-".repeat(8), "-".repeat(12), "-".repeat(7));
@@ -396,9 +396,17 @@ fn main() {
         check(label, prover::roundtrip_nonmembership::<1, 8>(64, Some(b)), false);
     }
     check("containment, depth 8, 64 rows", prover::roundtrip_containment::<1, 8>(64, None), true);
-    check("  ... sub-delegation cap raised above parent", prover::roundtrip_containment::<1, 8>(64, Some(5)), false);
-    check("  ... velocity windows made unequal", prover::roundtrip_containment::<1, 8>(64, Some(9)), false);
-    check("  ... unit range start moved below parent", prover::roundtrip_containment::<1, 8>(64, Some(11)), false);
+    check("  ... sub-delegation cap raised above parent", prover::roundtrip_containment::<1, 8>(64, Some(17)), false);
+    check("  ... velocity windows made unequal", prover::roundtrip_containment::<1, 8>(64, Some(21)), false);
+    check("  ... parent blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(15)), false);
+    check("  ... child blinding value altered", prover::roundtrip_containment::<1, 8>(64, Some(31)), false);
+    check("  ... child allowlist root not the node proved", prover::roundtrip_containment::<1, 8>(64, Some(23)), false);
+    check("  ... parent holding enlarged", prover::roundtrip_containment::<1, 8>(64, Some(33)), false);
+    check("  ... parent self-region enlarged past the grant boundary", prover::roundtrip_containment::<1, 8>(64, Some(34)), false);
+    check("  ... child commits more units than it was granted", prover::roundtrip_containment::<1, 8>(64, Some(35)), false);
+    check("  ... child self-region exceeds its unit count", prover::roundtrip_containment::<1, 8>(64, Some(36)), false);
+    check("  ... granted range moved below the grant boundary", prover::roundtrip_containment::<1, 8>(64, Some(38)), false);
+    check("  ... granted range extended past the parent's units", prover::roundtrip_containment::<1, 8>(64, Some(39)), false);
     let pl = spend_trace::PAYLOAD;
     check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<1, 16, 14>(64, None, pl), true);
     for (label, b) in [
@@ -412,6 +420,8 @@ fn main() {
         ("  ... range base moved", spend_trace::SpendBreak::RangeBase),
         ("  ... a slot spanning two units", spend_trace::SpendBreak::CoarseSpan),
         ("  ... run ends past the budget", spend_trace::SpendBreak::RunPastBudget),
+        ("  ... run ends past the units kept for the delegation itself", spend_trace::SpendBreak::RunPastSelf),
+        ("  ... self-region claimed larger than the holding", spend_trace::SpendBreak::SelfPastHolding),
     ] {
         check(label, prover::roundtrip_spend::<1, 16, 14>(64, Some(b), pl), false);
     }

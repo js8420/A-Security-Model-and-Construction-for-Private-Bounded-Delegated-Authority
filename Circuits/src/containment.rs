@@ -1,62 +1,124 @@
 use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
+use p3_poseidon2_air::num_cols;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout, SubAirBuilder};
 
-use crate::air::{recompose, RANGE_BITS};
+use crate::air::{recompose, DIGEST, POLICY_ELEMS, RANGE_BITS};
+use crate::full::{C9_PERMUTATIONS, RATE};
+use crate::hash::{
+    new_hash_air, output_offset, HashAir, DOMAIN_OPENING, HALF_FULL_ROUNDS, PARTIAL_ROUNDS,
+    SBOX_DEGREE, WIDTH,
+};
 use crate::merkle::MerkleAir;
 
 type F = Goldilocks;
 
-/// A sub-delegation may not grant more than its parent holds.
+/// A sub-delegation may not grant more than its parent holds, and the units it
+/// is granted must leave the parent's own reach.
+///
+/// The second half is what nesting alone does not give. Two delegations hold
+/// different secrets, so a unit consumed once by a parent and once by a child
+/// publishes two shares under one key at two indices with two unknown secrets:
+/// three unknowns, two equations, and the hash test fails. A cross-delegation
+/// collision is settled value with nothing extractable behind it. Nesting the
+/// ranges does not prevent one, and neither does forbidding siblings to
+/// overlap, since the parent goes on spending its whole range after granting.
+///
+/// So each delegation commits g <= m and spends only [base, base + g). Grants
+/// are cut from [base + g, base + m), and the reserve refuses a registration
+/// whose range overlaps one already recorded. Every delegation's spendable set
+/// is then disjoint from every other's, the chain's total is bounded by the
+/// root's m, and an overspend has to be one delegation colliding with itself,
+/// which is the case the tag scheme detects.
+///
+/// Both policies are opened here rather than assumed. Each party's block is
+/// absorbed by its own sponge and the two outputs are public, so the values
+/// compared below are the values the two records commit to. Without that the
+/// comparisons relate columns the prover chooses.
 ///
 /// Allowlist containment is one Merkle inclusion of the child's root under the
-/// parent's, since the child's root is required to be a NODE of the parent's
-/// tree rather than an arbitrary root. Proving instead that every leaf of the
-/// child's set lies under the parent root would be linear in that set.
+/// parent's, with the path's root bound to the parent's committed root and its
+/// leaf to the child's, so the inclusion is about the two committed trees and
+/// not about two digests standing beside them.
 ///
-/// The rest is six comparisons and one equality. The velocity windows are
-/// required equal, which reduces comparing two rates to comparing two counts.
+/// That the granted range is a power of two is not checked here: the range is
+/// public, so the reserve checks it at registration for nothing.
 pub struct ContainmentAir<const R: usize, const DEPTH: usize> {
     merchant: MerkleAir<R, DEPTH>,
     category: MerkleAir<R, DEPTH>,
+    hash: HashAir<R>,
 }
 
-const C_TSTART: usize = 0;
-const C_TSTART_SUB: usize = 1;
-const C_TEXP: usize = 2;
-const C_TEXP_SUB: usize = 3;
-const C_CAP: usize = 4;
-const C_CAP_SUB: usize = 5;
-const C_N: usize = 6;
-const C_N_SUB: usize = 7;
-const C_W: usize = 8;
-const C_W_SUB: usize = 9;
-const C_START: usize = 10;
-const C_START_SUB: usize = 11;
-const C_END: usize = 12;
-const C_END_SUB: usize = 13;
-const VALUE_COLS: usize = 14;
+// A policy block, laid out in the order the opening sponge absorbs it, so the
+// column of absorbed element e is e.
+const P_B: usize = 0;
+const P_C: usize = 1;
+const P_TSTART: usize = 2;
+const P_TEXP: usize = 3;
+const P_N: usize = 4;
+const P_W: usize = 5;
+const P_G: usize = 6;
+const P_MROOT: usize = 7;
+const P_CROOT: usize = P_MROOT + DIGEST;
+const P_R: usize = P_CROOT + DIGEST;
+const POLICY_COLS: usize = P_R + 1;
 
-/// Windows, caps, counts and the two ends of the unit range.
-pub const GAPS: usize = 6;
+// The block order is the absorption order, so a divergence between this layout
+// and the one the payment circuit commits would be a different commitment over
+// the same fields.
+const _: () = assert!(POLICY_COLS == POLICY_ELEMS);
+
+const PARENT: usize = 0;
+const CHILD: usize = POLICY_COLS;
+/// The canonical unit, which turns the two committed values into unit counts.
+const C_UNIT: usize = 2 * POLICY_COLS;
+const C_PM: usize = C_UNIT + 1;
+const C_PG: usize = C_PM + 1;
+const C_CM: usize = C_PG + 1;
+const C_CG: usize = C_CM + 1;
+/// The ranges, which are public: the parent's base and the two ends of what it
+/// granted. These are what the reserve records and checks a revocation against.
+const C_PBASE: usize = C_CG + 1;
+const C_LO: usize = C_PBASE + 1;
+const C_HI: usize = C_LO + 1;
+const VALUE_COLS: usize = C_HI + 1;
+
+/// Windows, caps, counts, the grant boundary, the spendable prefix, and the
+/// child's two counts.
+pub const GAPS: usize = 8;
+
+/// Both commitments, then the parent's base and the two ends of the grant.
+pub const PUBLIC_VALUES: usize = 2 * DIGEST + 3;
 
 impl<const R: usize, const DEPTH: usize> ContainmentAir<R, DEPTH> {
     pub fn new() -> Self {
         Self {
             merchant: MerkleAir::<R, DEPTH>::new(),
             category: MerkleAir::<R, DEPTH>::new(),
+            hash: new_hash_air::<R>(),
         }
     }
 
     fn path_width(&self) -> usize {
         BaseAir::<F>::width(&self.merchant)
     }
+
+    fn block_width(&self) -> usize {
+        num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>()
+    }
 }
 
 impl<const R: usize, const DEPTH: usize> BaseAir<F> for ContainmentAir<R, DEPTH> {
     fn width(&self) -> usize {
-        VALUE_COLS + 2 * self.path_width() + GAPS * RANGE_BITS
+        VALUE_COLS
+            + 2 * self.path_width()
+            + 2 * C9_PERMUTATIONS * self.block_width()
+            + GAPS * RANGE_BITS
+    }
+
+    fn num_public_values(&self) -> usize {
+        PUBLIC_VALUES
     }
 }
 
@@ -66,9 +128,12 @@ where
 {
     fn eval(&self, builder: &mut AB) {
         let pw = self.path_width();
+        let bw = self.block_width();
         let m0 = VALUE_COLS;
         let c0 = m0 + pw;
-        let g0 = c0 + pw;
+        let s0 = c0 + pw;
+        let s1 = s0 + C9_PERMUTATIONS * bw;
+        let g0 = s1 + C9_PERMUTATIONS * bw;
 
         {
             let mut sub = SubAirBuilder::<AB, MerkleAir<R, DEPTH>, F>::new(builder, m0..m0 + pw);
@@ -78,20 +143,95 @@ where
             let mut sub = SubAirBuilder::<AB, MerkleAir<R, DEPTH>, F>::new(builder, c0..c0 + pw);
             self.category.eval(&mut sub);
         }
+        for i in 0..(2 * C9_PERMUTATIONS) {
+            let start = s0 + i * bw;
+            let mut sub = SubAirBuilder::<AB, HashAir<R>, F>::new(builder, start..start + bw);
+            self.hash.eval(&mut sub);
+        }
 
+        // Copied out before any assertion, because public_values() borrows the
+        // builder and the assertions need it mutably.
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
 
-        // Equal windows, so N' <= N compares rates rather than counts.
-        builder.assert_eq(row[C_W].clone(), row[C_W_SUB].clone());
+        for (party, block, sbase) in [(0usize, PARENT, s0), (1usize, CHILD, s1)] {
+            for e in 0..POLICY_COLS {
+                let lane = sbase + (e / RATE) * bw + (e % RATE);
+                builder.assert_eq(row[block + e].clone(), row[lane].clone());
+            }
 
+            builder.assert_eq(
+                row[sbase + RATE].clone().into(),
+                AB::Expr::from_u64(DOMAIN_OPENING),
+            );
+            for lane in (RATE + 1)..WIDTH {
+                builder.assert_zero(row[sbase + lane].clone());
+            }
+
+            for i in 1..C9_PERMUTATIONS {
+                let taken = core::cmp::min(RATE, POLICY_COLS - i * RATE);
+                let prev_out = sbase + (i - 1) * bw + output_offset::<R>();
+                let next_in = sbase + i * bw;
+                for lane in taken..WIDTH {
+                    builder.assert_eq(row[prev_out + lane].clone(), row[next_in + lane].clone());
+                }
+            }
+
+            let last = sbase + (C9_PERMUTATIONS - 1) * bw + output_offset::<R>();
+            for j in 0..DIGEST {
+                builder.assert_eq(row[last + j].clone().into(), pv[party * DIGEST + j].clone());
+            }
+        }
+
+        // The path runs from the child's committed root up to the parent's, so
+        // the child's permitted set is the leaves beneath a node of the
+        // parent's tree and not a tree of its own.
+        let mroot = m0 + self.merchant.root_offset();
+        let croot = c0 + self.category.root_offset();
+        for j in 0..DIGEST {
+            builder.assert_eq(row[PARENT + P_MROOT + j].clone(), row[mroot + j].clone());
+            builder.assert_eq(row[CHILD + P_MROOT + j].clone(), row[m0 + j].clone());
+            builder.assert_eq(row[PARENT + P_CROOT + j].clone(), row[croot + j].clone());
+            builder.assert_eq(row[CHILD + P_CROOT + j].clone(), row[c0 + j].clone());
+        }
+
+        // The counts the comparisons run over are the committed values divided
+        // by the unit, which is the binding the composed circuit makes for one
+        // delegation and this one makes for both.
+        let u = row[C_UNIT].clone();
+        for (count, value) in [
+            (C_PM, PARENT + P_B),
+            (C_PG, PARENT + P_G),
+            (C_CM, CHILD + P_B),
+            (C_CG, CHILD + P_G),
+        ] {
+            builder.assert_eq(
+                u.clone().into() * row[count].clone().into(),
+                row[value].clone().into(),
+            );
+        }
+
+        // Equal windows, so N' <= N compares rates rather than counts.
+        builder.assert_eq(row[PARENT + P_W].clone(), row[CHILD + P_W].clone());
+
+        // The ranges are the ones the record carries.
+        for (k, col) in [C_PBASE, C_LO, C_HI].into_iter().enumerate() {
+            builder.assert_eq(row[col].clone().into(), pv[2 * DIGEST + k].clone());
+        }
 
         let gaps = [
-            row[C_TSTART_SUB].clone().into() - row[C_TSTART].clone().into(),
-            row[C_TEXP].clone().into() - row[C_TEXP_SUB].clone().into(),
-            row[C_CAP].clone().into() - row[C_CAP_SUB].clone().into(),
-            row[C_N].clone().into() - row[C_N_SUB].clone().into(),
-            row[C_START_SUB].clone().into() - row[C_START].clone().into(),
-            row[C_END].clone().into() - row[C_END_SUB].clone().into(),
+            row[CHILD + P_TSTART].clone().into() - row[PARENT + P_TSTART].clone().into(),
+            row[PARENT + P_TEXP].clone().into() - row[CHILD + P_TEXP].clone().into(),
+            row[PARENT + P_C].clone().into() - row[CHILD + P_C].clone().into(),
+            row[PARENT + P_N].clone().into() - row[CHILD + P_N].clone().into(),
+            // The grant begins at or after the parent's own units end.
+            row[C_LO].clone().into() - row[C_PBASE].clone().into() - row[C_PG].clone().into(),
+            // And ends inside what the parent actually holds.
+            row[C_PBASE].clone().into() + row[C_PM].clone().into() - row[C_HI].clone().into(),
+            // The child cannot commit more units than it was granted,
+            row[C_HI].clone().into() - row[C_LO].clone().into() - row[C_CM].clone().into(),
+            // nor keep more for itself than it committed.
+            row[C_CM].clone().into() - row[C_CG].clone().into(),
         ];
         for (g, gap) in gaps.into_iter().enumerate() {
             let start = g0 + g * RANGE_BITS;
@@ -101,7 +241,6 @@ where
             }
             builder.assert_eq(gap, recompose::<AB>(&bits));
         }
-        let _ = AB::Expr::ONE;
     }
 }
 

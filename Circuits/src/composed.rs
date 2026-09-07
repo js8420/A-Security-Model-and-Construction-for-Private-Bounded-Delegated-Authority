@@ -3,8 +3,8 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
 
-use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, RANGE_BITS};
-use crate::spend::{SpendAir, COL_M, COL_UNITS};
+use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, COL_G, RANGE_BITS};
+use crate::spend::{SpendAir, COL_M, COL_SELF, COL_UNITS};
 use crate::whole::{WholeAir, PUBLIC_VALUES};
 
 type F = Goldilocks;
@@ -132,6 +132,14 @@ where
         // and had to bind two committed fields and their product; there is one
         // quantity here and one binding.
         builder.assert_eq(u.clone() * m.clone(), budget.clone());
+
+        // What the delegation keeps for itself is committed on the same terms,
+        // so the run check above is against a figure the principal signed and
+        // not one the agent picks.
+        builder.assert_eq(
+            u.clone() * row[w + COL_SELF].clone().into(),
+            row[COL_G].clone().into(),
+        );
 
         // The run C8 is checked against is the run the payment consumes. Runs
         // are contiguous again, so the first and last positions bound it.

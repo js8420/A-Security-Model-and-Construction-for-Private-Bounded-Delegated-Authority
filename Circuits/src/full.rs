@@ -4,8 +4,8 @@ use p3_goldilocks::Goldilocks;
 use p3_poseidon2_air::num_cols;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout, SubAirBuilder};
 
-use crate::air::{policy_src, PolicyAir, ALL_CLAUSES, POLICY_ELEMS};
-use crate::hash::{DOMAIN_OPENING, new_hash_air, HashAir, HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE, WIDTH};
+use crate::air::{policy_src, PolicyAir, ALL_CLAUSES, DIGEST, POLICY_ELEMS};
+use crate::hash::{output_offset, DOMAIN_OPENING, new_hash_air, HashAir, HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE, WIDTH};
 
 type F = Goldilocks;
 
@@ -47,6 +47,10 @@ impl<const R: usize> BaseAir<F> for FullAir<R> {
     fn width(&self) -> usize {
         self.policy_width() + C9_PERMUTATIONS * self.block_width()
     }
+
+    fn num_public_values(&self) -> usize {
+        DIGEST
+    }
 }
 
 impl<AB, const R: usize> Air<AB> for FullAir<R>
@@ -67,10 +71,14 @@ where
             self.hash.eval(&mut sub);
         }
 
+        // Copied out before any assertion, because public_values() borrows the
+        // builder and the assertions need it mutably.
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
+        let row = builder.main().current_slice().to_vec();
+
         // Bind the absorbed elements to the policy columns the clauses read.
         // Without this the hash proves a statement about unrelated values and
         // every other constraint becomes vacuous.
-        let row = builder.main().current_slice().to_vec();
         for e in 0..C9_ELEMENTS {
             let absorbed = base + (e / RATE) * bw + (e % RATE);
             builder.assert_eq(row[policy_src(e)].clone(), row[absorbed].clone());
@@ -85,6 +93,26 @@ where
         );
         for lane in (RATE + 1)..WIDTH {
             builder.assert_zero(row[base + lane].clone());
+        }
+
+        // Chaining carries every lane the step does not absorb. Without it the
+        // capacity of each permutation after the first is a value the prover
+        // chooses, and the commitment with it, so the opening would establish
+        // nothing about the policy it absorbed.
+        for i in 1..C9_PERMUTATIONS {
+            let taken = core::cmp::min(RATE, C9_ELEMENTS - i * RATE);
+            let prev_out = base + (i - 1) * bw + output_offset::<R>();
+            let next_in = base + i * bw;
+            for lane in taken..WIDTH {
+                builder.assert_eq(row[prev_out + lane].clone(), row[next_in + lane].clone());
+            }
+        }
+
+        // And the sponge's output is the commitment, which is public, so the
+        // circuit proves the policy opens a particular one.
+        let last = base + (C9_PERMUTATIONS - 1) * bw + output_offset::<R>();
+        for j in 0..DIGEST {
+            builder.assert_eq(row[last + j].clone().into(), pv[j].clone());
         }
     }
 }

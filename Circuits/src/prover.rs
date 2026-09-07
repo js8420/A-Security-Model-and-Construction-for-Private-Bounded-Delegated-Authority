@@ -24,7 +24,7 @@ use crate::vacuous::VacuousAir;
 use crate::whole::WholeAir;
 use crate::merkle::MerkleAir;
 use crate::revocation::NonMembershipAir;
-use crate::trace::{vacuous_trace, whole_public_values, broken_composed, broken_composed_air, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, containment_trace, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
+use crate::trace::{full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_composed_air, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, containment_public_values, containment_trace, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
 type Val = Goldilocks;
@@ -271,8 +271,9 @@ pub fn roundtrip_composed<const R: usize>(rows: usize, how: Option<Break>) -> bo
         None => composed_trace::<R>(rows),
         Some(b) => broken_composed::<R>(rows, b),
     };
-    let proof = prove(&cfg, &air, trace, &vec![]);
-    verify(&cfg, &air, &proof, &vec![]).is_ok()
+    let pv = full_public_values::<R>();
+    let proof = prove(&cfg, &air, trace, &pv);
+    verify(&cfg, &air, &proof, &pv).is_ok()
 }
 
 
@@ -307,7 +308,8 @@ pub fn roundtrip_containment<const R: usize, const DEPTH: usize>(rows: usize, ba
     let cfg = config();
     let t = containment_trace::<R, DEPTH>(rows);
     let t = match bad { None => t, Some(c) => corrupt(t, c) };
-    verify(&cfg, &air, &prove(&cfg, &air, t, &vec![]), &vec![]).is_ok()
+    let pv = containment_public_values::<R, DEPTH>();
+    verify(&cfg, &air, &prove(&cfg, &air, t, &pv), &pv).is_ok()
 }
 
 /// Prove and verify the whole circuit at full parameters, and time it. This is
@@ -610,7 +612,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     let zk = config();
     let plain = config_plain();
     let pv: Vec<Goldilocks> = vec![Goldilocks::from_u64(crate::spend_trace::PAYLOAD)];
-    let empty: Vec<Goldilocks> = Vec::new();
+    let pv_full = full_public_values::<1>();
 
     // Declared before the closure vectors below, so that the closures which
     // borrow them are dropped first.
@@ -665,7 +667,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         }};
     }
 
-    variant!("policy + C9 only", FullAir::<1>::new(), composed_trace::<1>(ROWS), &zk, &empty);
+    variant!("policy + C9 only", FullAir::<1>::new(), composed_trace::<1>(ROWS), &zk, &pv_full);
     variant!("+ allowlists + revocation d32", WholeAir::<1, 16, 32>::new(),
              whole_trace::<1, 16, 32>(ROWS), &zk, &pv_w32);
     variant!("  same, revocation d20", WholeAir::<1, 16, 20>::new(),

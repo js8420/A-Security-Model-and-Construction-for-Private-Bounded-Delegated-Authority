@@ -90,8 +90,14 @@ pub const COL_TSTART: usize = COL_C + 1;
 pub const COL_TEXP: usize = COL_TSTART + 1;
 pub const COL_N: usize = COL_TEXP + 1;
 pub const COL_W: usize = COL_N + 1;
+/// The part of the budget the delegation keeps for itself, in value. Grants to
+/// sub-delegations are cut from what is left, so no two delegations on a chain
+/// can spend the same unit --- which matters because they hold different
+/// secrets, and a unit consumed by two of them yields two shares under one key
+/// with two unknowns behind them and nothing extractable.
+pub const COL_G: usize = COL_W + 1;
 // policy roots, DIGEST elements each, base index of the first lane
-pub const COL_MROOT: usize = COL_W + 1;
+pub const COL_MROOT: usize = COL_G + 1;
 pub const COL_CROOT: usize = COL_MROOT + DIGEST;
 // blinding value, absorbed last of the policy
 pub const COL_R: usize = COL_CROOT + DIGEST;
@@ -106,8 +112,8 @@ pub const VALUE_COLS: usize = COL_CATEGORY_OK + 1;
 
 /// The scalar policy fields C9 absorbs, in the order it absorbs them. The two
 /// roots follow, DIGEST elements each, then the blinding value.
-pub const POLICY_SCALARS: [usize; 6] =
-    [COL_B, COL_C, COL_TSTART, COL_TEXP, COL_N, COL_W];
+pub const POLICY_SCALARS: [usize; 7] =
+    [COL_B, COL_C, COL_TSTART, COL_TEXP, COL_N, COL_W, COL_G];
 
 /// Elements C9 absorbs from the policy: the scalars, both roots in full, and
 /// the blinding value.

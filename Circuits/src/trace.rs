@@ -9,7 +9,7 @@ use p3_poseidon2_air::num_cols;
 use crate::hash::{HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE};
 use crate::air::{
     RANGE_BITS, COL_AMOUNT, COL_B, COL_C, COL_CID, COL_CROOT, COL_MID, COL_MROOT,
-    COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
+    COL_G, COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
     PAYLOAD_SRC, VALUE_COLS,
 };
 use crate::full::C9_PERMUTATIONS;
@@ -113,6 +113,7 @@ pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F
         row[COL_TEXP] = F::from_u64(GOOD.t_exp);
         row[COL_N] = F::from_u64(GOOD.velocity_n);
         row[COL_W] = F::from_u64(100);
+        row[COL_G] = F::from_u64(GOOD.budget);
         row[COL_R] = F::from_u64(4242);
         row[COL_NONCE] = F::from_u64(777);
         row[COL_MERCHANT_OK] = F::ONE;
@@ -148,7 +149,7 @@ pub fn broken_trace(rows: usize) -> RowMajorMatrix<F> {
 fn absorbed() -> Vec<F> {
     [
         GOOD.budget, GOOD.cap,
-        GOOD.t_start, GOOD.t_exp, GOOD.velocity_n, 100,
+        GOOD.t_start, GOOD.t_exp, GOOD.velocity_n, 100, GOOD.budget,
     ]
     .into_iter()
     .chain((0..DIGEST).map(|j| 11 + j as u64))
@@ -161,6 +162,13 @@ fn absorbed() -> Vec<F> {
 /// Policy columns followed by the three C9 permutation blocks. The bindings
 /// hold by construction: the sponge absorbs exactly the values the policy
 /// columns carry, so each absorbed lane already equals its source column.
+/// The commitment the policy-plus-opening circuit computes, which that circuit
+/// now has to produce rather than merely contain.
+pub fn full_public_values<const R: usize>() -> Vec<F> {
+    let perms = sponge::<R>(&absorbed(), 4, DOMAIN_OPENING);
+    perm_output::<R>(perms.last().expect("sponge produced no permutation"))[..DIGEST].to_vec()
+}
+
 pub fn composed_trace<const R: usize>(rows: usize) -> RowMajorMatrix<F> {
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let policy = policy_trace(rows);
@@ -386,41 +394,117 @@ fn build_nonmembership<const R: usize, const DEPTH: usize>(
 /// smaller cap, fewer payments per window, and a unit range within the
 /// parent's. The two Merkle paths carry the child's allowlist roots up to the
 /// parent's.
+/// The two policies the containment proof opens, laid out in absorption order.
+/// The parent holds [0, 49152) and keeps 32768 units for itself, so grants are
+/// cut from [32768, 49152). The child is granted [36864, 45056), commits 4096
+/// units of that and keeps 2048. At a unit of 4 the two budgets are 196608 and
+/// 16384, and the two self-regions 131072 and 8192.
+const CT_UNIT: u64 = 4;
+const CT_PARENT: [u64; 7] = [196608, 200, 1000, 9000, 5, 100, 131072];
+const CT_CHILD: [u64; 7] = [16384, 50, 1500, 8000, 2, 100, 8192];
+const CT_BLIND: [u64; 2] = [4242, 4243];
+const CT_COUNTS: [u64; 4] = [49152, 32768, 4096, 2048];
+const CT_RANGES: [u64; 3] = [0, 36864, 45056];
+
+fn containment_policies<const R: usize, const DEPTH: usize>(
+    path: &RowMajorMatrix<F>,
+) -> (Vec<F>, Vec<F>) {
+    let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
+    let level = DIGEST + DIGEST + 1 + bw;
+    let root: Vec<F> = path.values[DEPTH * level..DEPTH * level + DIGEST].to_vec();
+    let leaf: Vec<F> = path.values[0..DIGEST].to_vec();
+
+    // The child's allowlist root is the leaf the path proves under the
+    // parent's, which is what makes the child's permitted set a subset.
+    let mut parent: Vec<F> = CT_PARENT.iter().map(|x| F::from_u64(*x)).collect();
+    parent.extend_from_slice(&root);
+    parent.extend_from_slice(&root);
+    parent.push(F::from_u64(CT_BLIND[0]));
+
+    let mut child: Vec<F> = CT_CHILD.iter().map(|x| F::from_u64(*x)).collect();
+    child.extend_from_slice(&leaf);
+    child.extend_from_slice(&leaf);
+    child.push(F::from_u64(CT_BLIND[1]));
+
+    (parent, child)
+}
+
+pub fn containment_public_values<const R: usize, const DEPTH: usize>() -> Vec<F> {
+    let path = merkle_trace::<R, DEPTH>(1);
+    let (parent, child) = containment_policies::<R, DEPTH>(&path);
+    let mut pv = Vec::new();
+    for elems in [&parent, &child] {
+        let perms = sponge::<R>(elems, 4, DOMAIN_OPENING);
+        let out = perm_output::<R>(perms.last().expect("sponge produced no permutation"));
+        pv.extend_from_slice(&out[..DIGEST]);
+    }
+    for r in CT_RANGES {
+        pv.push(F::from_u64(r));
+    }
+    pv
+}
+
 pub fn containment_trace<const R: usize, const DEPTH: usize>(rows: usize) -> RowMajorMatrix<F> {
-    let value_cols = 14;
-    let gaps_n = 6;
+    let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let path = merkle_trace::<R, DEPTH>(rows);
     let pw = path.width;
-    let width = value_cols + 2 * pw + gaps_n * RANGE_BITS;
+    let (parent, child) = containment_policies::<R, DEPTH>(&path);
 
-    // The child holds the range [4096, 32768), which is 28672 units; at a unit
-    // size of 4 that is a child range of 7168 units,
-    // and 4 * 14 * 512 = 28672 exactly.
-    let v: [u64; 14] = [
-        1000, 1500,     // t_start, t_start'
-        9000, 8000,     // t_exp,   t_exp'
-        200, 50,        // cap,     cap'
-        5, 2,           // N,       N'
-        100, 100,       // W,       W'
-        0, 4096,        // range start, start'
-        65536, 32768,   // range end,   end'
-    ];
+    let policy_cols = parent.len();
+    let value_cols = 2 * policy_cols + 8;
+    let perms_n = policy_cols.div_ceil(4);
+    let gaps_n = 8;
+    let width = value_cols + 2 * pw + 2 * perms_n * bw + gaps_n * RANGE_BITS;
+
     let gaps = [
-        v[1] - v[0], v[2] - v[3], v[4] - v[5],
-        v[6] - v[7], v[11] - v[10], v[12] - v[13],
+        CT_CHILD[2] - CT_PARENT[2],
+        CT_PARENT[3] - CT_CHILD[3],
+        CT_PARENT[1] - CT_CHILD[1],
+        CT_PARENT[4] - CT_CHILD[4],
+        CT_RANGES[1] - (CT_RANGES[0] + CT_COUNTS[1]),
+        (CT_RANGES[0] + CT_COUNTS[0]) - CT_RANGES[2],
+        (CT_RANGES[2] - CT_RANGES[1]) - CT_COUNTS[2],
+        CT_COUNTS[2] - CT_COUNTS[3],
     ];
+
+    let sponges: Vec<Vec<Vec<F>>> = [&parent, &child]
+        .into_iter()
+        .map(|e| sponge::<R>(e, 4, DOMAIN_OPENING))
+        .collect();
 
     let mut values = Vec::with_capacity(rows * width);
     for r in 0..rows {
         let mut row = vec![F::ZERO; width];
-        for (i, x) in v.iter().enumerate() {
-            row[i] = F::from_u64(*x);
+        for (i, x) in parent.iter().enumerate() {
+            row[i] = *x;
         }
+        for (i, x) in child.iter().enumerate() {
+            row[policy_cols + i] = *x;
+        }
+        let b = 2 * policy_cols;
+        row[b] = F::from_u64(CT_UNIT);
+        for (i, c) in CT_COUNTS.iter().enumerate() {
+            row[b + 1 + i] = F::from_u64(*c);
+        }
+        for (i, x) in CT_RANGES.iter().enumerate() {
+            row[b + 5 + i] = F::from_u64(*x);
+        }
+
         let p = &path.values[r * pw..(r + 1) * pw];
         row[value_cols..value_cols + pw].copy_from_slice(p);
         row[value_cols + pw..value_cols + 2 * pw].copy_from_slice(p);
+
+        let s0 = value_cols + 2 * pw;
+        for (s, blocks) in sponges.iter().enumerate() {
+            for (i, prow) in blocks.iter().enumerate() {
+                let at = s0 + (s * perms_n + i) * bw;
+                row[at..at + bw].copy_from_slice(prow);
+            }
+        }
+
+        let g0 = s0 + 2 * perms_n * bw;
         for (g, gap) in gaps.into_iter().enumerate() {
-            let start = value_cols + 2 * pw + g * RANGE_BITS;
+            let start = g0 + g * RANGE_BITS;
             for (i, bit) in bits_of(gap).into_iter().enumerate() {
                 row[start + i] = bit;
             }
@@ -489,6 +573,7 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
         committed.values[COL_B], committed.values[COL_C],
         committed.values[COL_TSTART], committed.values[COL_TEXP],
         committed.values[COL_N], committed.values[COL_W],
+        committed.values[COL_G],
     ];
     absorbed_v.extend_from_slice(&mroot);
     absorbed_v.extend_from_slice(&mroot);
@@ -589,6 +674,7 @@ pub fn whole_public_values_cap<const R: usize, const MD: usize, const RD: usize>
         policy.values[COL_B], policy.values[COL_C],
         policy.values[COL_TSTART], policy.values[COL_TEXP],
         policy.values[COL_N], policy.values[COL_W],
+        policy.values[COL_G],
     ];
     absorbed_v.extend_from_slice(&mroot);
     absorbed_v.extend_from_slice(&mroot);

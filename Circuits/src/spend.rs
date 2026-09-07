@@ -41,14 +41,17 @@ pub struct SpendAir<const R: usize, const DEPTH: usize, const COVER: usize> {
 /// than every other assumption the scheme makes.
 pub const SECRET_ELEMS: usize = 2;
 
-/// r is non-negative; the run ends within the delegation's spendable units;
-/// and the delegation's padded range lies inside the deployment's index space.
+/// r is non-negative; the run ends within the units the delegation kept for
+/// itself; the delegation's padded range lies inside the deployment's index
+/// space; and what it kept does not exceed what it holds.
 ///
-/// The second is the only refusal this circuit performs, and its threshold is
-/// m = B/u --- the budget, which the bound-privacy game excludes as a trivial
-/// win. An earlier revision divided the budget and needed six checks, three of
-/// which refused at thresholds below the budget and were open refusal channels.
-pub const RANGE_BLOCKS: usize = 3;
+/// The second is the only refusal this circuit performs. Its threshold is the
+/// self-region g, which equals m = B/u for a delegation that grants nothing and
+/// is committed alongside B in either case, so the bound-privacy game excludes
+/// it as a trivial win on the same terms. An earlier revision divided the budget
+/// and needed six checks, three of which refused at thresholds below the budget
+/// and were open refusal channels.
+pub const RANGE_BLOCKS: usize = 4;
 
 pub const COL_SECRET: usize = 0;
 pub const COL_INDEX: usize = COL_SECRET + SECRET_ELEMS;
@@ -59,10 +62,14 @@ pub const COL_ROOT_KEY: usize = COL_INDEX_INV + 1;
 /// bound-privacy game excludes as a trivial win, so the refusal channel it
 /// opens is closed in the sense of the model's Definition 15.
 pub const COL_M: usize = COL_ROOT_KEY + SECRET_ELEMS;
+/// The units the delegation may consume itself. The rest of what it holds is
+/// what it may grant away, and a run is checked against this rather than
+/// against the whole holding.
+pub const COL_SELF: usize = COL_M + 1;
 /// Where the payment's run starts, and how many units it charges. The run is
 /// [r, r + units) and it is contiguous: reserving from a single counter leaves
 /// nothing to wrap around.
-pub const COL_R: usize = COL_M + 1;
+pub const COL_R: usize = COL_SELF + 1;
 pub const COL_UNITS: usize = COL_R + 1;
 /// The first index of the delegation's padded range.
 pub const COL_BASE: usize = COL_UNITS + 1;
@@ -146,6 +153,7 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
             (0..SECRET_ELEMS).map(|j| row[base + COL_SECRET + j].clone()).collect();
         let index = row[base + COL_INDEX].clone();
         let m = row[base + COL_M].clone();
+        let self_units = row[base + COL_SELF].clone();
         let r = row[base + COL_R].clone();
         let units = row[base + COL_UNITS].clone();
         let pbase = row[base + COL_BASE].clone();
@@ -164,8 +172,9 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         let rb = base + self.range_base();
         let gaps = [
             r.clone().into(),
-            m.clone().into() - r.clone().into() - units.clone().into(),
+            self_units.clone().into() - r.clone().into() - units.clone().into(),
             two_pow[DEPTH].clone() - pbase.clone().into() - m.clone().into(),
+            m.clone().into() - self_units.clone().into(),
         ];
         for (g, gap) in gaps.into_iter().enumerate() {
             let start = rb + g * RANGE_BITS;
@@ -179,8 +188,10 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         // The consumed units are the contiguous run [r, r + units) inside the
         // delegation's range. There is nothing to wrap around: a payment
         // reserves at the counter value it finds, and the second gap above is
-        // the only threshold at which this circuit refuses --- the budget
-        // itself, which the bound-privacy game excludes.
+        // the only threshold at which this circuit refuses --- the units the
+        // delegation kept for itself, which is the budget for a delegation that
+        // grants nothing and is committed either way, so the bound-privacy game
+        // excludes it.
         let nb = base + self.node_base();
         builder.assert_eq(row[posb].clone().into(), r.clone().into());
 

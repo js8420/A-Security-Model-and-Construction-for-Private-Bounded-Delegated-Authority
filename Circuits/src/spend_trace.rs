@@ -9,7 +9,7 @@ use crate::hash::{DOMAIN_KEY, DOMAIN_NULL, DOMAIN_PAD, HALF_FULL_ROUNDS, PARTIAL
 // The layout is declared once, by the AIR, and imported here. It was restated in
 // this file until the two copies drifted apart three times.
 use crate::spend::{
-    COL_BASE, COL_INDEX, COL_INDEX_INV, COL_M, COL_R,
+    COL_BASE, COL_INDEX, COL_INDEX_INV, COL_M, COL_R, COL_SELF,
     COL_ROOT_KEY, COL_SECRET, COL_UNITS, FIXED_COLS, NODE_ACTIVE, NODE_KEY, NODE_NULL, NODE_SHARE,
     PER_NODE, RANGE_BLOCKS, SECRET_ELEMS,
 };
@@ -108,6 +108,13 @@ pub enum SpendBreak {
     /// the control for the one range check that remains after the divisions
     /// went.
     RunPastBudget,
+    /// The run stays inside what the delegation holds but ends past what it
+    /// kept for itself, which is the case a sub-delegating parent creates and
+    /// which the range check against the whole holding used to admit.
+    RunPastSelf,
+    /// The delegation claims to have kept more units than it holds, which would
+    /// let it spend into what it granted away.
+    SelfPastHolding,
 }
 
 /// The same payment under the second-invocation variant: the row the
@@ -193,6 +200,15 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
         off
     };
 
+    // What the delegation keeps for itself. A delegation that grants nothing
+    // keeps everything, which is the ordinary case and the one every other
+    // trace in this file builds.
+    let self_units = match how {
+        Some(SpendBreak::RunPastSelf) => off + units - 1,
+        Some(SpendBreak::SelfPastHolding) => spendable + 1,
+        _ => spendable,
+    };
+
     let mut row = vec![F::ZERO; l.width];
 
     for j in 0..SECRET_ELEMS {
@@ -202,6 +218,7 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
     row[COL_INDEX] = payload;
     row[COL_INDEX_INV] = payload.inverse();
     row[COL_M] = F::from_u64(spendable as u64);
+    row[COL_SELF] = F::from_u64(self_units as u64);
     row[COL_R] = F::from_u64(off as u64);
     row[COL_UNITS] = F::from_u64(units as u64);
     row[COL_BASE] = F::from_u64(base as u64);
@@ -211,8 +228,9 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
     let mask = (1u64 << RANGE_BITS) - 1;
     for (g, v) in [
         off as i128,
-        spendable as i128 - off as i128 - units as i128,
+        self_units as i128 - off as i128 - units as i128,
         (1i128 << DEPTH) - base as i128 - spendable as i128,
+        spendable as i128 - self_units as i128,
     ]
     .into_iter()
     .enumerate()
@@ -280,12 +298,14 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
                     row[l.pos + c] = p + F::from_u64(2);
                 }
             }
-            // These two are applied where the run offset and the reduction
-            // quotient are chosen, so the row is already built against them and
-            // nothing is corrupted afterwards. Listing them rather than adding a
+            // These three are applied where the run offset and the self-region
+            // are chosen, so the row is already built against them and nothing
+            // is corrupted afterwards. Listing them rather than adding a
             // wildcard is deliberate: a wildcard would silently swallow the next
             // variant somebody adds and the control would never fire.
-            SpendBreak::RunPastBudget => {}
+            SpendBreak::RunPastBudget
+            | SpendBreak::RunPastSelf
+            | SpendBreak::SelfPastHolding => {}
         }
     }
 
