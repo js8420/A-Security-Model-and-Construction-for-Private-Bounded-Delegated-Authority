@@ -9,7 +9,7 @@ use p3_poseidon2_air::num_cols;
 use crate::hash::{HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE};
 use crate::air::{
     RANGE_BITS, COL_AMOUNT, COL_B, COL_C, COL_CID, COL_CROOT, COL_MID, COL_MROOT,
-    COL_G, COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
+    COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
     PAYLOAD_SRC, VALUE_COLS,
 };
 use crate::full::C9_PERMUTATIONS;
@@ -113,7 +113,6 @@ pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F
         row[COL_TEXP] = F::from_u64(GOOD.t_exp);
         row[COL_N] = F::from_u64(GOOD.velocity_n);
         row[COL_W] = F::from_u64(100);
-        row[COL_G] = F::from_u64(GOOD.budget);
         row[COL_R] = F::from_u64(4242);
         row[COL_NONCE] = F::from_u64(777);
         row[COL_MERCHANT_OK] = F::ONE;
@@ -140,16 +139,15 @@ pub fn broken_trace(rows: usize) -> RowMajorMatrix<F> {
     m
 }
 
-/// The nine elements C9 absorbs, in commitment order, matching the values the
-/// policy columns carry.
 /// The C9 sponge's input, in the order POLICY_SCALARS names the columns. This
 /// is the third place the absorbed list is built, after whole_trace_amount and
-/// whole_public_values_amount, and extending two of the three is how the sponge
-/// came to want five permutations from a generator that produced four.
+/// whole_public_values_amount, and changing some of the three and not the rest
+/// is how the sponge came to want a permutation count the generator did not
+/// produce. Any change to POLICY_SCALARS has to land in all three.
 fn absorbed() -> Vec<F> {
     [
         GOOD.budget, GOOD.cap,
-        GOOD.t_start, GOOD.t_exp, GOOD.velocity_n, 100, GOOD.budget,
+        GOOD.t_start, GOOD.t_exp, GOOD.velocity_n, 100,
     ]
     .into_iter()
     .chain((0..DIGEST).map(|j| 11 + j as u64))
@@ -444,7 +442,6 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
         committed.values[COL_B], committed.values[COL_C],
         committed.values[COL_TSTART], committed.values[COL_TEXP],
         committed.values[COL_N], committed.values[COL_W],
-        committed.values[COL_G],
     ];
     absorbed_v.extend_from_slice(&mroot);
     absorbed_v.extend_from_slice(&mroot);
@@ -545,7 +542,6 @@ pub fn whole_public_values_cap<const R: usize, const MD: usize, const RD: usize>
         policy.values[COL_B], policy.values[COL_C],
         policy.values[COL_TSTART], policy.values[COL_TEXP],
         policy.values[COL_N], policy.values[COL_W],
-        policy.values[COL_G],
     ];
     absorbed_v.extend_from_slice(&mroot);
     absorbed_v.extend_from_slice(&mroot);

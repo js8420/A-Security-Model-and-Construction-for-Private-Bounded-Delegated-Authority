@@ -17,3 +17,7 @@ vectors.json
 Circuits/build_errors.txt
 Circuits/err.txt
 *.err.txt
+SourceCode/Reserve/lib/
+SourceCode/Reserve/out/
+SourceCode/Reserve/cache/
+_RefAudit/

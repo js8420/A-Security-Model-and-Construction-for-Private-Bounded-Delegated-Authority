@@ -398,8 +398,6 @@ fn main() {
         ("  ... range base moved", spend_trace::SpendBreak::RangeBase),
         ("  ... a slot spanning two units", spend_trace::SpendBreak::CoarseSpan),
         ("  ... run ends past the budget", spend_trace::SpendBreak::RunPastBudget),
-        ("  ... run ends past the units kept for the delegation itself", spend_trace::SpendBreak::RunPastSelf),
-        ("  ... self-region claimed larger than the holding", spend_trace::SpendBreak::SelfPastHolding),
     ] {
         check(label, prover::roundtrip_spend::<1, 16, 14>(64, Some(b), pl), false);
     }
