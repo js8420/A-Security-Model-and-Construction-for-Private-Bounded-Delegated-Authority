@@ -49,6 +49,7 @@ mod spend_trace;
 mod composed;
 mod vacuous;
 mod spend2;
+mod sweep;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -116,21 +117,37 @@ fn emit_verify_table() {
 }
 
 fn main() {
+    // `cargo run --release -- sweep` runs the FRI sweep alone. The timed
+    // sections below are what the manuscript quotes, and re-running them to
+    // reach a new section would produce a third set of figures that agrees
+    // with the published ones only approximately.
+    if std::env::args().any(|a| a == "sweep") {
+        sweep::run();
+        return;
+    }
+
     println!("COMMITMENT SCHEME AND VERIFICATION UNDER IT");
     println!("{}", "=".repeat(78));
     println!("  {:<44} {:>12}", "hiding PCS reported by the Pcs trait", prover::zk_enabled());
     println!("  {:<44} {:>12}", "salt elements per leaf", prover::SALT_ELEMS);
     println!("  {:<44} {:>12}", "random codewords per matrix", prover::NUM_RANDOM_CODEWORDS);
     let (deg7, deg3) = prover::zk_degree_bound();
-    diagnostic("bare poseidon2, degree 7, zero registers", deg7, false);
+    // Both admissible at blowup 16. At the blowup-4 setting this crate used
+    // until the sweep, degree 7 was not: the quotient the hiding PCS can
+    // commit to is bounded by the rate, so raising the rate admits higher
+    // degree. The S-box register was therefore a consequence of the FRI
+    // parameters and not of zero knowledge, which is worth knowing because a
+    // zero-register circuit is roughly half the width of a one-register one.
+    diagnostic("bare poseidon2, degree 7, zero registers", deg7, true);
     diagnostic("bare poseidon2, degree 3, one register", deg3, true);
     println!();
-    println!("  Zero registers makes every S-box constraint degree 7 and no proof");
-    println!("  verifies under the hiding PCS. One register makes them degree 3 and");
-    println!("  every proof verifies. Both cases above are upstream code with an");
-    println!("  upstream trace, so the bound belongs to p3-uni-stark 0.6.3. One");
-    println!("  register is therefore the only admissible setting, and the widths");
-    println!("  below are measured there.");
+    println!("  Zero registers makes every S-box constraint degree 7; one register");
+    println!("  makes them degree 3. Both verify under the hiding PCS at the rate");
+    println!("  this crate now uses. At blowup 4, which it used until the sweep,");
+    println!("  degree 7 did not verify: the quotient a hiding commitment can carry");
+    println!("  is bounded by the rate. The register was a consequence of the rate");
+    println!("  and not of zero knowledge. The widths below are measured at one");
+    println!("  register, and the section near the end measures what zero costs.");
     println!();
 
     println!();
@@ -193,7 +210,7 @@ fn main() {
         ("4  / 1", merkle::measure::<1, 4>()),
         ("8  / 1", merkle::measure::<1, 8>()),
         ("16 / 1", merkle::measure::<1, 16>()),
-        ("16 / 0 (not ZK-admissible)", merkle::measure::<0, 16>()),
+        ("16 / 0", merkle::measure::<0, 16>()),
     ];
     for (label, (w, n, d)) in mk {
         println!("  {:<26} {:>8} {:>14} {:>8}", label, w, n, d);
@@ -208,7 +225,7 @@ fn main() {
         ("20 / 1", revocation::measure::<1, 20>()),
         ("24 / 1", revocation::measure::<1, 24>()),
         ("32 / 1", revocation::measure::<1, 32>()),
-        ("32 / 0 (not ZK-admissible)", revocation::measure::<0, 32>()),
+        ("32 / 0", revocation::measure::<0, 32>()),
     ];
     for (label, (w, n, d)) in rv {
         println!("  {:<26} {:>8} {:>14} {:>8}", label, w, n, d);
@@ -217,14 +234,14 @@ fn main() {
     let (pw, pn, _) = measure(&ALL_CLAUSES);
     let (_, _, _) = (pw, pn, 0);
     let (fw, fn_, _) = full::measure::<1>();
-    let (mw, mn, _) = merkle::measure::<1, 16>();
-    let (rw, rn, _) = revocation::measure::<1, 32>();
+    let (mw, mn, _) = merkle::measure::<{ prover::REGISTERS }, 16>();
+    let (rw, rn, _) = revocation::measure::<{ prover::REGISTERS }, 32>();
     println!();
     println!("WHOLE CIRCUIT, DEPTH 16 ALLOWLISTS, DEPTH 32 REVOCATION, REGISTERS 1");
     println!("{}", "=".repeat(78));
     println!("  {:<30} {:>10} {:>14} {:>7}", "component", "columns", "constraints", "share");
     println!("  {:<30} {:>10} {:>14} {:>7}", "-".repeat(30), "-".repeat(10), "-".repeat(14), "-".repeat(7));
-    let c7w = whole::WholeAir::<1, 16, 32>::new().payload_cols();
+    let c7w = whole::WholeAir::<{ prover::REGISTERS }, 16, 32>::new().payload_cols();
     let total_w = fw + c7w + 2 * mw + rw;
     let items = [
         ("policy clauses plus C9", fw, fn_),
@@ -261,13 +278,13 @@ fn main() {
     for (label, (w, n, d)) in [
         ("16 / 20, registers 1", whole::measure::<1, 16, 20>()),
         ("16 / 32, registers 1", whole::measure::<1, 16, 32>()),
-        ("16 / 32, registers 0 (not ZK)", whole::measure::<0, 16, 32>()),
-        ("public payee, no allowlists", whole::measure::<1, 0, 32>()),
+        ("16 / 32, registers 0", whole::measure::<0, 16, 32>()),
+        ("public payee, no allowlists", whole::measure::<{ prover::REGISTERS }, 0, 32>()),
     ] {
         println!("  {:<30} {:>10} {:>14} {:>7}", label, w, n, d);
     }
     println!();
-    let (whw, whn, _) = whole::measure::<1, 16, 32>();
+    let (whw, whn, _) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
     println!("  Summed components gave {} / {} at 16 / 32 registers 1; the whole",
              fw + 2 * mw + rw, fn_ + 2 * mn + rn);
     println!("  AIR is {} / {}. Of the {} column difference, {} are C7's sponge",
@@ -292,33 +309,33 @@ fn main() {
         ("16 / 128 / 1", spend::measure::<1, 16, 128>()),
         ("16 / 8   / 1", spend::measure::<1, 16, 8>()),
         ("16 / 1   / 1", spend::measure::<1, 16, 1>()),
-        ("16 / 64  / 0 (not ZK)", spend::measure::<0, 16, 64>()),
+        ("16 / 64  / 0", spend::measure::<0, 16, 64>()),
     ] {
         println!("  {:<26} {:>8} {:>12} {:>7}", label, w, n, d);
     }
 
     println!();
-    let (vw, vn, _) = vacuous::measure::<1, 16, 32>();
-    let (rw, rn, _) = whole::measure::<1, 16, 32>();
+    let (vw, vn, _) = vacuous::measure::<{ prover::REGISTERS }, 16, 32>();
+    let (rw, rn, _) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
     println!("NULLIFIER FROM A SECOND INVOCATION: THE PRICE OF DROPPING AN ASSUMPTION");
     println!("{}", "=".repeat(78));
     println!("  {:<34} {:>10} {:>14}", "depth / cover", "width", "constraints");
     println!("  {:<34} {:>10} {:>14}", "-".repeat(34), "-".repeat(10), "-".repeat(14));
     for (label, (w, n, _)) in [
-        ("16 / 64, as built", spend::measure::<1, 16, 64>()),
-        ("16 / 64, second invocation", spend2::measure::<1, 16, 64>()),
-        ("16 / 30, second invocation", spend2::measure::<1, 16, 30>()),
-        ("16 / 128, second invocation", spend2::measure::<1, 16, 128>()),
+        ("16 / 64, as built", spend::measure::<{ prover::REGISTERS }, 16, 64>()),
+        ("16 / 64, second invocation", spend2::measure::<{ prover::REGISTERS }, 16, 64>()),
+        ("16 / 30, second invocation", spend2::measure::<{ prover::REGISTERS }, 16, 30>()),
+        ("16 / 128, second invocation", spend2::measure::<{ prover::REGISTERS }, 16, 128>()),
     ] {
         println!("  {:<34} {:>10} {:>14}", label, w, n);
     }
-    let (a1, _, _) = spend::measure::<1, 16, 64>();
-    let (a2, _, _) = spend2::measure::<1, 16, 64>();
-    let (wh, _, _) = whole::measure::<1, 16, 32>();
+    let (a1, _, _) = spend::measure::<{ prover::REGISTERS }, 16, 64>();
+    let (a2, _, _) = spend2::measure::<{ prover::REGISTERS }, 16, 64>();
+    let (wh, _, _) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
     println!();
     println!("  The accountability half grows {} to {}, and the composed circuit",
              a1, a2);
-    let (cw, _, _) = composed::measure::<1, 16, 32, 16, 64>();
+    let (cw, _, _) = composed::measure::<{ prover::REGISTERS }, 16, 32, 16, 64>();
     let bind = cw - (wh + a1);
     println!("  from {} to about {}, which is {:+.0}%. What it buys is that the",
              wh + a1 + bind, wh + a2 + bind,
@@ -351,9 +368,9 @@ fn main() {
     ] {
         println!("  {:<34} {:>10} {:>14} {:>7}", label, w, n, d);
     }
-    let (cw, _, _) = composed::measure::<1, 16, 32, 16, 64>();
-    let (ww, _, _) = whole::measure::<1, 16, 32>();
-    let (sw, _, _) = spend::measure::<1, 16, 64>();
+    let (cw, _, _) = composed::measure::<{ prover::REGISTERS }, 16, 32, 16, 64>();
+    let (ww, _, _) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
+    let (sw, _, _) = spend::measure::<{ prover::REGISTERS }, 16, 64>();
     println!();
     println!("  Separately the two halves are {} + {} = {} columns; composed they",
              ww, sw, ww + sw);
@@ -373,20 +390,20 @@ fn main() {
     check("  ... C9 binding broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Binding)), false);
     check("  ... sponge chaining broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Chaining)), false); 
     check("  ... permutation round state broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Permutation)), false);
-    check("merkle inclusion, depth 8, 64 rows", prover::roundtrip_merkle::<1, 8>(64, None), true);
-    check("  ... direction bit perturbed", prover::roundtrip_merkle::<1, 8>(64, Some(8)), false);
-    check("  ... sibling digest perturbed", prover::roundtrip_merkle::<1, 8>(64, Some(4)), false);
-    check("non-revocation, depth 8, 64 rows", prover::roundtrip_nonmembership::<1, 8>(64, None), true);
+    check("merkle inclusion, depth 8, 64 rows", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, None), true);
+    check("  ... direction bit perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(8)), false);
+    check("  ... sibling digest perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(4)), false);
+    check("non-revocation, depth 8, 64 rows", prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(64, None), true);
     for (label, b) in [
         ("  ... a gap decomposition perturbed", trace::RevokeBreak::GapDecomposition),
         ("  ... run starts inside the revoked range", trace::RevokeBreak::RunStartsInsideRange),
         ("  ... run reaches the next revoked range", trace::RevokeBreak::RunReachesNextRange),
         ("  ... run ends before it starts", trace::RevokeBreak::RunInverted),
     ] {
-        check(label, prover::roundtrip_nonmembership::<1, 8>(64, Some(b)), false);
+        check(label, prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(64, Some(b)), false);
     }
     let pl = spend_trace::PAYLOAD;
-    check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<1, 16, 14>(64, None, pl), true);
+    check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, None, pl), true);
     for (label, b) in [
         ("  ... published share altered", spend_trace::SpendBreak::Share),
         ("  ... key taken from another unit", spend_trace::SpendBreak::Key),
@@ -399,20 +416,20 @@ fn main() {
         ("  ... a slot spanning two units", spend_trace::SpendBreak::CoarseSpan),
         ("  ... run ends past the budget", spend_trace::SpendBreak::RunPastBudget),
     ] {
-        check(label, prover::roundtrip_spend::<1, 16, 14>(64, Some(b), pl), false);
+        check(label, prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, Some(b), pl), false);
     }
-    check("  ... wrong public payload digest", prover::roundtrip_spend::<1, 16, 14>(64, None, pl + 1), false);
-    let a10 = trace::whole_public_values_amount::<1, 16, 32>(10);
-    let a13 = trace::whole_public_values_amount::<1, 16, 32>(13);
+    check("  ... wrong public payload digest", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, None, pl + 1), false);
+    let a10 = trace::whole_public_values_amount::<{ prover::REGISTERS }, 16, 32>(10);
+    let a13 = trace::whole_public_values_amount::<{ prover::REGISTERS }, 16, 32>(13);
     check("commitment does not move with the payment", a10[5..9] == a13[5..9], true);
     check("payload digest does move with the payment", a10[0] != a13[0], true);
     check("second-invocation nullifier, depth 16, cover 14, 64 rows",
-          prover::roundtrip_spend_two::<1, 16, 14>(64), true);
+          prover::roundtrip_spend_two::<{ prover::REGISTERS }, 16, 14>(64), true);
     check("a policy the commitment does not open to, under the real circuit",
-          prover::roundtrip_vacuous::<1, 8, 8>(64, true), false);
+          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(64, true), false);
     check("  ... the same trace with C9's binding removed",
-          prover::roundtrip_vacuous::<1, 8, 8>(64, false), true);
-    let (okc, _) = prover::roundtrip_composed_air::<1, 8, 8, 16, 14>(64, None);
+          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(64, false), true);
+    let (okc, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(64, None);
     check("COMPOSED CIRCUIT, depth 16, cover 14, 64 rows", okc, true);
     for (label, b) in [
         ("  ... run start disagrees with C8's run", trace::ComposedBreak::RunStartMismatch),
@@ -421,7 +438,7 @@ fn main() {
         ("  ... unit size does not divide the budget", trace::ComposedBreak::UnitSizeWrong),
         ("  ... cap larger than the budget", trace::ComposedBreak::CapAboveBudget),
     ] {
-        let (got, _) = prover::roundtrip_composed_air::<1, 8, 8, 16, 14>(64, Some(b));
+        let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(64, Some(b));
         check(label, got, false);
     }
     let (ok32, ms32) = prover::roundtrip_whole::<1>(32, None);
@@ -489,9 +506,9 @@ fn main() {
     println!();
     println!("  Deterministic at fixed parameters, so one run is a measurement.");
     println!();
-    let cbytes = prover::composed_proof_bytes::<1, 16, 32, 16, 64>(32);
-    let (cw2, _, _) = composed::measure::<1, 16, 32, 16, 64>();
-    let sep = prover::proof_bytes::<1>(32).0 + prover::spend_proof_bytes::<1, 16, 64>(32);
+    let cbytes = prover::composed_proof_bytes::<{ prover::REGISTERS }, 16, 32, 16, 64>(32);
+    let (cw2, _, _) = composed::measure::<{ prover::REGISTERS }, 16, 32, 16, 64>();
+    let sep = prover::proof_bytes::<{ prover::REGISTERS }>(32).0 + prover::spend_proof_bytes::<{ prover::REGISTERS }, 16, 64>(32);
     println!("  {:<48} {:>10}", "composed proof, bincode bytes, 32-row trace", cbytes);
     println!("  {:<48} {:>10}", "two separate proofs, same payments", sep);
     println!("  {:<48} {:>10}", "saved by proving once", sep as i64 - cbytes as i64);
@@ -658,6 +675,54 @@ fn main() {
     for (i, (x, y, z)) in batch_medians.iter().enumerate() {
         println!("  {:>6} {:>12.4} {:>12.4} {:>12.4}", i + 1, x, y, z);
     }
+
+    println!();
+    println!("ZERO REGISTERS UNDER THE HIDING COMMITMENT");
+    println!("{}", "=".repeat(78));
+    println!("  The S-box register holds the constraint degree at 3. At the rate this");
+    println!("  crate now uses, degree 7 is admissible too, so the register is a cost");
+    println!("  rather than a requirement. Both rows below are proved and verified.");
+    println!();
+    println!("  {:<34} {:>10} {:>13} {:>7} {:>9}",
+             "composed circuit", "columns", "constraints", "degree", "verifies");
+    println!("  {:<34} {:>10} {:>13} {:>7} {:>9}",
+             "-".repeat(34), "-".repeat(10), "-".repeat(13), "-".repeat(7), "-".repeat(9));
+    {
+        let (w1, c1, d1) = composed::measure::<1, 16, 32, 16, 64>();
+        let (w0, c0, d0) = composed::measure::<0, 16, 32, 16, 64>();
+        let v1 = prover::composed_verifies::<1, 16, 32, 16, 64>(32);
+        let v0 = prover::composed_verifies::<0, 16, 32, 16, 64>(32);
+        println!("  {:<34} {:>10} {:>13} {:>7} {:>9}", "one register, as built", w1, c1, d1, v1);
+        println!("  {:<34} {:>10} {:>13} {:>7} {:>9}", "zero registers", w0, c0, d0, v0);
+        println!();
+        println!("  THE SMALLEST RATE THAT ADMITS ZERO REGISTERS");
+        println!("  {:<22} {:>10} {:>12}", "blowup", "provable", "verifies");
+        println!("  {:<22} {:>10} {:>12}", "-".repeat(22), "-".repeat(10), "-".repeat(12));
+        for lb in [1usize, 2, 3, 4, 5] {
+            let ok = prover::composed_verifies_at::<0, 16, 32, 16, 64>(
+                32, prover::NUM_QUERIES, lb, prover::POW_BITS);
+            let provable = (prover::NUM_QUERIES * lb) / 2 + prover::POW_BITS;
+            println!("  {:<22} {:>10} {:>12}", 1usize << lb, provable.min(126), ok);
+        }
+        println!();
+        println!("  Width is a property of the AIR and does not move with the rate.");
+        println!("  What moves is whether the commitment can carry a degree-7");
+        println!("  quotient, so the first row that verifies is the whole price of");
+        println!("  the register, and any rate above it is bought for soundness.");
+
+        println!();
+        if v0 {
+            println!("  Dropping the register removes {} columns, {:.1}% of the circuit,",
+                     w1 - w0, 100.0 * (w1 - w0) as f64 / w1 as f64);
+            println!("  and the proof still verifies. The cost moves into constraint");
+            println!("  degree, which the rate now covers.");
+        } else {
+            println!("  Zero registers does not verify at this rate for the composed");
+            println!("  circuit, whatever the bare permutation does. The register stays.");
+        }
+    }
+
+    sweep::run();
 
     println!("  Soundness gaps closed: C6 uses the field constant one in-circuit");
     println!("  rather than a witness adjustment; share indices are forced non-zero");

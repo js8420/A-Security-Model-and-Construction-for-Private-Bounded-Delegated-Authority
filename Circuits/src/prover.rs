@@ -140,13 +140,32 @@ fn config_plain() -> PlainConfig {
     StarkConfig::new(pcs, Challenger::new(perm))
 }
 
-/// 40 queries at blowup 4 with 8 proof-of-work bits is about 88 bits, which is
-/// the setting the upstream tests use. Report it alongside any timing.
-pub const NUM_QUERIES: usize = 40;
-pub const LOG_BLOWUP: usize = 2;
-pub const POW_BITS: usize = 8;
+/// 40 queries at blowup 16 with 20 grinding bits: 126 bits under the FRI
+/// list-decoding conjecture, and 100 without it. The earlier setting was the
+/// upstream test default --- 40 queries at blowup 4 with 8 grinding bits ---
+/// which is 88 conjectured and 48 provable, and was never chosen for this
+/// construction. The sweep of `sweep.rs` is why these three numbers and not
+/// others: grinding costs nothing in proof size, rate costs almost nothing,
+/// and queries cost about 208 kB each. Reaching 100 provable bits this way
+/// adds 12,800 bytes to a proof and takes proving from 1.7 s to 6.2 s for a
+/// 32-payment batch.
+/// S-box registers in the Poseidon2 AIR. One register witnesses an
+/// intermediate value and holds every S-box constraint at degree 3; zero
+/// registers leaves them at degree 7 and removes the columns. Both verify under
+/// the hiding commitment at the rate below, and zero is 44.8% narrower on the
+/// composed circuit, so zero is what the construction is built with. The
+/// ablation rows in main.rs name their register count literally and must stay
+/// that way; everything that means "as built" reads this.
+pub const REGISTERS: usize = 0;
 
-fn config() -> Config {
+pub const NUM_QUERIES: usize = 40;
+pub const LOG_BLOWUP: usize = 4;
+pub const POW_BITS: usize = 20;
+
+/// The hiding configuration at a chosen FRI setting. `config` is this at the
+/// deployment's parameters; the sweep of `sweep.rs` is this at others. There is
+/// one constructor so a parameter added here cannot be missed there.
+pub(crate) fn config_with(num_queries: usize, log_blowup: usize, pow_bits: usize) -> Config {
     let perm = default_goldilocks_poseidon2_8();
     let hash = Hash::new(perm.clone());
     let compress = Compress::new(perm.clone());
@@ -161,12 +180,12 @@ fn config() -> Config {
     let fri_mmcs = ValMmcs::new(hash, compress, 0, SaltRng::seeded(FRI_SALT_SEED));
     let challenge_mmcs = ChallengeMmcs::new(fri_mmcs);
     let fri_params = FriParameters {
-        log_blowup: LOG_BLOWUP,
+        log_blowup,
         log_final_poly_len: 3,
         max_log_arity: 2,
-        num_queries: NUM_QUERIES,
+        num_queries,
         commit_proof_of_work_bits: 0,
-        query_proof_of_work_bits: POW_BITS,
+        query_proof_of_work_bits: pow_bits,
         mmcs: challenge_mmcs,
     };
     let pcs = Pcs::new(
@@ -177,6 +196,10 @@ fn config() -> Config {
         SaltRng::seeded(CODEWORD_SEED),
     );
     StarkConfig::new(pcs, Challenger::new(perm))
+}
+
+fn config() -> Config {
+    config_with(NUM_QUERIES, LOG_BLOWUP, POW_BITS)
 }
 
 /// One proof over a genuine satisfying trace of `1 << log_rows` permutations.
@@ -600,13 +623,13 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     let zk = config();
     let plain = config_plain();
     let pv: Vec<Goldilocks> = vec![Goldilocks::from_u64(crate::spend_trace::PAYLOAD)];
-    let pv_full = full_public_values::<1>();
+    let pv_full = full_public_values::<{ REGISTERS }>();
 
     // Declared before the closure vectors below, so that the closures which
     // borrow them are dropped first.
-    let pv_w32 = whole_public_values::<1, 16, 32>();
-    let pv_wpp = whole_public_values::<1, 0, 32>();
-    let pv_w20 = whole_public_values::<1, 16, 20>();
+    let pv_w32 = whole_public_values::<{ REGISTERS }, 16, 32>();
+    let pv_wpp = whole_public_values::<{ REGISTERS }, 0, 32>();
+    let pv_w20 = whole_public_values::<{ REGISTERS }, 16, 20>();
     let pv_w32z = whole_public_values::<0, 16, 32>();
 
     let mut labels: Vec<&'static str> = Vec::new();
@@ -655,19 +678,19 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         }};
     }
 
-    variant!("policy + C9 only", FullAir::<1>::new(), composed_trace::<1>(ROWS), &zk, &pv_full);
-    variant!("+ allowlists + revocation d32", WholeAir::<1, 16, 32>::new(),
-             whole_trace::<1, 16, 32>(ROWS), &zk, &pv_w32);
-    variant!("  same, revocation d20", WholeAir::<1, 16, 20>::new(),
-             whole_trace::<1, 16, 20>(ROWS), &zk, &pv_w20);
-    variant!("  allowlists outside the proof", WholeAir::<1, 0, 32>::new(),
-             whole_trace::<1, 0, 32>(ROWS), &zk, &pv_wpp);
-    variant!("accountability, grain 1/64", crate::spend::SpendAir::<1, 16, 64>::new(),
-             crate::spend_trace::spend_trace::<1, 16, 64>(ROWS), &zk, &pv);
-    variant!("  coarser, grain 1/30", crate::spend::SpendAir::<1, 16, 30>::new(),
-             crate::spend_trace::spend_trace::<1, 16, 30>(ROWS), &zk, &pv);
-    variant!("  finer, grain 1/128", crate::spend::SpendAir::<1, 16, 128>::new(),
-             crate::spend_trace::spend_trace::<1, 16, 128>(ROWS), &zk, &pv);
+    variant!("policy + C9 only", FullAir::<{ REGISTERS }>::new(), composed_trace::<{ REGISTERS }>(ROWS), &zk, &pv_full);
+    variant!("+ allowlists + revocation d32", WholeAir::<{ REGISTERS }, 16, 32>::new(),
+             whole_trace::<{ REGISTERS }, 16, 32>(ROWS), &zk, &pv_w32);
+    variant!("  same, revocation d20", WholeAir::<{ REGISTERS }, 16, 20>::new(),
+             whole_trace::<{ REGISTERS }, 16, 20>(ROWS), &zk, &pv_w20);
+    variant!("  allowlists outside the proof", WholeAir::<{ REGISTERS }, 0, 32>::new(),
+             whole_trace::<{ REGISTERS }, 0, 32>(ROWS), &zk, &pv_wpp);
+    variant!("accountability, grain 1/64", crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new(),
+             crate::spend_trace::spend_trace::<{ REGISTERS }, 16, 64>(ROWS), &zk, &pv);
+    variant!("  coarser, grain 1/30", crate::spend::SpendAir::<{ REGISTERS }, 16, 30>::new(),
+             crate::spend_trace::spend_trace::<{ REGISTERS }, 16, 30>(ROWS), &zk, &pv);
+    variant!("  finer, grain 1/128", crate::spend::SpendAir::<{ REGISTERS }, 16, 128>::new(),
+             crate::spend_trace::spend_trace::<{ REGISTERS }, 16, 128>(ROWS), &zk, &pv);
     variant!("whole, no zero knowledge", WholeAir::<0, 16, 32>::new(),
              whole_trace::<0, 16, 32>(ROWS), &plain, &pv_w32z);
     variant!("accountability, no zk", crate::spend::SpendAir::<0, 16, 64>::new(),
@@ -675,8 +698,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     // The composed circuit is what a settlement actually costs: one proof
     // covering both halves of one payment, rather than a compliance figure that
     // has to be added to an accountability figure the abstract never added.
-    variant!("composed, one proof per payment", ComposedAir::<1, 16, 32, 16, 64>::new(),
-             composed_air_trace::<1, 16, 32, 16, 64>(ROWS), &zk, &pv_w32);
+    variant!("composed, one proof per payment", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::new(),
+             composed_air_trace::<{ REGISTERS }, 16, 32, 16, 64>(ROWS), &zk, &pv_w32);
 
     // The arrangement the manuscript describes, timed as one thing. Adding the
     // medians of two separately measured rows is not the median of their sum,
@@ -686,10 +709,10 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         let cfgp = &zk;
         let pw = &pv_w32;
         let ps = &pv;
-        let wair = WholeAir::<1, 16, 32>::new();
-        let sair = crate::spend::SpendAir::<1, 16, 64>::new();
-        let wtr = whole_trace::<1, 16, 32>(ROWS);
-        let str_ = crate::spend_trace::spend_trace::<1, 16, 64>(ROWS);
+        let wair = WholeAir::<{ REGISTERS }, 16, 32>::new();
+        let sair = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
+        let wtr = whole_trace::<{ REGISTERS }, 16, 32>(ROWS);
+        let str_ = crate::spend_trace::spend_trace::<{ REGISTERS }, 16, 64>(ROWS);
         let wproof = prove(cfgp, &wair, wtr.clone(), pw);
         let sproof = prove(cfgp, &sair, str_.clone(), ps);
         labels.push("two halves, one timed region");
@@ -699,8 +722,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
                 + bincode::serialize(&sproof).expect("proof serialises").len(),
         );
 
-        let w1 = WholeAir::<1, 16, 32>::new();
-        let s1 = crate::spend::SpendAir::<1, 16, 64>::new();
+        let w1 = WholeAir::<{ REGISTERS }, 16, 32>::new();
+        let s1 = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
         provers.push(Box::new(move || {
             let a = wtr.clone();
             let b = str_.clone();
@@ -710,8 +733,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
             t.elapsed().as_micros()
         }));
 
-        let w2 = WholeAir::<1, 16, 32>::new();
-        let s2 = crate::spend::SpendAir::<1, 16, 64>::new();
+        let w2 = WholeAir::<{ REGISTERS }, 16, 32>::new();
+        let s2 = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
         verifiers.push(Box::new(move || {
             let t = Instant::now();
             let ok = verify(cfgp, &w2, &wproof, pw).is_ok()
@@ -766,4 +789,77 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
             verify_batches: vbatch[i].clone(),
         })
         .collect()
+}
+
+
+/// One composed proof at a chosen FRI setting, with the size broken into the
+/// parts a wrapper would have to replace. Deterministic at fixed parameters.
+pub fn composed_proof_at<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    num_queries: usize,
+    log_blowup: usize,
+    pow_bits: usize,
+) -> (usize, usize, usize, usize, u128, u128, bool) {
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+    let cfg = config_with(num_queries, log_blowup, pow_bits);
+    let pv = whole_public_values::<R, MD, RD>();
+    let trace = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
+
+    let t0 = Instant::now();
+    let proof = prove(&cfg, &air, trace, &pv);
+    let prove_us = t0.elapsed().as_micros();
+
+    let whole = bincode::serialize(&proof).expect("proof serialises").len();
+    let commit = bincode::serialize(&proof.commitments).expect("commitments").len();
+    let opened = bincode::serialize(&proof.opened_values).expect("opened values").len();
+    let opening = bincode::serialize(&proof.opening_proof).expect("opening proof").len();
+
+    let t1 = Instant::now();
+    let ok = verify(&cfg, &air, &proof, &pv).is_ok();
+    let verify_us = t1.elapsed().as_micros();
+
+    (whole, commit, opened, opening, prove_us, verify_us, ok)
+}
+
+/// Does a composed configuration actually verify? `composed_proof_bytes`
+/// proves without verifying, so a size can be reported for a statement no
+/// verifier accepts. This exists so that cannot happen silently again.
+pub fn composed_verifies<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+) -> bool {
+    composed_verifies_at::<R, MD, RD, DEPTH, COVER>(rows, NUM_QUERIES, LOG_BLOWUP, POW_BITS)
+}
+
+/// The same question at a chosen rate. The degree a hiding commitment can
+/// carry is bounded by the rate, so the smallest rate admitting a zero-register
+/// circuit is what the register actually costs.
+pub fn composed_verifies_at<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    num_queries: usize,
+    log_blowup: usize,
+    pow_bits: usize,
+) -> bool {
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+    let cfg = config_with(num_queries, log_blowup, pow_bits);
+    let pv = whole_public_values::<R, MD, RD>();
+    let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
+    verify(&cfg, &air, &proof, &pv).is_ok()
 }
