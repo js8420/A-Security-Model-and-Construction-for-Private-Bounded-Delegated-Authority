@@ -9,7 +9,7 @@ use p3_poseidon2_air::num_cols;
 use crate::hash::{HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE};
 use crate::air::{
     RANGE_BITS, COL_AMOUNT, COL_B, COL_C, COL_CID, COL_CROOT, COL_MID, COL_MROOT,
-    COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
+    COL_DOMAIN, COL_N, COL_NONCE, COL_PAYEE, COL_R, COL_T, COL_TEXP, COL_TSTART, COL_W, DIGEST,
     PAYLOAD_SRC, VALUE_COLS,
 };
 use crate::full::C9_PERMUTATIONS;
@@ -38,6 +38,9 @@ struct Row {
     t_start: u64,
     t_exp: u64,
     velocity_n: u64,
+    /// The settlement domain the payment is for, as that domain's chain
+    /// identifier. 8453 is Base.
+    domain: u64,
 }
 
 /// The budget is the unit size times the spendable count: 4 * 1536 = 6144.
@@ -59,6 +62,7 @@ const GOOD: Row = Row {
     t_start: 1000,
     t_exp: 9000,
     velocity_n: 5,
+    domain: 8453,
 };
 
 fn bits_of(v: u64) -> Vec<F> {
@@ -115,6 +119,7 @@ pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F
         row[COL_W] = F::from_u64(100);
         row[COL_R] = F::from_u64(4242);
         row[COL_NONCE] = F::from_u64(777);
+        row[COL_DOMAIN] = F::from_u64(GOOD.domain);
         row[COL_MERCHANT_OK] = F::ONE;
         row[COL_CATEGORY_OK] = F::ONE;
 
@@ -588,6 +593,12 @@ pub enum ComposedBreak {
     AmountLowered,
     /// The witnessed unit size does not divide the committed budget.
     UnitSizeWrong,
+    /// The settlement domain column is altered after the payload digest was
+    /// computed, so the row claims a domain the digest does not cover. Without
+    /// the domain in the payload this control cannot be written at all, which
+    /// is the point of it: one payload would settle on two domains and publish
+    /// identical shares at one index.
+    DomainAltered,
 }
 
 /// A trace for the composed circuit: the compliance row, the spend row for the
@@ -715,6 +726,9 @@ fn build_composed<
         row[..w].copy_from_slice(&whole.values[..w]);
         row[w..w + spend.len()].copy_from_slice(&spend);
         row[w + spend.len()] = F::from_u64(u_written);
+        if how == Some(ComposedBreak::DomainAltered) {
+            row[COL_DOMAIN] += F::ONE;
+        }
         let rb = w + spend.len() + 1;
         for (g, gap) in gaps.iter().enumerate() {
             let start = rb + g * RANGE_BITS;

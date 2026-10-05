@@ -764,8 +764,17 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         }
         let mut pthis: Vec<Vec<u128>> = vec![Vec::new(); n];
         let mut vthis: Vec<Vec<u128>> = vec![Vec::new(); n];
-        for _ in 0..per_batch {
-            for i in 0..n {
+        // A variant's iterations run consecutively, and the order of variants
+        // rotates with the batch. Interleaving at the iteration level put a
+        // proof of 520 columns between two of 14,197 and charged each timed
+        // region for the allocator and cache behaviour of its neighbours: the
+        // same circuits timed as whole proofs elsewhere in this harness are
+        // stable to one percent, and here they were not. Rotating keeps the
+        // drift control that interleaving was for, since no variant is always
+        // measured first, and per-batch medians still expose drift if any.
+        for k in 0..n {
+            let i = (k + batch) % n;
+            for _ in 0..per_batch {
                 pthis[i].push(provers[i]());
                 vthis[i].push(verifiers[i]());
             }
@@ -825,6 +834,43 @@ pub fn composed_proof_at<
     let verify_us = t1.elapsed().as_micros();
 
     (whole, commit, opened, opening, prove_us, verify_us, ok)
+}
+
+/// Proving times for the same circuit and the same prebuilt trace, with the
+/// hiding configuration either shared across every iteration or rebuilt for
+/// each. The cost study shares one; the parameter sweep rebuilds. Their
+/// dispersions differ twentyfold and this is the only difference left between
+/// them, so it is measured here rather than argued about.
+pub fn composed_times<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    iters: usize,
+    share_config: bool,
+) -> Vec<u128> {
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+    let pv = whole_public_values::<R, MD, RD>();
+    let base = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
+    let shared = config();
+    let mut out = Vec::with_capacity(iters);
+    for _ in 0..iters {
+        let ready = base.clone();
+        if share_config {
+            let t = Instant::now();
+            let _ = prove(&shared, &air, ready, &pv);
+            out.push(t.elapsed().as_micros());
+        } else {
+            let cfg = config();
+            let t = Instant::now();
+            let _ = prove(&cfg, &air, ready, &pv);
+            out.push(t.elapsed().as_micros());
+        }
+    }
+    out
 }
 
 /// Does a composed configuration actually verify? `composed_proof_bytes`

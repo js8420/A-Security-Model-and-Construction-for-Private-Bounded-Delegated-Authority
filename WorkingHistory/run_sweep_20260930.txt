@@ -1,0 +1,86 @@
+﻿cargo :     Finished `release` profile [optimized] target(s) in 0.13s
+At line:1 char:97
++ ... DSC12_submission\Circuits"; cargo run --release -- sweep 2>&1 | Out-F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.13s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running `target\release\delegation-circuit.exe sweep`
+
+DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?
+==============================================================================
+  allowlist / revocation / depth / cover, rows     verifies
+  ---------------------------------------------- ----------
+  8 / 8 / 16 / 14, 64 rows (the checked one)           true
+  16 / 32 / 16 / 14, 64 rows                           true
+  16 / 32 / 16 / 14, 32 rows                           true
+  16 / 32 / 16 / 64, 64 rows                           true
+  16 / 32 / 16 / 64, 32 rows (the quoted one)          true
+
+FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 32 ROWS
+==============================================================================
+  queries  blowup   pow   conj.  Johnson  proof bytes   prove ms  verify ms  verifies
+  ------- ------- ----- ------- -------- ------------ ---------- ----------
+       40       4     8      88       48      9134533    1694.04    369.914      true
+       40       2     8      48       28      9128133    1194.74    363.459     false
+       40       8     8     126       68      9140933    2969.47    361.127      true
+       20       4     8      48       28      4979453    1678.28    251.249      true
+       30       4     8      68       38      7056993    1698.37    290.231      true
+       60       4     8     126       68     13289613    1654.33    444.802      true
+       80       4     8     126       88     17444693    1795.32    569.405      true
+       40       4     0      80       40      9134533    1682.34    354.507      true
+       40       4    16      96       56      9134533    1676.63    343.734      true
+       84       8    16     126      126     18289149    2925.20    570.246      true
+       40      16    20     126      100      9147333    6092.75    348.840      true
+       54       8    20     126      101     12051729    3443.65    429.113      true
+       80       4    20     126      100     17444693    1727.42    546.688      true
+
+  Blowup is the reciprocal rate. Conjectured soundness assumes a query
+  costs the full rate; Johnson is what holds without that conjecture and
+  is the figure to size a secret or a bond against. Both are capped at
+  126 bits, the challenge field.
+
+  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.
+  queries  blowup   pow  commitments       opened      opening opening%
+  ------- ------- ----- ------------ ------------ ------------ -------
+       40       4     8          121       823428      8310976   91.0%
+       40       2     8          121       823428      8304576   91.0%
+       40       8     8          121       823428      8317376   91.0%
+       20       4     8          121       823428      4155896   83.5%
+       30       4     8          121       823428      6233436   88.3%
+       60       4     8          121       823428     12466056   93.8%
+       80       4     8          121       823428     16621136   95.3%
+       40       4     0          121       823428      8310976   91.0%
+       40       4    16          121       823428      8310976   91.0%
+       84       8    16          121       823428     17465592   95.5%
+       40      16    20          121       823428      8323776   91.0%
+       54       8    20          121       823428     11228172   93.2%
+       80       4    20          121       823428     16621136   95.3%
+
+WHAT A SETTLEMENT DOMAIN CAN CARRY
+==============================================================================
+  call data in one 30M-gas block, at 16 gas a byte         1875000
+  one EIP-4844 blob                                         131072
+
+   proof bytes    Johnson       blocks        blobs
+  ------------ ---------- ------------ ------------
+       9134533         48         4.87         69.7
+       9128133         28         4.87         69.6
+       9140933         68         4.88         69.7
+       4979453         28         2.66         38.0
+       7056993         38         3.76         53.8
+      13289613         68         7.09        101.4
+      17444693         88         9.30        133.1
+       9134533         40         4.87         69.7
+       9134533         56         4.87         69.7
+      18289149        126         9.75        139.5
+       9147333        100         4.88         69.8
+      12051729        101         6.43         91.9
+      17444693        100         9.30        133.1
+
+  The smallest proof measured here is 4979453 bytes at 28 provable bits,
+  which is 38.0 blobs. No setting in this sweep brings a proof of this
+  circuit within one block of call data: the opening proof dominates and
+  it shrinks only with the query count, which is what soundness buys.
+  A backend meeting a settlement domain's budget has to replace the
+  opening argument, not tune it.

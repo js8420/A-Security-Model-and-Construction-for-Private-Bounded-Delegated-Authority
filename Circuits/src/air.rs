@@ -83,8 +83,14 @@ pub const COL_T: usize = 3;
 /// the recipient, and the allowlist constrains a value no settlement layer ever
 /// sees.
 pub const COL_PAYEE: usize = 4;
+/// The settlement domain this payment is for. Freshness is enforced per domain:
+/// a domain refuses a digest it has already settled and knows nothing of any
+/// other. Without this column one payload settles on two domains, both
+/// settlements publish the same shares at the same index, and extraction sees
+/// a repeated index rather than a repeated unit and returns nothing.
+pub const COL_DOMAIN: usize = 5;
 // policy scalars, in commitment order
-pub const COL_B: usize = 5;
+pub const COL_B: usize = COL_DOMAIN + 1;
 pub const COL_C: usize = COL_B + 1;
 pub const COL_TSTART: usize = COL_C + 1;
 pub const COL_TEXP: usize = COL_TSTART + 1;
@@ -116,8 +122,8 @@ pub const POLICY_ELEMS: usize = POLICY_SCALARS.len() + 2 * DIGEST + 1;
 /// The payment payload, in the order the C7 sponge absorbs it. These are the
 /// six fields of Definition 3 and nothing else: a digest over a subset of them
 /// would leave the rest detachable from the proof.
-pub const PAYLOAD_SRC: [usize; 6] =
-    [COL_AMOUNT, COL_MID, COL_CID, COL_T, COL_PAYEE, COL_NONCE];
+pub const PAYLOAD_SRC: [usize; 7] =
+    [COL_AMOUNT, COL_MID, COL_CID, COL_T, COL_PAYEE, COL_DOMAIN, COL_NONCE];
 
 pub const PAYLOAD_ELEMS: usize = PAYLOAD_SRC.len();
 

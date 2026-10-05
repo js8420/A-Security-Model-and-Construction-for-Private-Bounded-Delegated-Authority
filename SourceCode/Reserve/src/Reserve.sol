@@ -53,6 +53,13 @@ contract Reserve {
     error SecretDoesNotOpen();
 
     event Settled(uint256 indexed id, uint64 index, uint64 amount);
+
+    /// The transcript as log data rather than storage. Extraction only reads
+    /// the shares, and nothing in the contract compares against them, so a log
+    /// serves the same purpose at a fraction of the price. The cost is that a
+    /// log is not readable from inside the EVM: a future contract that wanted
+    /// to check a share itself could not.
+    event Transcript(uint256 indexed id, uint64 index, uint64[] elems);
     event BondForfeited(uint256 indexed id, address to, uint256 amount);
     event Revoked(uint256 indexed id, uint64 start, uint64 length);
 
@@ -147,6 +154,20 @@ contract Reserve {
         d.bond = 0;
         emit BondForfeited(id, d.principal, amount);
         payable(d.principal).transfer(amount);
+    }
+
+    /// The same settlement with the transcript emitted instead of stored.
+    /// Measured against `settle` so the choice is a number rather than an
+    /// assumption.
+    function settleLogged(
+        uint256 id,
+        uint64 amount,
+        uint64 index,
+        uint64[] calldata elems
+    ) external {
+        _admit(id, amount, index);
+        emit Transcript(id, index, elems);
+        emit Settled(id, index, amount);
     }
 
     function revoke(uint256 id, uint64 start, uint64 length) external {

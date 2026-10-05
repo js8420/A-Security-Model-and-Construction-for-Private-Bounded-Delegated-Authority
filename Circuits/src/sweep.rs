@@ -51,22 +51,102 @@ struct Row {
     verifies: bool,
 }
 
+/// Is the dispersion of the hiding rows the grinding search?
+///
+/// The deployment grinds 20 proof-of-work bits, a search over about 2^20
+/// hashes whose running time is geometric, so its mean and its spread are the
+/// same order. If that is what the hiding rows carry, then proving the same
+/// circuit at 0 bits and at 20 bits should differ by that amount in the median
+/// AND the 0-bit rows should be the tighter of the two. Measured here rather
+/// than argued from the distribution, with the two settings interleaved.
+fn grinding() {
+    const ITERS: usize = 24;
+    let mut off: Vec<f64> = Vec::with_capacity(ITERS);
+    let mut on: Vec<f64> = Vec::with_capacity(ITERS);
+    let mut ok_all = true;
+    for _ in 0..ITERS {
+        let (_, _, _, _, us0, _, o0) =
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, 40, 4, 0);
+        let (_, _, _, _, us1, _, o1) =
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, 40, 4, 20);
+        off.push(us0 as f64 / 1000.0);
+        on.push(us1 as f64 / 1000.0);
+        ok_all &= o0 && o1;
+    }
+    let q = |mut v: Vec<f64>| {
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p = |f: f64| v[((v.len() - 1) as f64 * f).round() as usize];
+        (v[0], p(0.25), p(0.5), p(0.75))
+    };
+    let (a0, b0, c0, d0) = q(off);
+    let (a1, b1, c1, d1) = q(on);
+
+    println!();
+    println!("WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED");
+    println!("{}", "=".repeat(78));
+    println!("  Same circuit, same rate, {} interleaved pairs. Only the grinding", ITERS);
+    println!("  bits differ. Both settings are below the rate this circuit needs to");
+    println!("  verify, so neither proof is accepted ({}); the timing is the point.", ok_all);
+    println!();
+    println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}", "grinding bits", "min", "q1", "median", "q3", "q3-q1");
+    println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}",
+             "-".repeat(22), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9));
+    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "0", a0, b0, c0, d0, d0 - b0);
+    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "20", a1, b1, c1, d1, d1 - b1);
+    println!();
+    println!("  median difference {:.2} ms, spread difference {:.2} ms.", c1 - c0, (d1 - b1) - (d0 - b0));
+    println!("  A geometric search over 2^20 hashes has a mean and a standard");
+    println!("  deviation of the same order, so if grinding is the source these two");
+    println!("  differences should be comparable and the 0-bit row should be tight.");
+}
+
+/// One hiding configuration reused, against a fresh one per proof.
+fn config_reuse() {
+    const ITERS: usize = 20;
+    let shared = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, ITERS, true);
+    let fresh  = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, ITERS, false);
+    let q = |v: &Vec<u128>| {
+        let mut w: Vec<f64> = v.iter().map(|&x| x as f64 / 1000.0).collect();
+        w.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p = |f: f64| w[((w.len() - 1) as f64 * f).round() as usize];
+        (w[0], p(0.25), p(0.5), p(0.75))
+    };
+    let (a0, b0, c0, d0) = q(&shared);
+    let (a1, b1, c1, d1) = q(&fresh);
+    println!();
+    println!("ONE CONFIGURATION REUSED, AGAINST A FRESH ONE PER PROOF");
+    println!("{}", "=".repeat(78));
+    println!("  Same circuit, same prebuilt trace, {} proofs each. The only", ITERS);
+    println!("  difference is whether the hiding configuration is rebuilt.");
+    println!();
+    println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}", "configuration", "min", "q1", "median", "q3", "q3-q1");
+    println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}",
+             "-".repeat(22), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9));
+    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "shared", a0, b0, c0, d0, d0 - b0);
+    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "rebuilt each proof", a1, b1, c1, d1, d1 - b1);
+    println!();
+    println!("  If sharing is the cause, the shared row is the wide one.");
+}
+
 pub fn run() {
+    config_reuse();
+    grinding();
+
     println!();
     println!("DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?");
     println!("{}", "=".repeat(78));
     println!("  {:<46} {:>10}", "allowlist / revocation / depth / cover, rows", "verifies");
     println!("  {:<46} {:>10}", "-".repeat(46), "-".repeat(10));
-    println!("  {:<46} {:>10}", "8 / 8 / 16 / 14, 64 rows (the checked one)",
-             composed_verifies::<1, 8, 8, 16, 14>(64));
+    println!("  {:<46} {:>10}", "8 / 8 / 16 / 14, 64 rows",
+             composed_verifies::<{ crate::prover::REGISTERS }, 8, 8, 16, 14>(64));
     println!("  {:<46} {:>10}", "16 / 32 / 16 / 14, 64 rows",
-             composed_verifies::<1, 16, 32, 16, 14>(64));
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 14>(64));
     println!("  {:<46} {:>10}", "16 / 32 / 16 / 14, 32 rows",
-             composed_verifies::<1, 16, 32, 16, 14>(32));
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 14>(32));
     println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, 64 rows",
-             composed_verifies::<1, 16, 32, 16, 64>(64));
-    println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, 32 rows (the quoted one)",
-             composed_verifies::<1, 16, 32, 16, 64>(32));
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(64));
+    println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, 32 rows (what the paper quotes)",
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32));
     println!();
     println!("FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 32 ROWS");
     println!("{}", "=".repeat(78));
@@ -96,7 +176,7 @@ pub fn run() {
     let mut rows: Vec<Row> = Vec::new();
     for (q, b, p) in settings {
         let (bytes, commit, opened, opening, prove_us, verify_us, ok) =
-            composed_proof_at::<1, 16, 32, 16, 64>(32, q, b, p);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, q, b, p);
         rows.push(Row {
             queries: q,
             blowup: b,

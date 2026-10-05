@@ -233,11 +233,11 @@ fn main() {
 
     let (pw, pn, _) = measure(&ALL_CLAUSES);
     let (_, _, _) = (pw, pn, 0);
-    let (fw, fn_, _) = full::measure::<1>();
+    let (fw, fn_, _) = full::measure::<{ prover::REGISTERS }>();
     let (mw, mn, _) = merkle::measure::<{ prover::REGISTERS }, 16>();
     let (rw, rn, _) = revocation::measure::<{ prover::REGISTERS }, 32>();
     println!();
-    println!("WHOLE CIRCUIT, DEPTH 16 ALLOWLISTS, DEPTH 32 REVOCATION, REGISTERS 1");
+    println!("WHOLE CIRCUIT, DEPTH 16 ALLOWLISTS, DEPTH 32 REVOCATION, AS BUILT");
     println!("{}", "=".repeat(78));
     println!("  {:<30} {:>10} {:>14} {:>7}", "component", "columns", "constraints", "share");
     println!("  {:<30} {:>10} {:>14} {:>7}", "-".repeat(30), "-".repeat(10), "-".repeat(14), "-".repeat(7));
@@ -285,7 +285,7 @@ fn main() {
     }
     println!();
     let (whw, whn, _) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
-    println!("  Summed components gave {} / {} at 16 / 32 registers 1; the whole",
+    println!("  Summed components gave {} / {} at 16 / 32 as built; the whole",
              fw + 2 * mw + rw, fn_ + 2 * mn + rn);
     println!("  AIR is {} / {}. Of the {} column difference, {} are C7's sponge",
              whw, whn, whw as i64 - (fw + 2 * mw + rw) as i64, c7w);
@@ -386,10 +386,10 @@ fn main() {
     println!("  {:<44} {:>12}", "-".repeat(44), "-".repeat(12));
     check("satisfying assignment, 64 rows", prover::roundtrip(64, false), true);
     check("one gap decomposition corrupted", prover::roundtrip(64, true), false);
-    check("policy composed with C9, 64 rows", prover::roundtrip_composed::<1>(64, None), true);
-    check("  ... C9 binding broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Binding)), false);
-    check("  ... sponge chaining broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Chaining)), false); 
-    check("  ... permutation round state broken", prover::roundtrip_composed::<1>(64, Some(trace::Break::Permutation)), false);
+    check("policy composed with C9, 64 rows", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, None), true);
+    check("  ... C9 binding broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Binding)), false);
+    check("  ... sponge chaining broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Chaining)), false); 
+    check("  ... permutation round state broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Permutation)), false);
     check("merkle inclusion, depth 8, 64 rows", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, None), true);
     check("  ... direction bit perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(8)), false);
     check("  ... sibling digest perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(4)), false);
@@ -437,15 +437,16 @@ fn main() {
         ("  ... amount below the units charged", trace::ComposedBreak::AmountLowered),
         ("  ... unit size does not divide the budget", trace::ComposedBreak::UnitSizeWrong),
         ("  ... cap larger than the budget", trace::ComposedBreak::CapAboveBudget),
+        ("  ... settlement domain not the one the digest covers", trace::ComposedBreak::DomainAltered),
     ] {
         let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(64, Some(b));
         check(label, got, false);
     }
-    let (ok32, ms32) = prover::roundtrip_whole::<1>(32, None);
+    let (ok32, ms32) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, None);
     check("WHOLE CIRCUIT at full parameters, 32 rows", ok32, true);
-    let (bad32, _) = prover::roundtrip_whole::<1>(32, Some(0));
+    let (bad32, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, Some(0));
     check("  ... a policy column perturbed", bad32, false);
-    let (badpl, _) = prover::roundtrip_whole::<1>(32, Some(air::COL_NONCE));
+    let (badpl, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, Some(air::COL_NONCE));
     check("  ... a payment field altered, digest not recomputed", badpl, false);
     println!();
     println!("  Whole circuit proved and verified in {} ms at 32 rows, against the", ms32);
@@ -462,10 +463,10 @@ fn main() {
     println!("  log_blowup, which is 5 at these parameters.");
 
     println!();
-    println!("WHOLE-CIRCUIT PROVING COST, ONE REGISTER, HIDING PCS");
+    println!("WHOLE-CIRCUIT PROVING COST, AS BUILT, HIDING PCS");
     println!("{}", "=".repeat(78));
     let heights = [8usize, 16, 32];
-    let (rows, drift) = prover::whole_timing::<1>(TIMING_BATCHES, TIMING_PER_BATCH, 10, &heights);
+    let (rows, drift) = prover::whole_timing::<{ prover::REGISTERS }>(TIMING_BATCHES, TIMING_PER_BATCH, 10, &heights);
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "rows", "min", "q1", "median", "q3", "per payment");
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "-".repeat(6), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(13));
     for (h, st) in &rows {
@@ -493,11 +494,11 @@ fn main() {
     }
 
     println!();
-    println!("PROOF SIZE AND VERIFICATION COST, ONE REGISTER, HIDING PCS");
+    println!("PROOF SIZE AND VERIFICATION COST, AS BUILT, HIDING PCS");
     println!("{}", "=".repeat(78));
     println!("  smallest trace height these FRI parameters admit  {:>10}",
         prover::min_admissible_height());
-    let (pw, pc, po, pp) = prover::proof_bytes::<1>(32);
+    let (pw, pc, po, pp) = prover::proof_bytes::<{ prover::REGISTERS }>(32);
     println!("  {:<48} {:>10}", "proof, bincode bytes, 32-row trace", pw);
     println!("  {:<48} {:>10}", "  of which commitments", pc);
     println!("  {:<48} {:>10}", "  of which opened values", po);
@@ -514,7 +515,7 @@ fn main() {
     println!("  {:<48} {:>10}", "saved by proving once", sep as i64 - cbytes as i64);
     println!("  {:<48} {:>10}", "composed width for reference", cw2);
     println!();
-    let (vrows, vdrift) = prover::verify_timing::<1>(TIMING_BATCHES, TIMING_PER_BATCH, 10, &heights);
+    let (vrows, vdrift) = prover::verify_timing::<{ prover::REGISTERS }>(TIMING_BATCHES, TIMING_PER_BATCH, 10, &heights);
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "rows", "min", "q1", "median", "q3", "per payment");
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "-".repeat(6), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(13));
     for (h, st) in &vrows {
@@ -548,6 +549,35 @@ fn main() {
     for r in &study {
         println!("  {:<30} {:>8} {:>9.2}ms {:>12} {:>9.3}ms",
                  r.label, r.columns, r.prove.median, r.bytes, r.verify.median);
+    }
+    println!();
+    println!("  Dispersion of the proving figures above. A median on its own says");
+    println!("  nothing about how stable it is, and these rows are the ones the");
+    println!("  manuscript quotes.");
+    println!("  {:<30} {:>9} {:>9} {:>9} {:>9}", "variant", "min", "q1", "median", "q3");
+    println!("  {:<30} {:>9} {:>9} {:>9} {:>9}",
+             "-".repeat(30), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9));
+    for r in &study {
+        println!("  {:<30} {:>9.2} {:>9.2} {:>9.2} {:>9.2}",
+                 r.label, r.prove.min, r.prove.q1, r.prove.median, r.prove.q3);
+    }
+    println!();
+    println!("  PER-BATCH MEDIANS of the proving figures, ms per payment. Flat means");
+    println!("  no drift within this study; the hiding rows above are far less stable");
+    println!("  than the plain ones and this is where that is either explained or not.");
+    {
+        let w = study.first().map(|r| r.prove_batches.len()).unwrap_or(0);
+        print!("  {:<30}", "variant");
+        for i in 0..w { print!(" {:>8}", i + 1); }
+        println!();
+        print!("  {:<30}", "-".repeat(30));
+        for _ in 0..w { print!(" {:>8}", "-".repeat(8)); }
+        println!();
+        for r in &study {
+            print!("  {:<30}", r.label);
+            for v in &r.prove_batches { print!(" {:>8.2}", v); }
+            println!();
+        }
     }
     println!();
     println!("  Medians of {} iterations, variants interleaved inside each batch.",

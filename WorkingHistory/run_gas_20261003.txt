@@ -1,0 +1,46 @@
+﻿Compiling 1 files with Solc 0.8.28
+Solc 0.8.28 finished in 1.31s
+Compiler run successful!
+
+Ran 4 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 622257)
+Logs:
+  Open 155458
+  Settle logged, cover 64 131193
+  Revoke, first range 48840
+  Revoke, later range 26941
+  Claim 31169
+
+[PASS] testChallengeCallDataBudget() (gas: 4107)
+Logs:
+  challenge call data alone, gas 81798736
+  proof bytes 5112421
+
+[PASS] testLoggedAgainstPreventive() (gas: 707530)
+Logs:
+  accountable, logged transcript, cover 64 131137
+  preventive 28070
+  ratio x100 467
+
+[PASS] testStoredAgainstLogged() (gas: 11869032)
+Logs:
+  cover 14
+    stored 301248
+    logged 51819
+    ratio x100 581
+  cover 30
+    stored 600328
+    logged 77231
+    ratio x100 777
+  cover 64
+    stored 1224853
+    logged 131640
+    ratio x100 930
+  cover 128
+    stored 2423046
+    logged 235657
+    ratio x100 1028
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 7.93ms (10.01ms CPU time)
+
+Ran 1 test suite in 12.18ms (7.93ms CPU time): 4 tests passed, 0 failed, 0 skipped (4 total tests)
