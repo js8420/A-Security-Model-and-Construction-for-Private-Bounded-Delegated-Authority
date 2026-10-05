@@ -16,8 +16,20 @@ use crate::spend::{
 
 type F = Goldilocks;
 
-/// The payload digest, supplied to prove and verify as the single public value.
-pub const PAYLOAD: u64 = 31337;
+/// The share index, supplied to prove and verify as the single public value.
+///
+/// It is the payload digest plus the settlement domain's identifier, not the
+/// digest alone. The digest is one field element, so an agent can grind about
+/// 2^32 nonces to find two payloads naming different domains that hash alike;
+/// each domain's freshness check sees that digest once and settles, and two
+/// settlements at one index publish identical shares, which extraction skips.
+/// Adding the domain makes the two indices differ by the domains' difference,
+/// so the shares stand at distinct indices and the secret falls out. Both
+/// terms are public, so the reserve recomputes this and the circuit treats it
+/// as the index it always did.
+pub const PAYLOAD_DIGEST: u64 = 31337;
+pub const DOMAIN_ID: u64 = 8453;
+pub const PAYLOAD: u64 = PAYLOAD_DIGEST + DOMAIN_ID;
 
 const SECRET: [u64; SECRET_ELEMS] = [987654321, 1234567891];
 const ROOT_KEY: [u64; SECRET_ELEMS] = [424242, 858585];

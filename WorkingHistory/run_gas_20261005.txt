@@ -1,0 +1,101 @@
+﻿Compiling 4 files with Solc 0.8.28
+Solc 0.8.28 finished in 1.59s
+Compiler run successful!
+
+Ran 7 tests for test/StepGas.t.sol:StepGas
+[PASS] testAdjudicateFold() (gas: 24006)
+Logs:
+  fold step, no path, gas 5973
+
+[PASS] testAdjudicateFoldWithPath() (gas: 114034)
+Logs:
+  fold step, path depth 8
+    gas 8535
+  fold step, path depth 16
+    gas 11709
+  fold step, path depth 24
+    gas 14904
+  fold step, path depth 32
+    gas 18112
+
+[PASS] testAdjudicateLinear() (gas: 19317)
+Logs:
+  linear step, 8 terms, gas 11307
+
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11402)
+[PASS] testFoldLinearInBeta() (gas: 13353)
+[PASS] testInverseIsAnInverse() (gas: 14979)
+[PASS] testWrongOperandsRejected() (gas: 11350)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.90ms (7.31ms CPU time)
+
+Ran 3 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testChallengerSilent() (gas: 167613)
+Logs:
+  defender wins when the challenger goes quiet
+
+[PASS] testCostByVerificationLength() (gas: 1603283)
+Logs:
+  steps 1024
+    rounds 10
+    total gas, excluding the one-step adjudicator 247647
+  steps 16384
+    rounds 14
+    total gas, excluding the one-step adjudicator 272399
+  steps 262144
+    rounds 18
+    total gas, excluding the one-step adjudicator 308158
+  steps 1048576
+    rounds 20
+    total gas, excluding the one-step adjudicator 326038
+  steps 16777216
+    rounds 24
+    total gas, excluding the one-step adjudicator 361802
+
+[PASS] testDefenderSilent() (gas: 164837)
+Logs:
+  challenger wins on timeout, gas 3311
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 12.82ms (5.69ms CPU time)
+
+Ran 4 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 746145)
+Logs:
+  Open 155458
+  Settle logged, cover 64 193424
+  Revoke, first range 48773
+  Revoke, later range 26874
+  Claim 31191
+
+[PASS] testChallengeCallDataBudget() (gas: 4107)
+Logs:
+  challenge call data alone, gas 81798736
+  proof bytes 5112421
+
+[PASS] testLoggedAgainstPreventive() (gas: 831520)
+Logs:
+  accountable, logged transcript, cover 64 193363
+  preventive 28070
+  ratio x100 688
+
+[PASS] testStoredAgainstLogged() (gas: 12832243)
+Logs:
+  cover 14
+    stored 319641
+    logged 70291
+    ratio x100 454
+  cover 30
+    stored 632835
+    logged 109994
+    ratio x100 575
+  cover 64
+    stored 1288346
+    logged 196130
+    ratio x100 656
+  cover 128
+    stored 2548865
+    logged 365151
+    ratio x100 698
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 12.68ms (16.50ms CPU time)
+
+Ran 3 test suites in 15.10ms (27.41ms CPU time): 14 tests passed, 0 failed, 0 skipped (14 total tests)

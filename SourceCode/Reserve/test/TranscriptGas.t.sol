@@ -12,7 +12,8 @@ contract TranscriptGas is Test {
     Reserve acc;
     PreventiveReserve prev;
     address principal = address(0xA11CE);
-    address agent = address(0xB0B);
+    uint256 constant AGENT_PK = 0xA6E47;
+    address agent;
 
     uint64 constant CAP = 1_000_000;
     uint64 constant BUDGET = 100_000_000;
@@ -20,6 +21,7 @@ contract TranscriptGas is Test {
     uint64 constant WINDOW = 86_400;
 
     function setUp() public {
+        agent = vm.addr(AGENT_PK);
         acc = new Reserve();
         prev = new PreventiveReserve();
         vm.deal(principal, 100 ether);
@@ -31,6 +33,31 @@ contract TranscriptGas is Test {
         for (uint256 i = 0; i < e.length; ++i) {
             e[i] = uint64(0x9E3779B97F4A7C15 ^ (i * 0x100000001B3));
         }
+    }
+
+    /// The agent's signature over everything it is answerable for.
+    function _sig(uint256 id, uint64 amount, uint64 index, uint64[] memory elems)
+        internal
+        view
+        returns (bytes32 commitment, bytes memory signature)
+    {
+        commitment = keccak256(abi.encodePacked("proof", id, index));
+        bytes32 digest = keccak256(
+            abi.encode(block.chainid, address(acc), id, amount, index,
+                       keccak256(abi.encodePacked(elems)), commitment)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(AGENT_PK, digest);
+        signature = abi.encodePacked(r, s, v);
+    }
+
+    function _settle(uint256 id, uint64 amount, uint64 index, uint64[] memory e) internal {
+        (bytes32 c, bytes memory sg) = _sig(id, amount, index, e);
+        acc.settle(id, amount, index, e, c, sg);
+    }
+
+    function _settleLogged(uint256 id, uint64 amount, uint64 index, uint64[] memory e) internal {
+        (bytes32 c, bytes memory sg) = _sig(id, amount, index, e);
+        acc.settleLogged(id, amount, index, e, c, sg);
     }
 
     function _reg() internal returns (uint256 id) {
@@ -48,16 +75,16 @@ contract TranscriptGas is Test {
             uint64[] memory e = _elems(covers[k]);
 
             vm.startPrank(agent);
-            acc.settle(a, 1000, 1, e);          // warm the record
+            _settle(a, 1000, 1, e);          // warm the record
             uint64[] memory e2 = _elems(covers[k]);
             uint256 g0 = gasleft();
-            acc.settle(a, 1000, 2, e2);
+            _settle(a, 1000, 2, e2);
             uint256 stored = g0 - gasleft();
 
-            acc.settleLogged(b, 1000, 1, e);    // warm the record
+            _settleLogged(b, 1000, 1, e);    // warm the record
             uint64[] memory e3 = _elems(covers[k]);
             uint256 g1 = gasleft();
-            acc.settleLogged(b, 1000, 2, e3);
+            _settleLogged(b, 1000, 2, e3);
             uint256 logged = g1 - gasleft();
             vm.stopPrank();
 
@@ -79,10 +106,10 @@ contract TranscriptGas is Test {
         console.log("Open", g0 - gasleft());
 
         vm.startPrank(agent);
-        acc.settleLogged(id, 1000, 1, _elems(64));
+        _settleLogged(id, 1000, 1, _elems(64));
         uint64[] memory e = _elems(64);
         uint256 g1 = gasleft();
-        acc.settleLogged(id, 1000, 2, e);
+        _settleLogged(id, 1000, 2, e);
         console.log("Settle logged, cover 64", g1 - gasleft());
         vm.stopPrank();
 
@@ -116,12 +143,12 @@ contract TranscriptGas is Test {
         uint256 p = prev.register(agent, CAP, BUDGET, VELOCITY, WINDOW);
 
         vm.startPrank(agent);
-        acc.settleLogged(a, 1000, 1, _elems(64));
+        _settleLogged(a, 1000, 1, _elems(64));
         prev.settle(p, 1000, 1);
 
         uint64[] memory e = _elems(64);
         uint256 g0 = gasleft();
-        acc.settleLogged(a, 1000, 2, e);
+        _settleLogged(a, 1000, 2, e);
         uint256 logged = g0 - gasleft();
 
         uint256 g1 = gasleft();

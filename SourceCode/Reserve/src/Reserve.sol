@@ -47,8 +47,8 @@ contract Reserve {
 
     error IndexAlreadySettled();
     error AmountAboveCap();
+    error BadSignature();
     error VelocityExceeded();
-    error NotAgent();
     error BondAlreadyPaid();
     error SecretDoesNotOpen();
 
@@ -87,21 +87,57 @@ contract Reserve {
     /// two share elements and one nullifier per slot, every slot, padded ones
     /// included, because a padded slot must be indistinguishable from a real
     /// one to anyone reading this.
+    /// Called by the payee, under the agent's signature. The signature covers
+    /// the shares and the proof commitment as well as the payload, so a payee
+    /// holding a signed payload cannot settle it with shares of its own: it
+    /// could otherwise consume the digest, block the real settlement, and
+    /// leave the agent unable to defend a commitment it never made.
     function settle(
         uint256 id,
         uint64 amount,
         uint64 index,
-        uint64[] calldata elems
+        uint64[] calldata elems,
+        bytes32 proofCommitment,
+        bytes calldata signature
     ) external {
+        _checkAgentSignature(id, amount, index, elems, proofCommitment, signature);
         _admit(id, amount, index);
         _append(id, elems);
         emit Settled(id, index, amount);
     }
 
+    /// Everything the agent is answerable for, under one signature.
+    function _checkAgentSignature(
+        uint256 id,
+        uint64 amount,
+        uint64 index,
+        uint64[] calldata elems,
+        bytes32 proofCommitment,
+        bytes calldata signature
+    ) private view {
+        bytes32 digest = keccak256(
+            abi.encode(block.chainid, address(this), id, amount, index,
+                       keccak256(abi.encodePacked(elems)), proofCommitment)
+        );
+        if (signature.length != 65) revert BadSignature();
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            revert BadSignature();
+        }
+        address signer = ecrecover(digest, v, r, s);
+        if (signer == address(0) || signer != delegations[id].agent) revert BadSignature();
+    }
+
     /// The three refusals the interface requires, all on public values.
     function _admit(uint256 id, uint64 amount, uint64 index) private {
         Delegation storage d = delegations[id];
-        if (msg.sender != d.agent) revert NotAgent();
         if (indexSeen[id][index]) revert IndexAlreadySettled();
         if (amount > d.cap) revert AmountAboveCap();
 
@@ -163,8 +199,11 @@ contract Reserve {
         uint256 id,
         uint64 amount,
         uint64 index,
-        uint64[] calldata elems
+        uint64[] calldata elems,
+        bytes32 proofCommitment,
+        bytes calldata signature
     ) external {
+        _checkAgentSignature(id, amount, index, elems, proofCommitment, signature);
         _admit(id, amount, index);
         emit Transcript(id, index, elems);
         emit Settled(id, index, amount);

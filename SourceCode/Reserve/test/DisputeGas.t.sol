@@ -14,16 +14,18 @@ contract DisputeGas is Test {
     Dispute d;
     address defender = address(0xB0B);
     address challenger = address(0xC14);
+    // funded in setUp so a challenger can post its bond
 
     function setUp() public {
-        d = new Dispute(7 days);
+        d = new Dispute(7 days, 0.01 ether);
+        vm.deal(challenger, 1 ether);
     }
 
     function _play(uint64 steps) internal returns (uint256 total, uint64 n) {
         bytes32 id = keccak256(abi.encodePacked(steps));
         uint256 g = gasleft();
         vm.prank(challenger);
-        d.open(id, defender, steps, bytes32(uint256(1)), bytes32(uint256(2)));
+        d.open{value: 0.01 ether}(id, defender, steps, bytes32(uint256(1)), bytes32(uint256(2)));
         total = g - gasleft();
 
         uint64 lo = 0;
@@ -64,7 +66,7 @@ contract DisputeGas is Test {
     function testDefenderSilent() public {
         bytes32 id = keccak256("silent");
         vm.prank(challenger);
-        d.open(id, defender, 1048576, bytes32(uint256(1)), bytes32(uint256(2)));
+        d.open{value: 0.01 ether}(id, defender, 1048576, bytes32(uint256(1)), bytes32(uint256(2)));
         vm.warp(block.timestamp + 7 days + 1);
         uint256 g = gasleft();
         d.timeout(id);
@@ -76,7 +78,7 @@ contract DisputeGas is Test {
     function testChallengerSilent() public {
         bytes32 id = keccak256("cs");
         vm.prank(challenger);
-        d.open(id, defender, 1024, bytes32(uint256(1)), bytes32(uint256(2)));
+        d.open{value: 0.01 ether}(id, defender, 1024, bytes32(uint256(1)), bytes32(uint256(2)));
         vm.prank(defender);
         d.respond(id, keccak256("mid"));
         vm.warp(block.timestamp + 7 days + 1);

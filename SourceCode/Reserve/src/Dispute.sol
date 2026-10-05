@@ -43,6 +43,10 @@ contract Dispute {
     }
 
     uint64 public immutable responseWindow;
+    /// A challenger must stake this to open a game. Without it, opening costs
+    /// nothing and an honest agent can be made to spend a dispute's gas on
+    /// demand, as often as anyone likes.
+    uint256 public immutable challengerBond;
     mapping(bytes32 => Game) public games;
 
     error NotYourMove();
@@ -50,13 +54,15 @@ contract Dispute {
     error DeadlineNotPassed();
     error IntervalTooSmall();
     error MidpointOutOfRange();
+    error BondTooSmall();
 
     event Opened(bytes32 indexed id, address challenger, uint64 steps);
     event Bisected(bytes32 indexed id, uint64 lo, uint64 hi);
     event Resolved(bytes32 indexed id, Status outcome);
 
-    constructor(uint64 window) {
+    constructor(uint64 window, uint256 bond) {
         responseWindow = window;
+        challengerBond = bond;
     }
 
     /// A challenger disputes the final state of a settlement's verification.
@@ -67,7 +73,8 @@ contract Dispute {
         uint64 steps,
         bytes32 initialState,
         bytes32 claimedFinalState
-    ) external {
+    ) external payable {
+        if (msg.value < challengerBond) revert BondTooSmall();
         games[id] = Game({
             defender: defender,
             challenger: msg.sender,
