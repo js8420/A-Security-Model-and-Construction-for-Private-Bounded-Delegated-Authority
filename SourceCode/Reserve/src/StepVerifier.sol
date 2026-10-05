@@ -19,12 +19,27 @@ pragma solidity ^0.8.28;
 /// Arithmetic is over the Goldilocks field, p = 2^64 - 2^32 + 1. Field
 /// elements fit in 64 bits, so their products fit in 128 and `mulmod` on
 /// 256-bit words is exact.
+interface IPoseidon2 {
+    function merkleLevel(uint256[4] memory left, uint256[4] memory right)
+        external pure returns (uint256[4] memory);
+}
+
 contract StepVerifier {
     uint256 internal constant P = 0xFFFFFFFF00000001;
 
+    /// The permutation the proof's own Merkle trees hash with. Most steps a
+    /// dispute can land on are levels of those trees, so without this the
+    /// adjudicator decides folds and nothing else.
+    IPoseidon2 public immutable algebraic;
+
+    constructor(address poseidon2) {
+        algebraic = IPoseidon2(poseidon2);
+    }
+
     enum Step {
         Fold,      // one FRI folding step
-        Merkle,    // one level of a Merkle path
+        Merkle,    // one level of a keccak-committed path
+        Algebraic, // one level of the proof's own Poseidon2 trees
         Linear,    // a linear combination, as constraint batching uses
         Squeeze    // derive a challenge from transcript state
     }
@@ -133,6 +148,15 @@ contract StepVerifier {
                 acc = addmod(mulmod(acc, alpha, P), operands[i - 1], P);
             }
             return acc;
+        }
+        if (kind == Step.Algebraic) {
+            uint256[4] memory l;
+            uint256[4] memory r;
+            for (uint256 i = 0; i < 4; ++i) {
+                l[i] = operands[i];
+                r[i] = operands[i + 4];
+            }
+            return algebraic.merkleLevel(l, r)[0];
         }
         return uint256(keccak256(abi.encodePacked(operands))) % P;
     }

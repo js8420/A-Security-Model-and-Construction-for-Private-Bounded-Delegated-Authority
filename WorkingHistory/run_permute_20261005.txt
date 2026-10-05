@@ -1,0 +1,18 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:97
++ ... C12_submission\Circuits"; cargo run --release -- permute 2>&1 | Out-F ...
++                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 41.32s
+     Running `target\release\delegation-circuit.exe permute`
+in  [0, 0, 0, 0, 0, 0, 0, 0]
+out [4904961330882102773, 6914533505831728251, 16060085509051262978, 161169382960502813, 8610401995229161121, 6947968519022847962, 9668808541865791489, 7055543217974479047]
+
+in  [1, 2, 3, 4, 5, 6, 7, 8]
+out [15506260347376358782, 2994144798473533345, 1833939590059144543, 15204941819943812974, 14698243433528585034, 119683474010473000, 5368738736850845934, 12216367676790481710]
+
+in  [4294967293, 0, 1, 2, 3, 4, 5, 6]
+out [10214557320059612825, 8356369697423656944, 1768380156506946077, 6979154712236571247, 7123206276911537751, 9942320711526508910, 48793503114292196, 15252172175273084701]
+

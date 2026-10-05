@@ -125,6 +125,14 @@ fn main() {
         sweep::run();
         return;
     }
+    if std::env::args().any(|a| a == "constants") {
+        dump_constants();
+        return;
+    }
+    if std::env::args().any(|a| a == "permute") {
+        reference_permutation();
+        return;
+    }
 
     println!("COMMITMENT SCHEME AND VERIFICATION UNDER IT");
     println!("{}", "=".repeat(78));
@@ -760,4 +768,72 @@ fn main() {
     println!("  chunk does not absorb, not only the capacity, so a partial final");
     println!("  chunk leaves no rate lane for a prover to choose.");
     println!();
+}
+
+/// The Poseidon2 round constants, in the form a Solidity contract needs.
+///
+/// The adjudicator of the dispute game has to recompute one Merkle level on
+/// chain, and the proof's trees hash with this permutation. Writing those
+/// constants out by hand is how a contract ends up computing a different hash
+/// from the circuit it is meant to judge, so they come from the same crate the
+/// prover uses.
+fn dump_constants() {
+    use p3_field::PrimeField64;
+    use p3_goldilocks::{
+        GOLDILOCKS_POSEIDON2_HALF_FULL_ROUNDS, GOLDILOCKS_POSEIDON2_PARTIAL_ROUNDS_8,
+        GOLDILOCKS_POSEIDON2_RC_8_EXTERNAL_FINAL, GOLDILOCKS_POSEIDON2_RC_8_EXTERNAL_INITIAL,
+        GOLDILOCKS_POSEIDON2_RC_8_INTERNAL, MATRIX_DIAG_8_GOLDILOCKS,
+    };
+
+    println!("POSEIDON2 OVER GOLDILOCKS, WIDTH 8 --- CONSTANTS FOR THE ADJUDICATOR");
+    println!("{}", "=".repeat(78));
+    println!("  half full rounds {}", GOLDILOCKS_POSEIDON2_HALF_FULL_ROUNDS);
+    println!("  partial rounds   {}", GOLDILOCKS_POSEIDON2_PARTIAL_ROUNDS_8);
+    println!();
+
+    let row = |r: &[p3_goldilocks::Goldilocks]| -> String {
+        let cells: Vec<String> = r.iter().map(|c| c.as_canonical_u64().to_string()).collect();
+        format!("[{}]", cells.join(", "))
+    };
+
+    println!("    uint64[8][4] internal constant RC_EXTERNAL_INITIAL = [");
+    for r in GOLDILOCKS_POSEIDON2_RC_8_EXTERNAL_INITIAL.iter() {
+        println!("        {},", row(r));
+    }
+    println!("    ];");
+    println!();
+    println!("    uint64[8][4] internal constant RC_EXTERNAL_FINAL = [");
+    for r in GOLDILOCKS_POSEIDON2_RC_8_EXTERNAL_FINAL.iter() {
+        println!("        {},", row(r));
+    }
+    println!("    ];");
+    println!();
+    println!("    uint64[22] internal constant RC_INTERNAL =");
+    println!("        {};", row(&GOLDILOCKS_POSEIDON2_RC_8_INTERNAL));
+    println!();
+    println!("    uint64[8] internal constant MDS_DIAG =");
+    println!("        {};", row(&MATRIX_DIAG_8_GOLDILOCKS));
+}
+
+/// What the crate's permutation does to a fixed input.
+///
+/// The Solidity transcription is checked against this rather than against
+/// itself: a contract that agrees with its own test tells you nothing about
+/// whether it hashes the way the circuit does.
+fn reference_permutation() {
+    use p3_field::{PrimeCharacteristicRing, PrimeField64};
+    use p3_goldilocks::{default_goldilocks_poseidon2_8, Goldilocks};
+    use p3_symmetric::Permutation;
+
+    let perm = default_goldilocks_poseidon2_8();
+    for case in [[0u64; 8], [1, 2, 3, 4, 5, 6, 7, 8],
+                 [u64::MAX - 1, 0, 1, 2, 3, 4, 5, 6]] {
+        let mut st: [Goldilocks; 8] = case.map(Goldilocks::from_u64);
+        let before: Vec<String> = st.iter().map(|c| c.as_canonical_u64().to_string()).collect();
+        perm.permute_mut(&mut st);
+        let after: Vec<String> = st.iter().map(|c| c.as_canonical_u64().to_string()).collect();
+        println!("in  [{}]", before.join(", "));
+        println!("out [{}]", after.join(", "));
+        println!();
+    }
 }

@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
 import {StepVerifier} from "../src/StepVerifier.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 
 /// The adjudicator has to be right before its cost means anything, so the
 /// field arithmetic is checked against identities that hold only if it is.
@@ -11,7 +12,7 @@ contract StepGas is Test {
     uint256 constant P = 0xFFFFFFFF00000001;
 
     function setUp() public {
-        v = new StepVerifier();
+        v = new StepVerifier(address(new Poseidon2Goldilocks()));
     }
 
     function testInverseIsAnInverse() public view {
@@ -81,6 +82,19 @@ contract StepGas is Test {
             console.log("fold step, path depth", depths[d]);
             console.log("  gas", used);
         }
+    }
+
+    function testAdjudicateAlgebraicMerkle() public view {
+        uint256[] memory ops = new uint256[](8);
+        for (uint256 i = 0; i < 8; ++i) ops[i] = i + 1;
+        uint256[4] memory l = [uint256(1), 2, 3, 4];
+        uint256[4] memory r = [uint256(5), 6, 7, 8];
+        uint256 expected = Poseidon2Goldilocks(address(v.algebraic())).merkleLevel(l, r)[0];
+        bytes32[] memory path = new bytes32[](0);
+        uint256 g = gasleft();
+        bool ok = v.adjudicate(StepVerifier.Step.Algebraic, ops, expected, _root(ops), path, 0);
+        console.log("algebraic Merkle step, gas", g - gasleft());
+        assertTrue(ok);
     }
 
     function testAdjudicateLinear() public view {
