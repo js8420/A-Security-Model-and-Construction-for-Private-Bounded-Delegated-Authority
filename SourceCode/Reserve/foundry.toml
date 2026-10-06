@@ -7,3 +7,5 @@ solc = "0.8.28"
 optimizer = true
 optimizer_runs = 200
 gas_reports = ["Reserve"]
+# The tests deploy the real Permit2 from the artifact its own pinned build writes.
+fs_permissions = [{ access = "read", path = "./lib/permit2/out" }]

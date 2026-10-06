@@ -1,0 +1,633 @@
+﻿cargo :     Finished `release` profile [optimized] target(s) in 2.78s
+At line:1 char:487
++ ... _sweep_20261005.txt" -Encoding utf8; cargo run --release 2>&1 | Out-F ...
++                                          ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 2.78s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running `target\release\delegation-circuit.exe`
+COMMITMENT SCHEME AND VERIFICATION UNDER IT
+==============================================================================
+  hiding PCS reported by the Pcs trait                 true
+  salt elements per leaf                                  2
+  random codewords per matrix                             2
+  bare poseidon2, degree 7, zero registers             true
+  bare poseidon2, degree 3, one register               true
+
+  Zero registers makes every S-box constraint degree 7; one register
+  makes them degree 3. Both verify under the hiding PCS at the rate
+  this crate now uses. At blowup 4, which it used until the sweep,
+  degree 7 did not verify: the quotient a hiding commitment can carry
+  is bounded by the rate. The register was a consequence of the rate
+  and not of zero knowledge. The widths below are measured at one
+  register, and the section near the end measures what zero costs.
+
+
+POLICY CIRCUIT COST, PLONKY3 0.6.3, GOLDILOCKS, 40-BIT RANGE CHECKS
+==============================================================================
+  clause                        width    constraints   degree
+  -------------------------- -------- -------------- --------
+  C1 per-payment cap               64             41        2
+  C2 cumulative budget             --             --       --
+  C3 merchant allowlist            24              2        1
+  C4 category allowlist            24              1        1
+  C5 validity window              104             82        2
+  C6 velocity                      --             --       --
+  -------------------------- -------- -------------- --------
+  circuit clauses combined        144            126        2
+
+  C2 and C6 are policy fields but not circuit clauses. A cumulative
+  total supplied by the prover is a value the prover chooses, so a
+  constraint over it binds nothing; the budget is enforced by the
+  tree, where exceeding it consumes a node twice. The rate limit is
+  public and is counted by the reserve, the only party that sees
+  every settlement.
+
+ONE POSEIDON2 PERMUTATION, GOLDILOCKS, WIDTH 8, S-BOX DEGREE 7
+==============================================================================
+  sbox registers              columns    constraints   degree
+  -------------------------- -------- -------------- --------
+  0                                94             86        7
+  1                               180            172        3
+
+POLICY CLAUSES PLUS C9 OPENING, 4 PERMUTATIONS FOR 15 ABSORBED ELEMENTS
+==============================================================================
+  sbox registers                width    constraints   degree
+  -------------------------- -------- -------------- --------
+  0                               520            506        7
+  1                               864            850        3
+
+MERKLE INCLUSION (C3 OR C4), ONE PERMUTATION PER LEVEL
+==============================================================================
+  depth / registers             width    constraints   degree
+  -------------------------- -------- -------------- --------
+  4  / 1                          760            740        3
+  8  / 1                         1516           1480        3
+  16 / 1                         3028           2960        3
+  16 / 0                         1652           1584        7
+
+C8 NON-REVOCATION, PATH PLUS FOUR COMPARISONS AGAINST THE CONSUMED RUN
+==============================================================================
+  depth / registers             width    constraints   degree
+  -------------------------- -------- -------------- --------
+  20 / 1                         3946           3865        3
+  24 / 1                         4702           4605        3
+  32 / 1                         6214           6085        3
+  32 / 0                         3462           3333        7
+
+WHOLE CIRCUIT, DEPTH 16 ALLOWLISTS, DEPTH 32 REVOCATION, AS BUILT
+==============================================================================
+  component                         columns    constraints   share
+  ------------------------------ ---------- -------------- -------
+  policy clauses plus C9                520            506      7%
+  C3 merchant, depth 16                1652           1584     22%
+  C4 category, depth 16                1652           1584     22%
+  C8 revocation, depth 32              3462           3333     46%
+  C7 payload sponge                     188             --      3%
+  ------------------------------ ---------- --------------
+  components                           7474             --
+
+  C7 has no standalone AIR, so its columns come from the layout and
+  its constraints are reported below with the glue rather than split
+  by a count kept in this file. Components without C7 sum to 7286 / 7007.
+
+  C7 is its own sponge over the 7 payload fields, in 2 permutations.
+  C9 absorbs 15 policy elements and stops there, so the commitment is
+  the same for every payment under one policy.
+
+WHOLE CIRCUIT AS ONE AIR, WITH CROSS-COMPONENT BINDINGS
+==============================================================================
+  allowlist / revocation depth        width    constraints  degree
+  ------------------------------ ---------- -------------- -------
+  16 / 20, registers 1                11233          11023       3
+  16 / 32, registers 1                13501          13243       3
+  16 / 32, registers 0                 7481           7223       7
+  public payee, no allowlists          4185           4055       7
+
+  Summed components gave 7286 / 7007 at 16 / 32 as built; the whole
+  AIR is 7481 / 7223. Of the 195 column difference, 188 are C7's sponge
+  and 7 are glue; the 216 constraint difference is C7 and the glue
+  together. Every figure here is a difference of measured widths
+  rather than a count maintained by hand, which is what let the
+  glue row in Table VI drift to 14 columns while GLUE was 6.
+
+
+
+SPEND COMPONENT: unit run, per-slot key derivation, shares and nullifiers
+THE WIDTH LAW IS 172 + 187c: NO TERM IN THE TREE DEPTH SURVIVES RESERVING
+==============================================================================
+  depth / cover / registers     width  constraints  degree
+  -------------------------- -------- ------------ -------
+  16 / 30  / 1                   5742         5738       3
+  16 / 64  / 1                  12100        12096       3
+  16 / 128 / 1                  24068        24064       3
+  16 / 8   / 1                   1628         1624       3
+  16 / 1   / 1                    319          315       3
+  16 / 64  / 0                   6596         6592       7
+
+NULLIFIER FROM A SECOND INVOCATION: THE PRICE OF DROPPING AN ASSUMPTION
+==============================================================================
+  depth / cover                           width    constraints
+  ---------------------------------- ---------- --------------
+  16 / 64, as built                        6596           6592
+  16 / 64, second invocation              12612          12608
+  16 / 30, second invocation               5982           5978
+  16 / 128, second invocation             25092          25088
+
+  The accountability half grows 6596 to 12612, and the composed circuit
+  from 14198 to about 20214, which is +42%. What it buys is that the
+  nullifier is a pseudorandom function of the key rather than a
+  lane published beside it, so exculpability and bound privacy need
+  no joint-lane assumption. We report the price; we do not pay it.
+
+WHAT ONE MISSING BINDING COSTS: C9 WITHOUT ITS POLICY BINDING
+==============================================================================
+                                          width    constraints
+  ---------------------------------- ---------- --------------
+  compliance half, as built                7481           7223
+  with C9's binding removed                7481           7208
+  difference                                  0             15
+
+  The width is identical and the constraint count differs by the
+  15 absorbed lanes. No cost table distinguishes these two
+  circuits, and the second proves compliance with a policy the
+  principal never committed to.
+
+COMPOSED CIRCUIT: COMPLIANCE AND ACCOUNTABILITY AS ONE STATEMENT
+==============================================================================
+  allowlist / revocation / depth / cover      width    constraints  degree
+  ---------------------------------- ---------- -------------- -------
+  16 / 32 / 16 / 14, registers 1          16372          16116       3
+  16 / 32 / 16 / 64, registers 1          25722          25466       3
+  8 / 8 / 16 / 14, registers 1             8812           8716       3
+
+  Separately the two halves are 7481 + 6596 = 14077 columns; composed they
+  are 14198, so the bindings cost 121. Nothing is shared between them:
+  the witness sets are disjoint and the cost is the binding, not a
+  saving. What composition buys is one proof rather than two.
+
+SATISFYING TRACE: PROVE AND VERIFY ROUND TRIP, POLICY AIR
+==============================================================================
+  trace                                            verifies
+  -------------------------------------------- ------------
+  satisfying assignment, 64 rows                       true
+  one gap decomposition corrupted                     false
+  policy composed with C9, 64 rows                     true
+    ... C9 binding broken                             false
+    ... sponge chaining broken                        false
+    ... permutation round state broken                false
+  merkle inclusion, depth 8, 64 rows                   true
+    ... direction bit perturbed                       false
+    ... sibling digest perturbed                      false
+  non-revocation, depth 8, 64 rows                     true
+    ... a gap decomposition perturbed                 false
+    ... run starts inside the revoked range           false
+    ... run reaches the next revoked range            false
+    ... run ends before it starts                     false
+  spend component, depth 16, 64 rows                   true
+    ... published share altered                       false
+    ... key taken from another unit                   false
+    ... nullifier altered                             false
+    ... a unit deactivated                            false
+    ... run start moved                               false
+    ... committed unit count perturbed                false
+    ... units understated                             false
+    ... range base moved                              false
+    ... a slot spanning two units                     false
+    ... run ends past the budget                      false
+    ... wrong public payload digest                   false
+    ... wrong public domain                           false
+  commitment does not move with the payment            true
+  payload digest does move with the payment            true
+  second-invocation nullifier, depth 16, cover 14, 64 rows         true
+  a policy the commitment does not open to, under the real circuit        false
+    ... the same trace with C9's binding removed         true
+  COMPOSED CIRCUIT, depth 16, cover 14, 64 rows         true
+    ... run start disagrees with C8's run             false
+    ... amount exceeds the units charged              false
+    ... amount below the units charged                false
+    ... unit size does not divide the budget          false
+    ... cap larger than the budget                    false
+    ... settlement domain not the one the digest covers        false
+    ... shares formed under a domain the payload does not name        false
+  WHOLE CIRCUIT at full parameters, 32 rows            true
+    ... a policy column perturbed                     false
+    ... a payment field altered, digest not recomputed        false
+
+  Whole circuit proved and verified in 1723 ms at 32 rows, against the
+  554 ms projected from a per-cell rate, not measured.
+
+  32 controls, every one rejected; 11 positive checks, every one holding.
+
+TABLE X BODY, GENERATED --- PASTE BETWEEN THE MIDRULES OF tab:verify
+==============================================================================
+C1 and C5 policy clauses   & satisfying trace                   & verifies \\
+                           & one gap decomposition corrupted    & yes \\
+\midrule
+Policy clauses with C9     & satisfying trace                   & verifies \\
+                           & C9 binding broken                  & yes \\
+                           & sponge chaining broken             & yes \\
+                           & permutation round state broken     & yes \\
+\midrule
+Merkle inclusion           & satisfying trace                   & verifies \\
+                           & direction bit perturbed            & yes \\
+                           & sibling digest perturbed           & yes \\
+\midrule
+C8 non-revocation          & satisfying trace                   & verifies \\
+                           & a gap decomposition perturbed      & yes \\
+                           & run starts inside the revoked range & yes \\
+                           & run reaches the next revoked range & yes \\
+                           & run ends before it starts          & yes \\
+\midrule
+Spend                      & satisfying trace                   & verifies \\
+                           & published share altered            & yes \\
+                           & key taken from another unit        & yes \\
+                           & nullifier altered                  & yes \\
+                           & a unit deactivated                 & yes \\
+                           & run start moved                    & yes \\
+                           & committed unit count perturbed     & yes \\
+                           & units understated                  & yes \\
+                           & range base moved                   & yes \\
+                           & a slot spanning two units          & yes \\
+                           & run ends past the budget           & yes \\
+                           & wrong public payload digest        & yes \\
+                           & wrong public domain                & yes \\
+                           & commitment does not move with the payment & holds \\
+                           & payload digest does move with the payment & holds \\
+\midrule
+Spend, second invocation   & satisfying trace                   & verifies \\
+                           & a policy the commitment does not open to, under the real circuit & yes \\
+                           & the same trace with C9's binding removed & holds \\
+\midrule
+Composed circuit           & satisfying trace                   & verifies \\
+                           & run start disagrees with C8's run  & yes \\
+                           & amount exceeds the units charged   & yes \\
+                           & amount below the units charged     & yes \\
+                           & unit size does not divide the budget & yes \\
+                           & cap larger than the budget         & yes \\
+                           & settlement domain not the one the digest covers & yes \\
+                           & shares formed under a domain the payload does not name & yes \\
+\midrule
+Whole circuit              & satisfying trace                   & verifies \\
+                           & a policy column perturbed          & yes \\
+                           & a payment field altered, digest not recomputed & yes \\
+
+  The second must read false. A generator that only produces valid
+  traces would tell us nothing about whether the check checks.
+  Height is 64: FRI requires log height > log_final_poly_len +
+  log_blowup, which is 5 at these parameters.
+
+WHOLE-CIRCUIT PROVING COST, AS BUILT, HIDING PCS
+==============================================================================
+    rows         min          q1      median          q3   per payment
+  ------ ----------- ----------- ----------- ----------- -------------
+       8     428.2ms     626.2ms     926.5ms    1426.7ms      115.81ms
+      16     808.8ms    1056.7ms    1418.8ms    1938.5ms       88.67ms
+      32    1576.9ms    1770.3ms    2097.6ms    2519.8ms       65.55ms
+
+  Per payment is the median divided by the row count. 300 iterations in
+  10 interleaved batches with a 10s pause. Heights are interleaved inside
+  each batch so drift hits them equally.
+
+  PER-BATCH MEDIANS, ms per payment. Flat means no thermal drift.
+   batch       8 rows      16 rows      32 rows
+      1      88.3301      94.2964      70.4431
+      2     109.7816      95.4387      65.2827
+      3     114.5674      90.7343      64.9375
+      4     144.2640      87.8343      64.9058
+      5     116.0570      86.5697      67.9033
+      6     126.3377      86.0824      67.3179
+      7     116.6005      89.1278      68.2310
+      8     101.4497      92.5825      57.7535
+      9     126.6354      87.6669      67.8850
+     10     136.6724     103.6153      60.3603
+
+PROOF SIZE AND VERIFICATION COST, AS BUILT, HIDING PCS
+==============================================================================
+  smallest trace height these FRI parameters admit           8
+  proof, bincode bytes, 32-row trace                  2748389
+    of which commitments                                  121
+    of which opened values                             240100
+    of which opening proof                            2508160
+  bytes per payment at 32 rows                          85887
+
+  Deterministic at fixed parameters, so one run is a measurement.
+
+  composed proof, bincode bytes, 32-row trace         5112773
+  two separate proofs, same payments                  5185258
+  saved by proving once                                 72485
+  composed width for reference                          14198
+
+    rows         min          q1      median          q3   per payment
+  ------ ----------- ----------- ----------- ----------- -------------
+       8     84.10ms     85.50ms     86.56ms     88.43ms      10.820ms
+      16     83.81ms     85.27ms     86.37ms     88.14ms       5.398ms
+      32     84.35ms     85.81ms     87.02ms     88.92ms       2.719ms
+
+  Verification, not proving. Proofs are built outside the timed region.
+  PER-BATCH MEDIANS, ms per payment.
+   batch       8 rows      16 rows      32 rows
+      1     10.84313      5.38956      2.71516
+      2     10.78625      5.39844      2.72694
+      3     10.81288      5.43438      2.73222
+      4     10.82062      5.39031      2.73097
+      5     10.80937      5.39813      2.71822
+      6     10.84750      5.42338      2.70834
+      7     10.83175      5.39037      2.73119
+      8     10.84825      5.41369      2.72116
+      9     10.81075      5.34606      2.71437
+     10     10.85300      5.41969      2.72250
+
+COST STRUCTURE: WHAT EACH DESIGN DECISION BUYS, 32-ROW TRACES
+==============================================================================
+  variant                         columns   prove/pmt  proof bytes  verify/pmt
+  ------------------------------ -------- ----------- ------------ -----------
+  policy + C9 only                    520      4.04ms       298117     0.258ms
+  + allowlists + revocation d32      7481     48.96ms      2748389     2.726ms
+    same, revocation d20             6245     40.79ms      2313317     2.298ms
+    allowlists outside the proof     4185     27.70ms      1588197     1.519ms
+  accountability, grain 1/64         6596     42.61ms      2436869     2.375ms
+    coarser, grain 1/30              3162     20.78ms      1228101     1.157ms
+    finer, grain 1/128              13060     83.76ms      4712197     4.755ms
+  whole, no zero knowledge           7481     24.50ms      2678485     2.651ms
+  accountability, no zk              6596     21.26ms      2366965     2.270ms
+  composed, one proof per payment    14198     92.02ms      5112773     5.281ms
+  two halves, one timed region      14077     91.61ms      5185258     5.111ms
+
+  Proved with grinding off. Every deployed proof adds one 20-bit search,
+  the same for every variant, timed on its own below over 200 fresh
+  transcripts. Add its mean to a row for a deployed proof's time.
+  grinding, ms per proof               min        q1    median        q3      mean
+                                      6.66    253.56    619.44   1138.27    809.26
+
+  COMPARISONS, by iteration quartiles. A difference is reported as
+  real only if the two interquartile ranges do not overlap.
+  composed, one proof per payment / two halves, one timed region   91.76-92.39   vs   91.35-92.00   OVERLAP
+  + allowlists + revocation d32 / same, revocation d20   48.83-49.21   vs   40.69-41.00   separate
+  + allowlists + revocation d32 / allowlists outside the proof   48.83-49.21   vs   27.60-27.88   separate
+  accountability, grain 1/64 / coarser, grain 1/30   42.42-42.89   vs   20.69-20.90   separate
+  accountability, grain 1/64 / finer, grain 1/128   42.42-42.89   vs   83.52-84.23   separate
+
+  Dispersion of the proving figures above. A median on its own says
+  nothing about how stable it is, and these rows are the ones the
+  manuscript quotes.
+  variant                              min        q1    median        q3
+  ------------------------------ --------- --------- --------- ---------
+  policy + C9 only                    3.99      4.03      4.04      4.08
+  + allowlists + revocation d32      48.60     48.83     48.96     49.21
+    same, revocation d20             40.39     40.69     40.79     41.00
+    allowlists outside the proof     27.44     27.60     27.70     27.88
+  accountability, grain 1/64         42.13     42.42     42.61     42.89
+    coarser, grain 1/30              20.55     20.69     20.78     20.90
+    finer, grain 1/128               83.07     83.52     83.76     84.23
+  whole, no zero knowledge           24.19     24.39     24.50     24.62
+  accountability, no zk              21.02     21.17     21.26     21.39
+  composed, one proof per payment     91.34     91.76     92.02     92.39
+  two halves, one timed region       90.93     91.35     91.61     92.00
+
+  PER-BATCH MEDIANS of the proving figures, ms per payment. Flat means
+  no drift within this study; the hiding rows above are far less stable
+  than the plain ones and this is where that is either explained or not.
+  variant                               1        2        3        4        5        6        7        8        9       10
+  ------------------------------ -------- -------- -------- -------- -------- -------- -------- -------- -------- --------
+  policy + C9 only                   4.05     4.04     4.04     4.06     4.05     4.05     4.06     4.06     4.05     4.04
+  + allowlists + revocation d32     49.05    48.97    48.92    48.93    48.89    48.99    48.95    49.15    49.02    48.98
+    same, revocation d20            40.77    40.80    40.79    40.75    40.91    40.75    41.04    40.84    40.79    40.93
+    allowlists outside the proof    27.66    27.72    27.71    27.65    27.70    27.60    27.89    27.84    27.74    27.76
+  accountability, grain 1/64        42.60    42.64    42.57    42.45    42.62    42.54    42.63    42.75    42.79    42.76
+    coarser, grain 1/30             20.75    20.81    20.73    20.81    20.79    20.75    20.83    20.89    20.78    20.83
+    finer, grain 1/128              83.71    83.67    83.77    83.74    83.69    83.57    83.84    83.95    83.95    83.86
+  whole, no zero knowledge          24.51    24.50    24.51    24.45    24.45    24.52    24.55    24.49    24.49    24.56
+  accountability, no zk             21.25    21.23    21.25    21.26    21.29    21.26    21.29    21.22    21.34    21.27
+  composed, one proof per payment    91.94    92.06    91.99    91.77    91.96    91.92    93.01    92.38    92.18    92.13
+  two halves, one timed region      91.52    91.52    91.63    91.50    91.43    91.60    92.04    91.70    91.74    91.68
+
+  Medians of 200 iterations, variants interleaved inside each batch.
+  Traces are built once and cloned before the timer starts, so no row
+  is charged for generating its own witness.
+  Every row is a real AIR proved at 32 rows, not a sum of other rows.
+  Marginal costs are differences between measured rows:
+    C7, allowlists, revocation     6961 cols     44.92ms      2450272 bytes
+    allowlists alone             3296 cols     21.26ms      1160192 bytes
+    revocation d32 over d20      1236 cols                           435072 bytes
+    grain 1/64 over 1/30         3434 cols                          1208768 bytes
+    zero knowledge, policy          0 cols     24.46ms        69904 bytes
+    zero knowledge, accnt.          0 cols                            69904 bytes
+
+WHAT ONE PAYMENT COSTS, COMPOSED AGAINST THE TWO HALVES SEPARATELY
+==============================================================================
+                                     min        q1    median        q3  proof bytes
+  ---------------------------- --------- --------- --------- --------- ------------
+  composed, proving               91.34    91.76    92.02    92.39      5112773
+  composed, verification           5.13     5.19     5.28     5.34             
+  two halves, proving             90.93    91.35    91.61    92.00      5185258
+  two halves, verification         5.00     5.05     5.11     5.19             
+
+  Milliseconds per payment at 32 rows. Both rows are timed the same
+  way: one region covering everything a settlement pays for. The two
+  halves are two proofs inside one region rather than two medians
+  added, which is not the median of a sum.
+  Proving  +0.4%   verification  +3.3%   proof bytes -1.4%
+  Interquartile ranges OVERLAP on proving, so the difference is not established.
+
+  PER-BATCH MEDIANS, ms per payment. Flat means no thermal drift.
+   batch    composed pr      halves pr    composed vf      halves vf
+  ------ -------------- -------------- -------------- --------------
+       1         91.936         91.524          5.317          5.109
+       2         92.064         91.520          5.280          5.146
+       3         91.991         91.629          5.332          5.089
+       4         91.765         91.499          5.264          5.126
+       5         91.956         91.428          5.278          5.130
+       6         91.918         91.598          5.273          5.104
+       7         93.013         92.041          5.307          5.150
+       8         92.383         91.700          5.280          5.097
+       9         92.178         91.736          5.318          5.124
+      10         92.128         91.679          5.279          5.085
+
+
+POSEIDON2 SUB-TRACE GENERATION, SANITY CHECKS
+==============================================================================
+  row width equals num_cols                              94
+  output differs from all-zero input                   true
+  ten elements absorb in three permutations               3
+  capacity carries from perm 0 into perm 1             true
+
+PROVING TIME, 1000 ITERATIONS IN 10 INTERLEAVED BATCHES, 10s PAUSE
+40 QUERIES AT BLOWUP 2^4, 20 POW BITS
+==============================================================================
+  configuration                 min        q1    median        q3      mean
+  ------------------------ -------- --------- --------- --------- ---------
+  256 perms, 0 registers     1.4000    2.2119    3.4438    5.3678    4.2045
+  256 perms, 1 register      1.5652    2.3966    3.5932    5.4745    4.4257
+  1024 perms, 0 registers    1.4293    1.6332    1.9080    2.4379    2.1573
+
+  Milliseconds per permutation. Configurations are interleaved so
+  drift hits each equally; minimum is the most robust statistic,
+  since interference can only ever slow a run down.
+  Register verdict: 3.4438 vs 3.5932 ms/perm at matched height, ratio 1.04x.
+
+  PER-BATCH MEDIANS, ms per permutation. Flat means no thermal drift;
+  a rising trend means the machine throttled over the run.
+   batch        256/0        256/1       1024/0
+  ------ ------------ ------------ ------------
+       1       3.1794       3.6117       1.9973
+       2       3.7264       3.5630       1.9435
+       3       3.3466       3.2357       1.8413
+       4       4.1331       3.6029       1.9127
+       5       3.2493       3.6506       1.8688
+       6       3.3284       3.9144       1.8569
+       7       3.5661       3.7197       2.0048
+       8       3.7255       3.7841       1.9214
+       9       3.3451       3.3863       1.9046
+      10       3.3800       3.3774       1.8276
+
+ZERO REGISTERS UNDER THE HIDING COMMITMENT
+==============================================================================
+  The S-box register holds the constraint degree at 3. At the rate this
+  crate now uses, degree 7 is admissible too, so the register is a cost
+  rather than a requirement. Both rows below are proved and verified.
+
+  composed circuit                      columns   constraints  degree  verifies
+  ---------------------------------- ---------- ------------- ------- ---------
+  one register, as built                  25722         25466       3      true
+  zero registers                          14198         13942       7      true
+
+  THE SMALLEST RATE THAT ADMITS ZERO REGISTERS
+  blowup                   provable     verifies
+  ---------------------- ---------- ------------
+  2                              40        false
+  4                              60        false
+  8                              80         true
+  16                            100         true
+  32                            120         true
+
+  Width is a property of the AIR and does not move with the rate.
+  What moves is whether the commitment can carry a degree-7
+  quotient, so the first row that verifies is the whole price of
+  the register, and any rate above it is bought for soundness.
+
+  Dropping the register removes 11524 columns, 44.8% of the circuit,
+  and the proof still verifies. The cost moves into constraint
+  degree, which the rate now covers.
+
+ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED
+==============================================================================
+  composed circuit, 32 rows, verifies                  true
+  Poseidon2 permutations during verify               159338
+  constraints                                         13942
+  distinct operations evaluating them                308164
+  folding them into one, two per constraint           27884
+  lower bound on steps                               495386  (2^18.92)
+  rounds of bisection                                    19
+
+ONE CONFIGURATION REUSED, AGAINST A FRESH ONE PER PROOF
+==============================================================================
+  Same circuit, same prebuilt trace, 20 proofs each. The only
+  difference is whether the hiding configuration is rebuilt.
+
+  configuration                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  shared                   3022.71   3228.28   3538.51   3879.21    650.93
+  rebuilt each proof       4499.39   4514.07   4528.07   4543.31     29.24
+
+  If sharing is the cause, the shared row is the wide one.
+
+WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED
+==============================================================================
+  Same circuit, same rate, 24 interleaved pairs. Only the grinding
+  bits differ. Both settings are below the rate this circuit needs to
+  verify, so neither proof is accepted (true); the timing is the point.
+
+  grinding bits                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  0                        2930.84   2938.21   2947.88   2958.51     20.30
+  20                       4496.51   4509.52   4517.44   4525.58     16.06
+
+  median difference 1569.56 ms, spread difference -4.24 ms.
+  A geometric search over 2^20 hashes has a mean and a standard
+  deviation of the same order, so if grinding is the source these two
+  differences should be comparable and the 0-bit row should be tight.
+
+DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?
+==============================================================================
+  allowlist / revocation / depth / cover, rows     verifies
+  ---------------------------------------------- ----------
+  8 / 8 / 16 / 14, 64 rows                             true
+  16 / 32 / 16 / 14, 64 rows                           true
+  16 / 32 / 16 / 14, 32 rows                           true
+  16 / 32 / 16 / 64, 64 rows                           true
+  16 / 32 / 16 / 64, 32 rows (what the paper quotes)       true
+
+FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 32 ROWS
+==============================================================================
+  queries  blowup   pow   conj.  Johnson  proof bytes   prove ms  verify ms  verifies
+  ------- ------- ----- ------- -------- ------------ ---------- ----------
+       40       4     8      88       48      5099973    1088.93    169.627     false
+       40       2     8      48       28      5093573     727.81    168.918     false
+       40       8     8     126       68      5106373    1610.32    172.001      true
+       20       4     8      48       28      2778173    1080.69    116.857     false
+       30       4     8      68       38      3939073    1085.33    140.543     false
+       60       4     8     126       68      7421773    1088.34    228.779     false
+       80       4     8     126       88      9743573    1099.79    288.662     false
+       40       4     0      80       40      5099973    1099.98    170.010     false
+       40       4    16      96       56      5099973    1174.97    168.696     false
+       84       8    16     126      126     10221373    1629.86    296.502      true
+       40      16    20     126      100      5112773    4551.29    171.176      true
+       54       8    20     126      101      6733873    2947.70    208.113      true
+       80       4    20     126      100      9743573    1407.99    289.079     false
+
+  Blowup is the reciprocal rate. Conjectured soundness assumes a query
+  costs the full rate; Johnson is what holds without that conjecture and
+  is the figure to size a secret or a bond against. Both are capped at
+  126 bits, the challenge field.
+
+  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.
+  queries  blowup   pow  commitments       opened      opening opening%
+  ------- ------- ----- ------------ ------------ ------------ -------
+       40       4     8          121       455044      4644800   91.1%
+       40       2     8          121       455044      4638400   91.1%
+       40       8     8          121       455044      4651200   91.1%
+       20       4     8          121       455044      2323000   83.6%
+       30       4     8          121       455044      3483900   88.4%
+       60       4     8          121       455044      6966600   93.9%
+       80       4     8          121       455044      9288400   95.3%
+       40       4     0          121       455044      4644800   91.1%
+       40       4    16          121       455044      4644800   91.1%
+       84       8    16          121       455044      9766200   95.5%
+       40      16    20          121       455044      4657600   91.1%
+       54       8    20          121       455044      6278700   93.2%
+       80       4    20          121       455044      9288400   95.3%
+
+WHAT A SETTLEMENT DOMAIN CAN CARRY
+==============================================================================
+  call data in one 30M-gas block, at 16 gas a byte         1875000
+  one EIP-4844 blob                                         131072
+
+   proof bytes    Johnson       blocks        blobs
+  ------------ ---------- ------------ ------------
+       5099973         48         2.72         38.9
+       5093573         28         2.72         38.9
+       5106373         68         2.72         39.0
+       2778173         28         1.48         21.2
+       3939073         38         2.10         30.1
+       7421773         68         3.96         56.6
+       9743573         88         5.20         74.3
+       5099973         40         2.72         38.9
+       5099973         56         2.72         38.9
+      10221373        126         5.45         78.0
+       5112773        100         2.73         39.0
+       6733873        101         3.59         51.4
+       9743573        100         5.20         74.3
+
+  The smallest proof measured here is 2778173 bytes at 28 provable bits,
+  which is 21.2 blobs. No setting in this sweep brings a proof of this
+  circuit within one block of call data: the opening proof dominates and
+  it shrinks only with the query count, which is what soundness buys.
+  A backend meeting a settlement domain's budget has to replace the
+  opening argument, not tune it.
+  Soundness gaps closed: C6 uses the field constant one in-circuit
+  rather than a witness adjustment; share indices are forced non-zero
+  by a witnessed inverse; and each sponge carries every lane its
+  chunk does not absorb, not only the capacity, so a partial final
+  chunk leaves no rate lane for a prover to choose.
+

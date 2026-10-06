@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-/// The scheme this construction is an alternative to.
-///
-/// The domain holds the cumulative total and refuses a payment that would carry
-/// it past the budget. Nothing is extracted, no shares are published, and the
-/// transcript holds only what a settlement needs. It is cheaper than the
-/// accountable reserve in every dimension, and by Corollary 2 it cannot keep
-/// the budget private: an adversary that offers payments and watches which are
-/// served recovers the bound by binary search.
-///
-/// It is here to price that corollary. The difference between this contract and
-/// Reserve.sol is what accountability costs on chain.
+interface IERC20P {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+/// The scheme this construction is an alternative to. The domain holds the
+/// cumulative total and refuses a payment that would carry it past the budget.
+/// Nothing is extracted and no shares are published, and by the probing
+/// argument it cannot keep the budget private. It pays out of a deposit exactly
+/// as Reserve does in Deposit mode, so the difference between the two is what
+/// accountability costs and nothing else.
 contract PreventiveReserve {
     struct Delegation {
         address principal;
@@ -21,6 +21,7 @@ contract PreventiveReserve {
         uint64 spent;
         uint64 velocityN;
         uint64 windowW;
+        uint256 deposit;
     }
 
     struct Window {
@@ -28,6 +29,7 @@ contract PreventiveReserve {
         uint64 count;
     }
 
+    IERC20P public immutable token;
     mapping(uint256 => Delegation) public delegations;
     mapping(uint256 => Window) private windows;
     mapping(uint256 => mapping(uint64 => bool)) private indexSeen;
@@ -40,7 +42,11 @@ contract PreventiveReserve {
     error BudgetExceeded();
     error NotAgent();
 
-    event Settled(uint256 indexed id, uint64 index, uint64 amount);
+    event Settled(uint256 indexed id, uint64 index, uint64 amount, address payee);
+
+    constructor(address token_) {
+        token = IERC20P(token_);
+    }
 
     function register(
         address agent,
@@ -57,12 +63,13 @@ contract PreventiveReserve {
             budget: budget,
             spent: 0,
             velocityN: velocityN,
-            windowW: windowW
+            windowW: windowW,
+            deposit: budget
         });
+        require(token.transferFrom(msg.sender, address(this), budget), "deposit");
     }
 
-    /// The refusal Corollary 2 is about is the last of these four.
-    function settle(uint256 id, uint64 amount, uint64 index) external {
+    function settle(uint256 id, address payee, uint64 amount, uint64 index) external {
         Delegation storage d = delegations[id];
         if (msg.sender != d.agent) revert NotAgent();
         if (indexSeen[id][index]) revert IndexAlreadySettled();
@@ -79,8 +86,10 @@ contract PreventiveReserve {
 
         if (d.spent + amount > d.budget) revert BudgetExceeded();
         d.spent += amount;
+        d.deposit -= amount;
 
         indexSeen[id][index] = true;
-        emit Settled(id, index, amount);
+        require(token.transfer(payee, amount), "transfer");
+        emit Settled(id, index, amount, payee);
     }
 }

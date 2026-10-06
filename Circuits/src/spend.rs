@@ -1,4 +1,5 @@
 use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
+use p3_field::extension::BinomiallyExtendable;
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_poseidon2_air::num_cols;
@@ -50,10 +51,21 @@ pub const SECRET_ELEMS: usize = 2;
 /// needed six checks, three of which refused at thresholds below the budget.
 pub const RANGE_BLOCKS: usize = 3;
 
+/// The share index is an element of the degree-2 extension, (digest, domain).
+/// Indices from different domains differ in the second coordinate whatever
+/// the digests are, so two settlements of one unit on two domains always
+/// stand at distinct indices; within a domain, freshness refuses a repeated
+/// digest. Neither case needs the digest to resist collisions.
+///
+/// The secret, the key and the share are extension elements as well, and the
+/// share is s + K * index under the extension's multiplication. An earlier
+/// form multiplied lane by lane by a base-field index, under which a second
+/// index coordinate would have separated only one lane of the secret.
 pub const COL_SECRET: usize = 0;
 pub const COL_INDEX: usize = COL_SECRET + SECRET_ELEMS;
 pub const COL_INDEX_INV: usize = COL_INDEX + 1;
-pub const COL_ROOT_KEY: usize = COL_INDEX_INV + 1;
+pub const COL_DOM: usize = COL_INDEX_INV + 1;
+pub const COL_ROOT_KEY: usize = COL_DOM + 1;
 /// The spendable unit count, m = B/u, committed with the policy. It is the one
 /// threshold at which this circuit refuses.
 pub const COL_M: usize = COL_ROOT_KEY + SECRET_ELEMS;
@@ -112,11 +124,13 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         self.node_base() + PER_NODE * COVER
     }
 
-    pub(crate) fn constrain<AB>(&self, builder: &mut AB, base: usize)
+    /// `dom_pv` is the public value carrying the domain: 1 when this AIR is
+    /// proved alone, after the compliance half's values when composed.
+    pub(crate) fn constrain<AB>(&self, builder: &mut AB, base: usize, dom_pv: usize)
     where
         AB: AirBuilder<F = F>,
     {
-        self.constrain_with(builder, base, false);
+        self.constrain_with(builder, base, false, dom_pv);
     }
 
     /// The same constraints, with the nullifier optionally left to the caller.
@@ -124,8 +138,13 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
     /// nullifier to a spare lane of the permutation that produced its key, so
     /// the second-invocation variant can derive it from a second invocation
     /// instead and be measured against this one.
-    pub(crate) fn constrain_with<AB>(&self, builder: &mut AB, base: usize, external_nullifier: bool)
-    where
+    pub(crate) fn constrain_with<AB>(
+        &self,
+        builder: &mut AB,
+        base: usize,
+        external_nullifier: bool,
+        dom_pv: usize,
+    ) where
         AB: AirBuilder<F = F>,
     {
         let bw = self.block_width();
@@ -143,13 +162,17 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         let secret: Vec<AB::Var> =
             (0..SECRET_ELEMS).map(|j| row[base + COL_SECRET + j].clone()).collect();
         let index = row[base + COL_INDEX].clone();
+        let dom = row[base + COL_DOM].clone();
         let m = row[base + COL_M].clone();
         let r = row[base + COL_R].clone();
         let units = row[base + COL_UNITS].clone();
         let pbase = row[base + COL_BASE].clone();
 
         builder.assert_eq(index.clone().into(), pv[0].clone());
+        builder.assert_eq(dom.clone().into(), pv[dom_pv].clone());
+        // A non-zero digest makes the index non-zero, so no share is the secret.
         builder.assert_one(index.clone().into() * row[base + COL_INDEX_INV].clone().into());
+        let w: AB::Expr = AB::Expr::from(<F as BinomiallyExtendable<2>>::W);
 
         let mut two_pow: Vec<AB::Expr> = Vec::with_capacity(DEPTH + 1);
         let mut p: AB::Expr = AB::Expr::ONE;
@@ -232,12 +255,20 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
                     row[n + NODE_KEY + j].clone().into(),
                     row[blk + output_offset::<R>() + j].clone().into(),
                 );
-                builder.assert_eq(
-                    row[n + NODE_SHARE + j].clone().into(),
-                    secret[j].clone().into()
-                        + row[n + NODE_KEY + j].clone().into() * index.clone().into(),
-                );
             }
+            // (k0 + k1 X)(x0 + x1 X) with X^2 = W.
+            let k0: AB::Expr = row[n + NODE_KEY].clone().into();
+            let k1: AB::Expr = row[n + NODE_KEY + 1].clone().into();
+            let x0: AB::Expr = index.clone().into();
+            let x1: AB::Expr = dom.clone().into();
+            builder.assert_eq(
+                row[n + NODE_SHARE].clone().into(),
+                secret[0].clone().into() + k0.clone() * x0.clone() + w.clone() * k1.clone() * x1.clone(),
+            );
+            builder.assert_eq(
+                row[n + NODE_SHARE + 1].clone().into(),
+                secret[1].clone().into() + k0 * x1 + k1 * x0,
+            );
             if !external_nullifier {
                 builder.assert_eq(
                     row[n + NODE_NULL].clone().into(),
@@ -257,9 +288,9 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> BaseAir<F>
         self.value_cols() + Self::permutations() * self.block_width()
     }
 
-    /// The payload digest, which is the share index.
+    /// The payload digest and the settlement domain: the share index.
     fn num_public_values(&self) -> usize {
-        1
+        2
     }
 }
 
@@ -269,7 +300,7 @@ where
     AB: AirBuilder<F = F>,
 {
     fn eval(&self, builder: &mut AB) {
-        self.constrain(builder, 0);
+        self.constrain(builder, 0, 1);
     }
 }
 

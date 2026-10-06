@@ -23,7 +23,7 @@ use crate::vacuous::VacuousAir;
 use crate::whole::WholeAir;
 use crate::merkle::MerkleAir;
 use crate::revocation::NonMembershipAir;
-use crate::trace::{full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_composed_air, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
+use crate::trace::{composed_case, composed_public_values, full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
 type Val = Goldilocks;
@@ -133,7 +133,9 @@ fn config_plain() -> PlainConfig {
         max_log_arity: 2,
         num_queries: NUM_QUERIES,
         commit_proof_of_work_bits: 0,
-        query_proof_of_work_bits: POW_BITS,
+        // Grinding off, as in the hiding rows of the cost study it is
+        // compared with, which is its only use.
+        query_proof_of_work_bits: 0,
         mmcs: challenge_mmcs,
     };
     let pcs = PlainPcs::new(Dft::default(), val_mmcs, fri_params);
@@ -343,10 +345,9 @@ pub fn roundtrip_whole<const R: usize>(rows: usize, bad: Option<usize>) -> (bool
 pub fn roundtrip_spend_two<const R: usize, const DEPTH: usize, const COVER: usize>(
     rows: usize,
 ) -> bool {
-    use p3_field::PrimeCharacteristicRing;
     let air = crate::spend2::SpendTwoAir::<R, DEPTH, COVER>::new();
     let cfg = config();
-    let pv = vec![Goldilocks::from_u64(crate::spend_trace::PAYLOAD)];
+    let pv = crate::spend_trace::spend_public_values();
     let t = crate::spend_trace::spend_two_trace::<R, DEPTH, COVER>(rows);
     verify(&cfg, &air, &prove(&cfg, &air, t, &pv), &pv).is_ok()
 }
@@ -388,11 +389,7 @@ pub fn roundtrip_composed_air<
 ) -> (bool, u128) {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config();
-    let pv = whole_public_values::<R, MD, RD>();
-    let t = match how {
-        None => composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows),
-        Some(b) => broken_composed_air::<R, MD, RD, DEPTH, COVER>(rows, b),
-    };
+    let (t, pv) = composed_case::<R, MD, RD, DEPTH, COVER>(rows, how);
     let start = Instant::now();
     let proof = prove(&cfg, &air, t, &pv);
     let ms = start.elapsed().as_millis();
@@ -412,7 +409,7 @@ pub fn composed_proof_bytes<
 ) -> usize {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config();
-    let pv = whole_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD>();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     bincode::serialize(&proof).expect("proof serialises").len()
 }
@@ -423,10 +420,9 @@ pub fn composed_proof_bytes<
 pub fn spend_proof_bytes<const R: usize, const DEPTH: usize, const COVER: usize>(
     rows: usize,
 ) -> usize {
-    use p3_field::PrimeCharacteristicRing;
     let air = crate::spend::SpendAir::<R, DEPTH, COVER>::new();
     let cfg = config();
-    let pv = vec![Goldilocks::from_u64(crate::spend_trace::PAYLOAD)];
+    let pv = crate::spend_trace::spend_public_values();
     let t = crate::spend_trace::spend_trace::<R, DEPTH, COVER>(rows);
     let proof = prove(&cfg, &air, t, &pv);
     bincode::serialize(&proof).expect("proof serialises").len()
@@ -438,6 +434,7 @@ pub fn roundtrip_spend<const R: usize, const DEPTH: usize, const COVER: usize>(
     rows: usize,
     bad: Option<crate::spend_trace::SpendBreak>,
     payload: u64,
+    dom: u64,
 ) -> bool {
     use p3_field::PrimeCharacteristicRing;
     let air = crate::spend::SpendAir::<R, DEPTH, COVER>::new();
@@ -446,7 +443,7 @@ pub fn roundtrip_spend<const R: usize, const DEPTH: usize, const COVER: usize>(
         None => crate::spend_trace::spend_trace::<R, DEPTH, COVER>(rows),
         Some(b) => crate::spend_trace::broken_spend::<R, DEPTH, COVER>(rows, b),
     };
-    let pv = vec![Goldilocks::from_u64(payload)];
+    let pv = vec![Goldilocks::from_u64(payload), Goldilocks::from_u64(dom)];
     let proof = prove(&cfg, &air, t, &pv);
     verify(&cfg, &air, &proof, &pv).is_ok()
 }
@@ -617,12 +614,17 @@ pub struct CostRow {
 /// Every variant is a real AIR proved at 32 rows, not an arithmetic combination
 /// of other rows. The marginal costs are differences between measured rows.
 pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<CostRow> {
-    use p3_field::PrimeCharacteristicRing;
     const ROWS: usize = 32;
 
-    let zk = config();
+    // Proved with grinding off. The search adds a random cost whose spread
+    // swamps the differences between variants; it is the same search for
+    // every variant, so it is measured once, by grinding_cost, and added back
+    // as a known quantity rather than sampled inside each row. Proof bytes do
+    // not depend on the grinding bits.
+    let zk = config_with(NUM_QUERIES, LOG_BLOWUP, 0);
     let plain = config_plain();
-    let pv: Vec<Goldilocks> = vec![Goldilocks::from_u64(crate::spend_trace::PAYLOAD)];
+    let pv: Vec<Goldilocks> = crate::spend_trace::spend_public_values();
+    let pv_c = composed_public_values::<{ REGISTERS }, 16, 32>();
     let pv_full = full_public_values::<{ REGISTERS }>();
 
     // Declared before the closure vectors below, so that the closures which
@@ -699,7 +701,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     // covering both halves of one payment, rather than a compliance figure that
     // has to be added to an accountability figure the abstract never added.
     variant!("composed, one proof per payment", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::new(),
-             composed_air_trace::<{ REGISTERS }, 16, 32, 16, 64>(ROWS), &zk, &pv_w32);
+             composed_air_trace::<{ REGISTERS }, 16, 32, 16, 64>(ROWS), &zk, &pv_c);
 
     // The arrangement the manuscript describes, timed as one thing. Adding the
     // medians of two separately measured rows is not the median of their sum,
@@ -817,7 +819,7 @@ pub fn composed_proof_at<
 ) -> (usize, usize, usize, usize, u128, u128, bool) {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config_with(num_queries, log_blowup, pow_bits);
-    let pv = whole_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD>();
     let trace = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
 
     let t0 = Instant::now();
@@ -853,7 +855,7 @@ pub fn composed_times<
     share_config: bool,
 ) -> Vec<u128> {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let pv = whole_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD>();
     let base = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
     let shared = config();
     let mut out = Vec::with_capacity(iters);
@@ -905,7 +907,150 @@ pub fn composed_verifies_at<
 ) -> bool {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config_with(num_queries, log_blowup, pow_bits);
-    let pv = whole_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD>();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     verify(&cfg, &air, &proof, &pv).is_ok()
+}
+
+// ---------------------------------------------------------------------------
+// How much work one verification is, counted rather than derived from the FRI
+// shape. The dispute bisects this work, so its length sets the round count.
+// ---------------------------------------------------------------------------
+
+static PERMUTATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The deployed permutation with a counter in front of it. Same outputs, so a
+/// proof made under it is the proof the deployment makes.
+#[derive(Clone)]
+pub struct Counting<P>(P);
+
+impl<T: Clone, P: p3_symmetric::Permutation<T>> p3_symmetric::Permutation<T> for Counting<P> {
+    fn permute_mut(&self, input: &mut T) {
+        PERMUTATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.0.permute_mut(input);
+    }
+}
+
+impl<T: Clone, P: p3_symmetric::CryptographicPermutation<T>> p3_symmetric::CryptographicPermutation<T>
+    for Counting<P>
+{
+}
+
+type CPerm = Counting<Perm>;
+type CHash = PaddingFreeSponge<CPerm, 8, 4, 4>;
+type CCompress = TruncatedPermutation<CPerm, 2, 4, 8>;
+type CValMmcs = MerkleTreeHidingMmcs<
+    <Val as Field>::Packing,
+    <Val as Field>::Packing,
+    CHash,
+    CCompress,
+    SaltRng,
+    2,
+    4,
+    SALT_ELEMS,
+>;
+type CChallengeMmcs = ExtensionMmcs<Val, Challenge, CValMmcs>;
+type CPcs = HidingFriPcs<Val, Dft, CValMmcs, CChallengeMmcs, SaltRng>;
+type CChallenger = DuplexChallenger<Val, CPerm, 8, 4>;
+type CConfig = StarkConfig<CPcs, Challenge, CChallenger>;
+
+fn counting_config() -> CConfig {
+    let perm = Counting(default_goldilocks_poseidon2_8());
+    let hash = CHash::new(perm.clone());
+    let compress = CCompress::new(perm.clone());
+    let val_mmcs = CValMmcs::new(hash.clone(), compress.clone(), 0, SaltRng::seeded(INPUT_SALT_SEED));
+    let fri_mmcs = CValMmcs::new(hash, compress, 0, SaltRng::seeded(FRI_SALT_SEED));
+    let fri_params = FriParameters {
+        log_blowup: LOG_BLOWUP,
+        log_final_poly_len: 3,
+        max_log_arity: 2,
+        num_queries: NUM_QUERIES,
+        commit_proof_of_work_bits: 0,
+        query_proof_of_work_bits: POW_BITS,
+        mmcs: CChallengeMmcs::new(fri_mmcs),
+    };
+    let pcs = CPcs::new(
+        Dft::default(),
+        val_mmcs,
+        fri_params,
+        NUM_RANDOM_CODEWORDS,
+        SaltRng::seeded(CODEWORD_SEED),
+    );
+    StarkConfig::new(pcs, CChallenger::new(perm))
+}
+
+/// Distinct arithmetic operations in the constraint system, counting a shared
+/// subexpression once, as a verifier evaluating it at one point does.
+fn constraint_ops(cs: &[p3_air::SymbolicExpression<Val>]) -> usize {
+    use p3_air::symbolic::SymbolicExpr;
+    use std::collections::HashSet;
+    type E = SymbolicExpr<p3_air::BaseLeaf<Val>>;
+    fn walk(e: &E, seen: &mut HashSet<*const E>, n: &mut usize) {
+        let kids: Vec<&std::sync::Arc<E>> = match e {
+            SymbolicExpr::Leaf(_) => return,
+            SymbolicExpr::Add { x, y, .. }
+            | SymbolicExpr::Sub { x, y, .. }
+            | SymbolicExpr::Mul { x, y, .. } => vec![x, y],
+            SymbolicExpr::Neg { x, .. } => vec![x],
+        };
+        *n += 1;
+        for k in kids {
+            if seen.insert(std::sync::Arc::as_ptr(k)) {
+                walk(k, seen, n);
+            }
+        }
+    }
+    let mut seen = HashSet::new();
+    let mut n = 0;
+    for c in cs {
+        walk(c, &mut seen, &mut n);
+    }
+    n
+}
+
+pub struct VerifierWork {
+    pub verifies: bool,
+    pub permutations: u64,
+    pub constraints: usize,
+    pub constraint_ops: usize,
+}
+
+/// One verification of the composed circuit as deployed, with every Poseidon2
+/// permutation the verifier runs counted and the constraint evaluation sized.
+pub fn verifier_work<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+) -> VerifierWork {
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+    let cfg = counting_config();
+    let pv = composed_public_values::<R, MD, RD>();
+    let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
+    PERMUTATIONS.store(0, std::sync::atomic::Ordering::Relaxed);
+    let verifies = verify(&cfg, &air, &proof, &pv).is_ok();
+    let permutations = PERMUTATIONS.load(std::sync::atomic::Ordering::Relaxed);
+    let cs = p3_air::get_symbolic_constraints::<Val, _>(&air, p3_air::AirLayout::from_air::<Val>(&air));
+    VerifierWork { verifies, permutations, constraints: cs.len(), constraint_ops: constraint_ops(&cs) }
+}
+
+/// The proof-of-work search a deployed proof performs, timed on its own.
+/// Each sample grinds a fresh transcript, so the samples are independent draws
+/// of the search's running time.
+pub fn grinding_cost(samples: usize) -> Stats {
+    use p3_challenger::{CanObserve, GrindingChallenger};
+    use p3_field::PrimeCharacteristicRing;
+    let perm = default_goldilocks_poseidon2_8();
+    let mut us: Vec<u128> = Vec::with_capacity(samples);
+    for i in 0..samples {
+        let mut ch = Challenger::new(perm.clone());
+        ch.observe(Goldilocks::from_u64(0x9E37_79B9_7F4A_7C15 ^ i as u64));
+        let t = Instant::now();
+        let _ = ch.grind(POW_BITS);
+        us.push(t.elapsed().as_micros());
+    }
+    summarise(us, 1)
 }

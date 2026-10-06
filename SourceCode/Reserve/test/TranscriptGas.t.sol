@@ -1,93 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
+import {console} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
-import {PreventiveReserve} from "../src/PreventiveReserve.sol";
+import {Fixture} from "./Fixture.sol";
 
-/// Does accountability cost what the transcript costs, or what storing the
-/// transcript costs? Extraction reads the shares and nothing in the contract
-/// compares against them, so a log would serve. This measures both.
-contract TranscriptGas is Test {
-    Reserve acc;
-    PreventiveReserve prev;
-    address principal = address(0xA11CE);
-    uint256 constant AGENT_PK = 0xA6E47;
-    address agent;
-
-    uint64 constant CAP = 1_000_000;
-    uint64 constant BUDGET = 100_000_000;
-    uint64 constant VELOCITY = 1_000;
-    uint64 constant WINDOW = 86_400;
-
+/// What a settlement costs, now that it moves the payment as well as
+/// publishing its evidence. Every figure is the settle call alone, warmed by
+/// one earlier settlement on the same delegation.
+contract TranscriptGas is Fixture {
     function setUp() public {
-        agent = vm.addr(AGENT_PK);
-        acc = new Reserve();
-        prev = new PreventiveReserve();
-        vm.deal(principal, 100 ether);
-        vm.deal(agent, 1 ether);
-    }
-
-    function _elems(uint256 cover) internal pure returns (uint64[] memory e) {
-        e = new uint64[](cover * 3);
-        for (uint256 i = 0; i < e.length; ++i) {
-            e[i] = uint64(0x9E3779B97F4A7C15 ^ (i * 0x100000001B3));
-        }
-    }
-
-    /// The agent's signature over everything it is answerable for.
-    function _sig(uint256 id, uint64 amount, uint64 index, uint64[] memory elems)
-        internal
-        view
-        returns (bytes32 commitment, bytes memory signature)
-    {
-        commitment = keccak256(abi.encodePacked("proof", id, index));
-        bytes32 digest = keccak256(
-            abi.encode(block.chainid, address(acc), id, amount, index,
-                       keccak256(abi.encodePacked(elems)), commitment)
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(AGENT_PK, digest);
-        signature = abi.encodePacked(r, s, v);
-    }
-
-    function _settle(uint256 id, uint64 amount, uint64 index, uint64[] memory e) internal {
-        (bytes32 c, bytes memory sg) = _sig(id, amount, index, e);
-        acc.settle(id, amount, index, e, c, sg);
-    }
-
-    function _settleLogged(uint256 id, uint64 amount, uint64 index, uint64[] memory e) internal {
-        (bytes32 c, bytes memory sg) = _sig(id, amount, index, e);
-        acc.settleLogged(id, amount, index, e, c, sg);
-    }
-
-    function _reg() internal returns (uint256 id) {
-        vm.prank(principal);
-        id = acc.register{value: 1 ether}(
-            agent, CAP, VELOCITY, WINDOW, keccak256(abi.encodePacked(uint64(7), uint64(11)))
-        );
+        _base();
     }
 
     function testStoredAgainstLogged() public {
         uint16[4] memory covers = [uint16(14), 30, 64, 128];
         for (uint256 k = 0; k < covers.length; ++k) {
-            uint256 a = _reg();
-            uint256 b = _reg();
-            uint64[] memory e = _elems(covers[k]);
-
-            vm.startPrank(agent);
-            _settle(a, 1000, 1, e);          // warm the record
-            uint64[] memory e2 = _elems(covers[k]);
-            uint256 g0 = gasleft();
-            _settle(a, 1000, 2, e2);
-            uint256 stored = g0 - gasleft();
-
-            _settleLogged(b, 1000, 1, e);    // warm the record
-            uint64[] memory e3 = _elems(covers[k]);
-            uint256 g1 = gasleft();
-            _settleLogged(b, 1000, 2, e3);
-            uint256 logged = g1 - gasleft();
-            vm.stopPrank();
-
+            uint256 a = _reg(Reserve.Funding.Deposit);
+            uint256 b = _reg(Reserve.Funding.Deposit);
+            _settle(a, 1, _elems(covers[k], 1), false);
+            uint256 stored = _settle(a, 2, _elems(covers[k], 2), false);
+            _settle(b, 1, _elems(covers[k], 1), true);
+            uint256 logged = _settle(b, 2, _elems(covers[k], 2), true);
             console.log("cover", covers[k]);
             console.log("  stored", stored);
             console.log("  logged", logged);
@@ -95,27 +29,36 @@ contract TranscriptGas is Test {
         }
     }
 
-    /// Every operation the paper tabulates, measured in one place and warmed
-    /// the same way, so no row of the table comes from a different experiment.
+    /// The two ways of funding a delegation, at the cover the paper uses.
+    function testDepositAgainstPermit2() public {
+        uint256 a = _reg(Reserve.Funding.Deposit);
+        uint256 b = _reg(Reserve.Funding.Permit2);
+        _settle(a, 1, _elems(64, 1), true);
+        uint256 dep = _settle(a, 2, _elems(64, 2), true);
+        _settle(b, 1, _elems(64, 1), true);
+        uint256 p2 = _settle(b, 2, _elems(64, 2), true);
+        console.log("settle logged, cover 64, deposit", dep);
+        console.log("settle logged, cover 64, permit2", p2);
+        console.log("  permit2 minus deposit", p2 - dep);
+        assertEq(token.balanceOf(payee), 1 + 4 * 1000);
+    }
+
     function testAllOperationsOneWarming() public {
         uint256 g0 = gasleft();
-        vm.prank(principal);
-        uint256 id = acc.register{value: 1 ether}(
-            agent, CAP, VELOCITY, WINDOW, keccak256(abi.encodePacked(uint64(7), uint64(11)))
-        );
-        console.log("Open", g0 - gasleft());
-
-        vm.startPrank(agent);
-        _settleLogged(id, 1000, 1, _elems(64));
-        uint64[] memory e = _elems(64);
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        console.log("Open, deposit", g0 - gasleft());
         uint256 g1 = gasleft();
-        _settleLogged(id, 1000, 2, e);
-        console.log("Settle logged, cover 64", g1 - gasleft());
-        vm.stopPrank();
+        _reg(Reserve.Funding.Permit2);
+        console.log("Open, permit2", g1 - gasleft());
 
+        _settle(id, 1, _elems(64, 1), true);
+        console.log("Settle logged, cover 64", _settle(id, 2, _elems(64, 2), true));
+
+        vm.prank(principal);
         uint256 g2 = gasleft();
         acc.revoke(id, 0, 64);
         console.log("Revoke, first range", g2 - gasleft());
+        vm.prank(principal);
         uint256 g3 = gasleft();
         acc.revoke(id, 128, 64);
         console.log("Revoke, later range", g3 - gasleft());
@@ -126,38 +69,59 @@ contract TranscriptGas is Test {
         console.log("Claim", g4 - gasleft());
     }
 
-    /// What a challenge would have to carry. Not a call: the proof is over five
-    /// megabytes and no block admits it. Call data cost alone, at 16 gas a
-    /// non-zero byte, before any verification work. The proof size is the one
-    /// the circuit harness measures for the composed circuit at a 32-row trace.
-    function testChallengeCallDataBudget() public pure {
-        uint256 proofBytes = 5_112_421;
-        uint256 callDataGas = proofBytes * 16;
-        console.log("challenge call data alone, gas", callDataGas);
-        console.log("proof bytes", proofBytes);
-    }
-
     function testLoggedAgainstPreventive() public {
-        uint256 a = _reg();
+        uint256 a = _reg(Reserve.Funding.Deposit);
         vm.prank(principal);
         uint256 p = prev.register(agent, CAP, BUDGET, VELOCITY, WINDOW);
 
-        vm.startPrank(agent);
-        _settleLogged(a, 1000, 1, _elems(64));
-        prev.settle(p, 1000, 1);
+        _settle(a, 1, _elems(64, 1), true);
+        vm.prank(agent);
+        prev.settle(p, payee, 1000, 1);
 
-        uint64[] memory e = _elems(64);
-        uint256 g0 = gasleft();
-        _settleLogged(a, 1000, 2, e);
-        uint256 logged = g0 - gasleft();
-
+        uint256 logged = _settle(a, 2, _elems(64, 2), true);
+        vm.prank(agent);
         uint256 g1 = gasleft();
-        prev.settle(p, 1000, 2);
+        prev.settle(p, payee, 1000, 2);
         uint256 preventive = g1 - gasleft();
-        vm.stopPrank();
 
-        console.log("accountable, logged transcript, cover 64", logged);
+        console.log("accountable, logged, cover 64", logged);
         console.log("preventive", preventive);
         console.log("ratio x100", (logged * 100) / preventive);
+    }
+
+    /// Call data alone, at 16 gas a non-zero byte, for presenting the proof
+    /// the harness measures. Not a call: it exceeds the per-transaction cap.
+    function testChallengeCallDataBudget() public pure {
+        uint256 proofBytes = 5_112_773;
+        console.log("challenge call data alone, gas", proofBytes * 16);
+        console.log("proof bytes", proofBytes);
+        console.log("over the 2^24 per-transaction cap x100", proofBytes * 16 * 100 / (1 << 24));
+    }
+
+    function testRevokeIsThePrincipals() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        vm.expectRevert(Reserve.NotPrincipal.selector);
+        acc.revoke(id, 0, 64);
+    }
+
+    /// The signature covers the payee, so a settlement redirected to anyone
+    /// else does not verify.
+    function testPayeeIsBound() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory e = _elems(14, 1);
+        bytes32 c = _commit(id, 1);
+        bytes memory sg = _sign(id, 1000, 1, e, c);
+        vm.expectRevert(Reserve.BadSignature.selector);
+        acc.settleLogged(id, address(0xBAD), 1000, 1, e, c, sg);
+    }
+
+    function testDigestSettlesOnce() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        _settle(id, 1, _elems(14, 1), true);
+        uint64[] memory e = _elems(14, 2);
+        bytes32 c = _commit(id, 1);
+        bytes memory sg = _sign(id, 1000, 1, e, c);
+        vm.expectRevert(Reserve.IndexAlreadySettled.selector);
+        acc.settleLogged(id, payee, 1000, 1, e, c, sg);
     }
 }

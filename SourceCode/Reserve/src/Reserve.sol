@@ -1,24 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-/// The reserve of Section V, as a settlement domain would deploy it.
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+/// Uniswap Permit2, allowance mode. Only the call the reserve makes.
+interface IAllowanceTransfer {
+    function transferFrom(address from, address to, uint160 amount, address token) external;
+}
+
+/// The reserve of Section V on one settlement domain.
 ///
-/// It verifies no payment proof. It records settlements, appends the shares and
-/// nullifiers submitted with them, refuses a payload index it has already
-/// settled, refuses an amount above the public cap or a payment beyond the
-/// public velocity bound, and pays the bond to the principal on a secret
-/// matching the committed hash.
+/// It verifies no payment proof. It records each settlement against its payload
+/// digest, publishes the shares and nullifiers, refuses a digest it has already
+/// settled, an amount above the public cap, or a payment beyond the public
+/// velocity bound, and moves the payment itself. Value leaves the principal
+/// only through settle, so a payment that moves money always publishes shares.
 ///
-/// Challenge is deliberately absent. A challenge must carry the payment proof,
-/// which is over nine megabytes; there is no call data budget for it on any
-/// chain, so a function taking it would not be callable and measuring one would
-/// report a number nobody can pay.
+/// Two ways to fund a delegation, measured against each other:
+///   Deposit  the principal deposits the declared range up front and the
+///            reserve pays out of it;
+///   Permit2  the money stays in the principal's wallet and the reserve pulls
+///            each payment through a Permit2 allowance.
+/// Either amount is public, so either must be sized to the declared range and
+/// not to the budget.
 contract Reserve {
-    /// Field elements packed four to a word. Goldilocks elements are under
-    /// 2^64, so four fit and the transcript costs a quarter of the naive
-    /// layout. This is the dominant cost of a settlement and the reason the
-    /// slot cover is worth choosing carefully.
     uint256 private constant PER_WORD = 4;
+
+    enum Funding { Deposit, Permit2 }
 
     struct Delegation {
         address principal;
@@ -26,9 +37,11 @@ contract Reserve {
         uint64 cap;
         uint64 velocityN;
         uint64 windowW;
+        Funding funding;
+        bool bondPaid;
+        uint256 deposit;
         uint256 bond;
         bytes32 secretHash;
-        bool settled;
     }
 
     struct Window {
@@ -36,9 +49,23 @@ contract Reserve {
         uint64 count;
     }
 
+    /// This domain's identifier, the second coordinate of every share index
+    /// settled here. Never zero: a zero index would publish the secret itself.
+    uint64 public immutable domain;
+    IERC20 public immutable token;
+    IAllowanceTransfer public immutable permit2;
+    address private immutable deployer;
+
+    /// The two contracts allowed to forfeit a bond: the dispute game and the
+    /// availability challenge. Set once, after all three are deployed.
+    address public dispute;
+    address public availability;
+
     mapping(uint256 => Delegation) public delegations;
     mapping(uint256 => Window) private windows;
-    mapping(uint256 => mapping(uint64 => bool)) private indexSeen;
+    /// Proof commitment of each settled digest. Non-zero means settled, so the
+    /// freshness check and the record a challenge needs share one slot.
+    mapping(uint256 => mapping(uint64 => bytes32)) public settled;
     mapping(uint256 => mapping(uint256 => uint256)) private transcript;
     mapping(uint256 => uint256) private transcriptLen;
     mapping(uint256 => uint64[2][]) private revoked;
@@ -51,24 +78,39 @@ contract Reserve {
     error VelocityExceeded();
     error BondAlreadyPaid();
     error SecretDoesNotOpen();
+    error NotPrincipal();
+    error NotArbiter();
+    error AlreadySet();
+    error ZeroCommitment();
+    error DepositExhausted();
 
-    event Settled(uint256 indexed id, uint64 index, uint64 amount);
-
-    /// The transcript as log data rather than storage. Extraction only reads
-    /// the shares, and nothing in the contract compares against them, so a log
-    /// serves the same purpose at a fraction of the price. The cost is that a
-    /// log is not readable from inside the EVM: a future contract that wanted
-    /// to check a share itself could not.
-    event Transcript(uint256 indexed id, uint64 index, uint64[] elems);
+    event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee);
+    event Transcript(uint256 indexed id, uint64 digest, uint64[] elems);
     event BondForfeited(uint256 indexed id, address to, uint256 amount);
     event Revoked(uint256 indexed id, uint64 start, uint64 length);
+
+    constructor(uint64 domainId, address token_, address permit2_) {
+        require(domainId != 0, "domain");
+        domain = domainId;
+        token = IERC20(token_);
+        permit2 = IAllowanceTransfer(permit2_);
+        deployer = msg.sender;
+    }
+
+    function setArbiters(address dispute_, address availability_) external {
+        if (msg.sender != deployer || dispute != address(0)) revert AlreadySet();
+        dispute = dispute_;
+        availability = availability_;
+    }
 
     function register(
         address agent,
         uint64 cap,
         uint64 velocityN,
         uint64 windowW,
-        bytes32 secretHash
+        bytes32 secretHash,
+        Funding funding,
+        uint256 deposit
     ) external payable returns (uint256 id) {
         id = nextId++;
         delegations[id] = Delegation({
@@ -77,48 +119,80 @@ contract Reserve {
             cap: cap,
             velocityN: velocityN,
             windowW: windowW,
+            funding: funding,
+            bondPaid: false,
+            deposit: funding == Funding.Deposit ? deposit : 0,
             bond: msg.value,
-            secretHash: secretHash,
-            settled: false
+            secretHash: secretHash
         });
+        if (funding == Funding.Deposit && deposit != 0) {
+            require(token.transferFrom(msg.sender, address(this), deposit), "deposit");
+        }
     }
 
-    /// One payment. `elems` is the flattened transcript the payment publishes:
-    /// two share elements and one nullifier per slot, every slot, padded ones
-    /// included, because a padded slot must be indistinguishable from a real
-    /// one to anyone reading this.
-    /// Called by the payee, under the agent's signature. The signature covers
-    /// the shares and the proof commitment as well as the payload, so a payee
-    /// holding a signed payload cannot settle it with shares of its own: it
-    /// could otherwise consume the digest, block the real settlement, and
-    /// leave the agent unable to defend a commitment it never made.
+    /// One payment, transcript stored. Called by whoever delivers the service,
+    /// under the agent's signature over everything the agent answers for: the
+    /// domain, the payee, the amount, the digest, the shares and the proof
+    /// commitment. A payee holding a signed payload therefore cannot settle it
+    /// with shares of its own.
     function settle(
         uint256 id,
+        address payee,
         uint64 amount,
-        uint64 index,
+        uint64 digest,
         uint64[] calldata elems,
         bytes32 proofCommitment,
         bytes calldata signature
     ) external {
-        _checkAgentSignature(id, amount, index, elems, proofCommitment, signature);
-        _admit(id, amount, index);
+        _checkAgentSignature(id, payee, amount, digest, elems, proofCommitment, signature);
+        _admit(id, amount, digest, proofCommitment);
         _append(id, elems);
-        emit Settled(id, index, amount);
+        _pay(id, payee, amount);
+        emit Settled(id, digest, amount, payee);
     }
 
-    /// Everything the agent is answerable for, under one signature.
+    /// The same settlement with the transcript emitted rather than stored.
+    function settleLogged(
+        uint256 id,
+        address payee,
+        uint64 amount,
+        uint64 digest,
+        uint64[] calldata elems,
+        bytes32 proofCommitment,
+        bytes calldata signature
+    ) external {
+        _checkAgentSignature(id, payee, amount, digest, elems, proofCommitment, signature);
+        _admit(id, amount, digest, proofCommitment);
+        emit Transcript(id, digest, elems);
+        _pay(id, payee, amount);
+        emit Settled(id, digest, amount, payee);
+    }
+
+    function signedDigest(
+        uint256 id,
+        address payee,
+        uint64 amount,
+        uint64 digest,
+        bytes32 elemsHash,
+        bytes32 proofCommitment
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(block.chainid, address(this), domain, id, payee, amount, digest,
+                       elemsHash, proofCommitment)
+        );
+    }
+
     function _checkAgentSignature(
         uint256 id,
+        address payee,
         uint64 amount,
-        uint64 index,
+        uint64 digest,
         uint64[] calldata elems,
         bytes32 proofCommitment,
         bytes calldata signature
     ) private view {
-        bytes32 digest = keccak256(
-            abi.encode(block.chainid, address(this), id, amount, index,
-                       keccak256(abi.encodePacked(elems)), proofCommitment)
-        );
+        bytes32 h = signedDigest(id, payee, amount, digest,
+                                 keccak256(abi.encodePacked(elems)), proofCommitment);
         if (signature.length != 65) revert BadSignature();
         bytes32 r;
         bytes32 s;
@@ -131,14 +205,14 @@ contract Reserve {
         if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert BadSignature();
         }
-        address signer = ecrecover(digest, v, r, s);
+        address signer = ecrecover(h, v, r, s);
         if (signer == address(0) || signer != delegations[id].agent) revert BadSignature();
     }
 
-    /// The three refusals the interface requires, all on public values.
-    function _admit(uint256 id, uint64 amount, uint64 index) private {
+    function _admit(uint256 id, uint64 amount, uint64 digest, bytes32 proofCommitment) private {
         Delegation storage d = delegations[id];
-        if (indexSeen[id][index]) revert IndexAlreadySettled();
+        if (proofCommitment == bytes32(0)) revert ZeroCommitment();
+        if (settled[id][digest] != bytes32(0)) revert IndexAlreadySettled();
         if (amount > d.cap) revert AmountAboveCap();
 
         Window storage w = windows[id];
@@ -149,12 +223,20 @@ contract Reserve {
         }
         if (w.count + 1 > d.velocityN) revert VelocityExceeded();
         w.count += 1;
-        indexSeen[id][index] = true;
+        settled[id][digest] = proofCommitment;
     }
 
-    /// The transcript (I2) requires: every share and nullifier the payment
-    /// published, padded slots included. This dominates the cost of a
-    /// settlement.
+    function _pay(uint256 id, address payee, uint64 amount) private {
+        Delegation storage d = delegations[id];
+        if (d.funding == Funding.Deposit) {
+            if (d.deposit < amount) revert DepositExhausted();
+            d.deposit -= amount;
+            require(token.transfer(payee, amount), "transfer");
+        } else {
+            permit2.transferFrom(d.principal, payee, uint160(amount), address(token));
+        }
+    }
+
     function _append(uint256 id, uint64[] calldata elems) private {
         uint256 base = transcriptLen[id];
         uint256 n = elems.length;
@@ -171,47 +253,43 @@ contract Reserve {
         transcriptLen[id] = base + words;
     }
 
-    /// Evidence is a secret opening the committed hash. The transfer is to the
-    /// principal and not to whoever presents it: a bearer payout would let the
-    /// agent reclaim its own bond by overdrawing deliberately.
-    ///
-    /// The hash here is keccak256. The circuit commits under the algebraic hash
-    /// the proof system uses, so a deployment must evaluate that hash on chain
-    /// instead, which costs more. The figure this function reports is therefore
-    /// a lower bound on Claim.
+    /// Evidence of overdraft is a secret opening the committed hash. The bond
+    /// goes to the principal, never to whoever presents the secret, or an agent
+    /// could reclaim its own bond by overdrawing on purpose. keccak256 here; a
+    /// deployment committing with Poseidon2 pays one on-chain permutation
+    /// instead, measured in Poseidon2Gas.
     function claim(uint256 id, uint64[2] calldata secret) external {
-        Delegation storage d = delegations[id];
-        if (d.settled) revert BondAlreadyPaid();
-        if (keccak256(abi.encodePacked(secret[0], secret[1])) != d.secretHash) {
+        if (keccak256(abi.encodePacked(secret[0], secret[1])) != delegations[id].secretHash) {
             revert SecretDoesNotOpen();
         }
-        d.settled = true;
+        _forfeit(id);
+    }
+
+    /// A lost dispute, or a proof the agent would not publish when challenged.
+    function forfeit(uint256 id) external {
+        if (msg.sender != dispute && msg.sender != availability) revert NotArbiter();
+        _forfeit(id);
+    }
+
+    function _forfeit(uint256 id) private {
+        Delegation storage d = delegations[id];
+        if (d.bondPaid) revert BondAlreadyPaid();
+        d.bondPaid = true;
         uint256 amount = d.bond;
         d.bond = 0;
         emit BondForfeited(id, d.principal, amount);
-        payable(d.principal).transfer(amount);
-    }
-
-    /// The same settlement with the transcript emitted instead of stored.
-    /// Measured against `settle` so the choice is a number rather than an
-    /// assumption.
-    function settleLogged(
-        uint256 id,
-        uint64 amount,
-        uint64 index,
-        uint64[] calldata elems,
-        bytes32 proofCommitment,
-        bytes calldata signature
-    ) external {
-        _checkAgentSignature(id, amount, index, elems, proofCommitment, signature);
-        _admit(id, amount, index);
-        emit Transcript(id, index, elems);
-        emit Settled(id, index, amount);
+        (bool ok, ) = payable(d.principal).call{value: amount}("");
+        require(ok, "bond");
     }
 
     function revoke(uint256 id, uint64 start, uint64 length) external {
+        if (msg.sender != delegations[id].principal) revert NotPrincipal();
         revoked[id].push([start, length]);
         emit Revoked(id, start, length);
+    }
+
+    function agentOf(uint256 id) external view returns (address) {
+        return delegations[id].agent;
     }
 
     function transcriptWords(uint256 id) external view returns (uint256) {

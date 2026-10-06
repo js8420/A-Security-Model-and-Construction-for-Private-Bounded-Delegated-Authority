@@ -1,4 +1,5 @@
-use p3_field::{Field, PrimeCharacteristicRing};
+use p3_field::extension::BinomialExtensionField;
+use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing};
 use p3_goldilocks::Goldilocks;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_poseidon2_air::num_cols;
@@ -9,27 +10,33 @@ use crate::hash::{DOMAIN_KEY, DOMAIN_NULL, DOMAIN_PAD, HALF_FULL_ROUNDS, PARTIAL
 // The layout is declared once, by the AIR, and imported here. It was restated in
 // this file until the two copies drifted apart three times.
 use crate::spend::{
-    COL_BASE, COL_INDEX, COL_INDEX_INV, COL_M, COL_R,
+    COL_BASE, COL_DOM, COL_INDEX, COL_INDEX_INV, COL_M, COL_R,
     COL_ROOT_KEY, COL_SECRET, COL_UNITS, FIXED_COLS, NODE_ACTIVE, NODE_KEY, NODE_NULL, NODE_SHARE,
     PER_NODE, RANGE_BLOCKS, SECRET_ELEMS,
 };
 
 type F = Goldilocks;
 
-/// The share index, supplied to prove and verify as the single public value.
-///
-/// It is the payload digest plus the settlement domain's identifier, not the
-/// digest alone. The digest is one field element, so an agent can grind about
-/// 2^32 nonces to find two payloads naming different domains that hash alike;
-/// each domain's freshness check sees that digest once and settles, and two
-/// settlements at one index publish identical shares, which extraction skips.
-/// Adding the domain makes the two indices differ by the domains' difference,
-/// so the shares stand at distinct indices and the secret falls out. Both
-/// terms are public, so the reserve recomputes this and the circuit treats it
-/// as the index it always did.
+/// The share index, supplied to prove and verify as two public values: the
+/// payload digest and the settlement domain. The domain is never zero.
 pub const PAYLOAD_DIGEST: u64 = 31337;
 pub const DOMAIN_ID: u64 = 8453;
-pub const PAYLOAD: u64 = PAYLOAD_DIGEST + DOMAIN_ID;
+
+pub fn spend_public_values() -> Vec<F> {
+    vec![F::from_u64(PAYLOAD_DIGEST), F::from_u64(DOMAIN_ID)]
+}
+
+type E = BinomialExtensionField<F, 2>;
+
+/// s + K * index in the extension, computed by the library's own
+/// multiplication rather than the formula the AIR states, so the two are
+/// checked against each other every time a proof verifies.
+fn share(secret: [F; 2], key: [F; 2], digest: F, dom: F) -> [F; 2] {
+    let ext = |a: [F; 2]| E::from_basis_coefficients_slice(&a).expect("two coefficients");
+    let t = ext(secret) + ext(key) * ext([digest, dom]);
+    let c = t.as_basis_coefficients_slice();
+    [c[0], c[1]]
+}
 
 const SECRET: [u64; SECRET_ELEMS] = [987654321, 1234567891];
 const ROOT_KEY: [u64; SECRET_ELEMS] = [424242, 858585];
@@ -90,13 +97,14 @@ fn interval(
 /// two copies drifted apart three times.
 pub fn spend_row<const R: usize, const DEPTH: usize, const COVER: usize>(
     payload: F,
+    dom: F,
     units_want: Option<usize>,
     off_delta: usize,
     pindex: usize,
     part: usize,
     how: Option<SpendBreak>,
 ) -> Vec<F> {
-    row_of::<R, DEPTH, COVER>(payload, units_want, off_delta, pindex, part, how)
+    row_of::<R, DEPTH, COVER>(payload, dom, units_want, off_delta, pindex, part, how)
 }
 
 /// What a control corrupts. Each must make verification fail.
@@ -131,7 +139,7 @@ pub fn spend_two_trace<const R: usize, const DEPTH: usize, const COVER: usize>(
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let l = layout(DEPTH, COVER, bw);
     let mut row = row_of::<R, DEPTH, COVER>(
-        F::from_u64(PAYLOAD), None, 0, 0, 1usize << (DEPTH - 1), None);
+        F::from_u64(PAYLOAD_DIGEST), F::from_u64(DOMAIN_ID), None, 0, 0, 1usize << (DEPTH - 1), None);
 
     let mut tail: Vec<F> = Vec::with_capacity(COVER * bw);
     for c in 0..COVER {
@@ -175,7 +183,7 @@ fn build<const R: usize, const DEPTH: usize, const COVER: usize>(
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let l = layout(DEPTH, COVER, bw);
     let row = row_of::<R, DEPTH, COVER>(
-        F::from_u64(PAYLOAD), None, 0, 0, 1usize << (DEPTH - 1), how);
+        F::from_u64(PAYLOAD_DIGEST), F::from_u64(DOMAIN_ID), None, 0, 0, 1usize << (DEPTH - 1), how);
     let mut values = Vec::with_capacity(rows * l.width);
     for _ in 0..rows {
         values.extend_from_slice(&row);
@@ -185,6 +193,7 @@ fn build<const R: usize, const DEPTH: usize, const COVER: usize>(
 
 fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
     payload: F,
+    dom: F,
     units_want: Option<usize>,
     off_delta: usize,
     pindex: usize,
@@ -213,6 +222,7 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
     }
     row[COL_INDEX] = payload;
     row[COL_INDEX_INV] = payload.inverse();
+    row[COL_DOM] = dom;
     row[COL_M] = F::from_u64(spendable as u64);
     row[COL_R] = F::from_u64(off as u64);
     row[COL_UNITS] = F::from_u64(units as u64);
@@ -258,9 +268,15 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
         row[blk..blk + bw].copy_from_slice(&prow);
 
         row[n + NODE_ACTIVE] = if active { F::ONE } else { F::ZERO };
+        let sh = share(
+            [F::from_u64(SECRET[0]), F::from_u64(SECRET[1])],
+            [outp[0], outp[1]],
+            payload,
+            dom,
+        );
         for j in 0..SECRET_ELEMS {
             row[n + NODE_KEY + j] = outp[j];
-            row[n + NODE_SHARE + j] = F::from_u64(SECRET[j]) + outp[j] * payload;
+            row[n + NODE_SHARE + j] = sh[j];
         }
         row[n + NODE_NULL] = outp[SECRET_ELEMS];
 

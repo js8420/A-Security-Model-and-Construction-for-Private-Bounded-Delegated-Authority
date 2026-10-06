@@ -49,7 +49,7 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> BaseAir<F>
     }
 
     fn num_public_values(&self) -> usize {
-        1
+        2
     }
 }
 
@@ -61,7 +61,7 @@ where
     fn eval(&self, builder: &mut AB) {
         // Everything the single-invocation AIR constrains, except the tie
         // between a slot's nullifier and a lane of its key's permutation.
-        self.inner.constrain_with(builder, 0, true);
+        self.inner.constrain_with(builder, 0, true, 1);
 
         let bw = self.inner.block_width();
         let nb = self.null_base();

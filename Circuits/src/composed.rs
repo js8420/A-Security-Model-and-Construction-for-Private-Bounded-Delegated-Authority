@@ -4,7 +4,8 @@ use p3_goldilocks::Goldilocks;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
 
 use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, RANGE_BITS};
-use crate::spend::{SpendAir, COL_M, COL_UNITS};
+use crate::air::COL_DOMAIN;
+use crate::spend::{SpendAir, COL_DOM, COL_M, COL_UNITS};
 use crate::whole::{WholeAir, PUBLIC_VALUES};
 
 type F = Goldilocks;
@@ -98,11 +99,11 @@ impl<
         self.unit_col() + EXTRA_COLS + RANGE_BLOCKS * RANGE_BITS
     }
 
-    /// The same nine a verifier of the compliance circuit supplies. The spend
-    /// component reads the payload digest from the first of them, so the two
-    /// halves are proved against one public statement rather than two.
+    /// The compliance circuit's values, then the settlement domain. The spend
+    /// component reads the digest from the first and the domain from the last,
+    /// so the two halves are proved against one public statement.
     fn num_public_values(&self) -> usize {
-        PUBLIC_VALUES
+        PUBLIC_VALUES + 1
     }
 }
 
@@ -115,7 +116,7 @@ where
         let w = self.whole_width();
 
         self.whole.constrain(builder, 0);
-        self.spend.constrain(builder, w);
+        self.spend.constrain(builder, w, PUBLIC_VALUES);
 
         let row = builder.main().current_slice().to_vec();
 
@@ -133,6 +134,11 @@ where
         // and had to bind two committed fields and their product; there is one
         // quantity here and one binding.
         builder.assert_eq(u.clone() * m.clone(), budget.clone());
+
+        // The domain in the share index is the domain the payload names, which
+        // the digest covers. Without this an agent could form the shares under
+        // one domain and settle a payload naming another.
+        builder.assert_eq(row[COL_DOMAIN].clone(), row[w + COL_DOM].clone());
 
         // The run C8 is checked against is the run the payment consumes. Runs
         // are contiguous again, so the first and last positions bound it.

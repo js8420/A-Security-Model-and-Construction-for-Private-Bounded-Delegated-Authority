@@ -120,8 +120,8 @@ pub const POLICY_SCALARS: [usize; 6] =
 pub const POLICY_ELEMS: usize = POLICY_SCALARS.len() + 2 * DIGEST + 1;
 
 /// The payment payload, in the order the C7 sponge absorbs it. These are the
-/// six fields of Definition 3 and nothing else: a digest over a subset of them
-/// would leave the rest detachable from the proof.
+/// seven fields of the payload definition and nothing else: a digest over a
+/// subset of them would leave the rest detachable from the proof.
 pub const PAYLOAD_SRC: [usize; 7] =
     [COL_AMOUNT, COL_MID, COL_CID, COL_T, COL_PAYEE, COL_DOMAIN, COL_NONCE];
 

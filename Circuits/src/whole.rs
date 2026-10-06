@@ -18,9 +18,9 @@ type F = Goldilocks;
 /// payment and could not be the value the principal signed at issuance.
 pub const ABSORBED: usize = POLICY_ELEMS;
 
-/// C7's own sponge over the six payload fields. The digest is its output's
-/// first lane, which is also the share index, and a share index has to be a
-/// single field element because the share equation multiplies by it.
+/// C7's own sponge over the seven payload fields. The digest is its output's
+/// first lane, which is the first coordinate of the share index; the second
+/// is the payload's domain.
 pub const PAYLOAD_PERMUTATIONS: usize = PAYLOAD_ELEMS.div_ceil(RATE);
 
 /// Glue columns the components are bound against: the revocation root, the

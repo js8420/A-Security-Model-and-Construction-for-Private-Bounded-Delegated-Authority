@@ -130,48 +130,28 @@ fn config_reuse() {
 
 /// How many adjudicable steps is one verification?
 ///
-/// \Cref{tab:dispute} is drawn at powers of two because the dispute protocol's
-/// cost depends only on the logarithm. What a deployment needs is the count for
-/// its own proof, and that follows from the FRI shape rather than from running
-/// anything: the verifier opens `queries` positions, folds the committed
-/// domain down to the final polynomial one layer at a time, and checks one
-/// Merkle path per query per layer. Each path level and each fold is a step the
-/// adjudicator of StepVerifier.sol decides.
-fn step_count() {
-    let rows_log = 5usize;                       // 32-row trace
-    let domain_log = rows_log + crate::prover::LOG_BLOWUP;
-    let final_log = 3usize;                      // log_final_poly_len in config
-    let layers = domain_log - final_log;
-    let q = crate::prover::NUM_QUERIES;
-
-    // One Merkle path per query at each layer, shrinking by one level a layer,
-    // plus one fold per query per layer.
-    let mut path_levels = 0usize;
-    for l in 0..layers {
-        path_levels += domain_log - l;
-    }
-    let merkle = q * path_levels;
-    let folds = q * layers;
-    let total = merkle + folds;
-
+/// Counted on a real verification of the composed circuit at the deployed
+/// parameters: every Poseidon2 permutation the verifier runs, through a
+/// counter placed in front of the permutation, and every distinct operation
+/// in evaluating the constraints at the out-of-domain point. Each permutation
+/// is one Algebraic step of StepVerifier.sol and each operation one arithmetic
+/// step. FRI's own folding and the batched reduction of the opened values are
+/// further work on top, so the total is a lower bound on the program's length.
+pub fn step_count() {
+    let w = crate::prover::verifier_work::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32);
+    let total = w.permutations as usize + w.constraint_ops + 2 * w.constraints;
     println!();
-    println!("ADJUDICABLE STEPS IN ONE VERIFICATION");
+    println!("ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED");
     println!("{}", "=".repeat(78));
-    println!("  trace rows                        2^{}", rows_log);
-    println!("  committed domain                  2^{}", domain_log);
-    println!("  FRI layers to the final polynomial   {}", layers);
-    println!("  queries                              {}", q);
-    println!();
-    println!("  Merkle path levels, all queries   {:>8}", merkle);
-    println!("  folding steps, all queries        {:>8}", folds);
-    println!("  total                             {:>8}  (2^{:.1})",
+    println!("  composed circuit, 32 rows, verifies          {:>12}", w.verifies);
+    println!("  Poseidon2 permutations during verify         {:>12}", w.permutations);
+    println!("  constraints                                  {:>12}", w.constraints);
+    println!("  distinct operations evaluating them          {:>12}", w.constraint_ops);
+    println!("  folding them into one, two per constraint    {:>12}", 2 * w.constraints);
+    println!("  lower bound on steps                         {:>12}  (2^{:.2})",
              total, (total as f64).log2());
-    println!();
-    println!("  The dispute of Dispute.sol bisects this count, so it needs");
-    println!("  {} rounds. Most steps are Merkle levels, which the adjudicator",
+    println!("  rounds of bisection                          {:>12}",
              (total as f64).log2().ceil() as usize);
-    println!("  cannot yet decide: they hash with Poseidon2 over Goldilocks and");
-    println!("  only the folding step is implemented on chain.");
 }
 
 pub fn run() {

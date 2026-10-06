@@ -1,0 +1,171 @@
+﻿Compiling 12 files with Solc 0.8.28
+Solc 0.8.28 finished in 3.79s
+Compiler run successful!
+
+Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
+[PASS] testLateResolutionRejected() (gas: 671805)
+[PASS] testResolveByBlobs() (gas: 834907)
+Logs:
+  blobs for the proof 41
+  challenge, gas 40593
+  resolve calls 7
+  resolve, execution gas over all calls 135537
+  blob gas, 131072 a blob 5373952
+
+[PASS] testWithheldForfeits() (gas: 669946)
+Logs:
+  withheld: expire, gas 24824
+
+[PASS] testWrongBlobRejected() (gas: 673444)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 8.04ms (7.83ms CPU time)
+
+Ran 7 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577764)
+[PASS] testFalseInputsRevert() (gas: 3093528)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11448)
+[PASS] testFoldLinearInBeta() (gas: 13400)
+[PASS] testInverseIsAnInverse() (gas: 14984)
+[PASS] testPackRoundTrip() (gas: 10970)
+[PASS] testStepCosts() (gas: 5578069)
+Logs:
+  memory depth 22
+  program depth 20
+  fold step, gas 77444
+  Poseidon2 Merkle level step, gas 335760
+  linear step, 8 terms, gas 150334
+  equality step, gas 61406
+
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 29.09ms (41.20ms CPU time)
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+Logs:
+  one Merkle level over the proof's trees, gas 282435
+
+[PASS] testPermutationGas() (gas: 284058)
+Logs:
+  one permutation, gas 280499
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 29.47ms (16.34ms CPU time)
+
+Ran 7 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testCannotReopen() (gas: 2045161)
+[PASS] testChallengerSilent() (gas: 2590037)
+[PASS] testCostByVerificationLength() (gas: 24405093)
+Logs:
+  steps 2^ 10
+    rounds 10
+    open and final claim 141461
+    bisection 93450
+    last step, fold, with bonds moving 96124
+    total 331035
+  steps 2^ 14
+    rounds 14
+    open and final claim 142138
+    bisection 123035
+    last step, fold, with bonds moving 101842
+    total 367015
+  steps 2^ 18
+    rounds 18
+    open and final claim 142850
+    bisection 153127
+    last step, fold, with bonds moving 108013
+    total 403990
+  steps 2^ 20
+    rounds 20
+    open and final claim 143592
+    bisection 168592
+    last step, fold, with bonds moving 113518
+    total 425702
+  steps 2^ 24
+    rounds 24
+    open and final claim 144372
+    bisection 199557
+    last step, fold, with bonds moving 120573
+    total 464502
+
+[PASS] testDearestStep() (gas: 14083411)
+Logs:
+  steps 2^ 18
+    rounds 18
+    last step, Poseidon2 level, with bonds moving 358087
+    total 652060
+  steps 2^ 20
+    rounds 20
+    last step, Poseidon2 level, with bonds moving 358920
+    total 668642
+  steps 2^ 24
+    rounds 24
+    last step, Poseidon2 level, with bonds moving 363532
+    total 704232
+
+[PASS] testDefenderSilent() (gas: 1989851)
+Logs:
+  defender silent: challenger wins on timeout, gas 22042
+
+[PASS] testFalseClaimLoses() (gas: 2959508)
+Logs:
+  false claim: challenger wins, agent's bond to the principal
+
+[PASS] testTrueClaimStands() (gas: 2971824)
+Logs:
+  true claim: defender wins and keeps the challenger's bond
+
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 29.72ms (63.09ms CPU time)
+
+Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1004547)
+Logs:
+  Open, deposit 211605
+  Open, permit2 123657
+  Settle logged, cover 64 179760
+  Revoke, first range 49012
+  Revoke, later range 27113
+  Claim 11509
+
+[PASS] testChallengeCallDataBudget() (gas: 4953)
+Logs:
+  challenge call data alone, gas 81798736
+  proof bytes 5112421
+  over the 2^24 per-transaction cap x100 487
+
+[PASS] testDepositAgainstPermit2() (gas: 1534835)
+Logs:
+  settle logged, cover 64, deposit 179752
+  settle logged, cover 64, permit2 181624
+    permit2 minus deposit 1872
+
+[PASS] testDigestSettlesOnce() (gas: 380257)
+[PASS] testLoggedAgainstPreventive() (gas: 1043661)
+Logs:
+  accountable, logged, cover 64 179744
+  preventive 32434
+  ratio x100 554
+
+[PASS] testPayeeIsBound() (gas: 258021)
+[PASS] testRevokeIsThePrincipals() (gas: 213300)
+[PASS] testStoredAgainstLogged() (gas: 13918686)
+Logs:
+  cover 14
+    stored 319250
+    logged 69920
+    ratio x100 456
+  cover 30
+    stored 628111
+    logged 105237
+    ratio x100 596
+  cover 64
+    stored 1273855
+    logged 181339
+    ratio x100 702
+  cover 128
+    stored 2513726
+    logged 328818
+    ratio x100 764
+
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 29.10ms (34.20ms CPU time)
+
+Ran 5 test suites in 33.90ms (125.43ms CPU time): 31 tests passed, 0 failed, 0 skipped (31 total tests)

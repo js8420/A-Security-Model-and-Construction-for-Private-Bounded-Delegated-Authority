@@ -599,6 +599,11 @@ pub enum ComposedBreak {
     /// is the point of it: one payload would settle on two domains and publish
     /// identical shares at one index.
     DomainAltered,
+    /// The shares are formed, and the domain stated publicly, under a domain
+    /// other than the one the payload names. Each half is consistent with its
+    /// own values; only the binding of the index's domain to the payload's
+    /// fails.
+    ShareDomain,
 }
 
 /// A trace for the composed circuit: the compliance row, the spend row for the
@@ -628,10 +633,22 @@ pub fn composed_air_trace<
 >(
     rows: usize,
 ) -> RowMajorMatrix<F> {
-    build_composed::<R, MD, RD, DEPTH, COVER>(rows, None)
+    build_composed::<R, MD, RD, DEPTH, COVER>(rows, None).0
 }
 
-pub fn broken_composed_air<
+/// The public values for the composed circuit: the compliance half's nine,
+/// then the settlement domain.
+pub fn composed_public_values<const R: usize, const MD: usize, const RD: usize>() -> Vec<F> {
+    let mut pv = whole_public_values::<R, MD, RD>();
+    pv.push(F::from_u64(GOOD.domain));
+    pv
+}
+
+/// A composed trace together with the public values that match it. A control
+/// that moves the amount or the cap moves the digest or the commitment too,
+/// and checked against the honest values it would fail on that mismatch
+/// rather than on the binding it exists to test.
+pub fn composed_case<
     const R: usize,
     const MD: usize,
     const RD: usize,
@@ -639,9 +656,9 @@ pub fn broken_composed_air<
     const COVER: usize,
 >(
     rows: usize,
-    how: ComposedBreak,
-) -> RowMajorMatrix<F> {
-    build_composed::<R, MD, RD, DEPTH, COVER>(rows, Some(how))
+    how: Option<ComposedBreak>,
+) -> (RowMajorMatrix<F>, Vec<F>) {
+    build_composed::<R, MD, RD, DEPTH, COVER>(rows, how)
 }
 
 fn build_composed<
@@ -653,7 +670,7 @@ fn build_composed<
 >(
     rows: usize,
     how: Option<ComposedBreak>,
-) -> RowMajorMatrix<F> {
+) -> (RowMajorMatrix<F>, Vec<F>) {
     // B = u * m, the same relation the composed circuit constrains.
     let u = GOOD.budget / SPENDABLE;
     assert!(
@@ -701,8 +718,15 @@ fn build_composed<
         Some(ComposedBreak::RunStartMismatch) => 1,
         _ => 0,
     };
+    // The domain the shares are formed under. The control forms them, and
+    // states them publicly, under a domain the payload does not name.
+    let share_dom = match how {
+        Some(ComposedBreak::ShareDomain) => GOOD.domain + 1,
+        _ => GOOD.domain,
+    };
     let spend = crate::spend_trace::spend_row::<R, DEPTH, COVER>(
         pv[0],
+        F::from_u64(share_dom),
         Some(units as usize),
         off_delta,
         BASE_INDEX as usize,
@@ -738,5 +762,7 @@ fn build_composed<
         }
         values.extend(row);
     }
-    RowMajorMatrix::new(values, width)
+    let mut pv = pv;
+    pv.push(F::from_u64(share_dom));
+    (RowMajorMatrix::new(values, width), pv)
 }

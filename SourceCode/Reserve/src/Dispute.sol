@@ -1,151 +1,211 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-/// Challenge by refereed bisection, so the reserve never carries the proof.
+import {StepVerifier} from "./StepVerifier.sol";
+
+interface IReserveD {
+    function settled(uint256 id, uint64 digest) external view returns (bytes32);
+    function agentOf(uint256 id) external view returns (address);
+    function forfeit(uint256 id) external;
+}
+
+/// Challenge by refereed bisection over the verifier's execution.
 ///
-/// The reserve verifies no payment proof: at five megabytes a proof does not
-/// fit in call data, and a settlement that recorded one would cost more than
-/// the payment. The construction therefore leaves validity to a challenge, and
-/// a challenge that must present the proof is a challenge nobody can raise.
+/// A state is keccak256(memory root, step index). The game opens at the state
+/// the settlement committed to: the agent signed keccak256(inputRoot,
+/// blobsHash), and inputRoot is the memory the verifier starts from. The
+/// agent, as defender, first names the memory root it claims verification ends
+/// in and proves the accept slot there holds 1. The two then halve the
+/// disputed interval until one step remains, and StepVerifier decides it.
 ///
-/// Bisection removes that requirement. Verification is a deterministic
-/// computation of N steps, and the agent commits to the state its execution
-/// passes through. A challenger disputes the final state. The two then halve
-/// the disputed interval until one step remains, which the chain adjudicates.
-/// Nothing larger than a commitment ever crosses the chain, and the number of
-/// messages is logarithmic in N.
+/// Bisection needs somebody who can compute the true states, and that needs
+/// the proof. The principal receives it point to point; failing that, the
+/// Availability contract forces it into blobs. A challenger reasoning without
+/// it cannot win against a defender that answers every round.
 ///
-/// What makes it work against an agent holding the only copy of the proof is
-/// the clock: a party that does not move within the response window loses.
-/// An agent that settled on a proof it cannot defend declines to play and
-/// forfeits, which is the same outcome as losing, and it reaches that outcome
-/// without anyone else ever holding the proof.
-///
-/// The one-step adjudicator is not implemented here. It is the verifier's
-/// transition function for a single step, and its cost is a property of that
-/// function rather than of this protocol; published interactive systems report
-/// 200,000 to 500,000 gas for an equivalent step. What this contract measures
-/// is everything around it: opening, each round of bisection, and the two ways
-/// a game can end.
+/// Bonds. The challenger stakes one to open. If the defender wins, by the step
+/// or by the clock, the stake pays the defender for its gas. If the challenger
+/// wins, the stake comes back and the agent's bond in the reserve goes to the
+/// principal.
 contract Dispute {
-    enum Status { None, Running, DefenderWon, ChallengerWon }
+    enum Status { None, AwaitingFinal, Running, DefenderWon, ChallengerWon }
 
     struct Game {
         address defender;
         address challenger;
-        uint64 lo;            // first step both agree on
-        uint64 hi;            // first step they disagree on
-        bytes32 loState;      // committed state at lo
-        bytes32 hiState;      // defender's claimed state at hi
+        uint256 reserveId;
+        uint64 lo;
+        uint64 hi;
         uint64 deadline;
         bool defenderToMove;
         Status status;
+        bytes32 loState;
+        bytes32 hiState;
+        bytes32 midState;
     }
 
+    /// Memory slot holding the verifier's verdict, 1 for accept.
+    uint256 public constant ACCEPT_SLOT = 0;
+
+    IReserveD public immutable reserve;
+    StepVerifier public immutable verifier;
+    /// The verifier's program, fixed by the circuit and the proof system.
+    bytes32 public immutable programRoot;
+    uint64 public immutable programDepth;
+    uint64 public immutable steps;
+    uint64 public immutable memDepth;
     uint64 public immutable responseWindow;
-    /// A challenger must stake this to open a game. Without it, opening costs
-    /// nothing and an honest agent can be made to spend a dispute's gas on
-    /// demand, as often as anyone likes.
     uint256 public immutable challengerBond;
+
     mapping(bytes32 => Game) public games;
 
     error NotYourMove();
     error GameNotRunning();
+    error GameExists();
     error DeadlineNotPassed();
     error IntervalTooSmall();
-    error MidpointOutOfRange();
     error BondTooSmall();
+    error WrongCommitment();
+    error NotAccepting();
 
-    event Opened(bytes32 indexed id, address challenger, uint64 steps);
+    event Opened(bytes32 indexed id, uint256 reserveId, uint64 digest, address challenger);
     event Bisected(bytes32 indexed id, uint64 lo, uint64 hi);
     event Resolved(bytes32 indexed id, Status outcome);
 
-    constructor(uint64 window, uint256 bond) {
+    constructor(
+        address reserve_,
+        address verifier_,
+        bytes32 programRoot_,
+        uint64 programDepth_,
+        uint64 steps_,
+        uint64 memDepth_,
+        uint64 window,
+        uint256 bond
+    ) {
+        reserve = IReserveD(reserve_);
+        verifier = StepVerifier(verifier_);
+        programRoot = programRoot_;
+        programDepth = programDepth_;
+        steps = steps_;
+        memDepth = memDepth_;
         responseWindow = window;
         challengerBond = bond;
     }
 
-    /// A challenger disputes the final state of a settlement's verification.
-    /// The defender is the agent that signed the payload.
-    function open(
-        bytes32 id,
-        address defender,
-        uint64 steps,
-        bytes32 initialState,
-        bytes32 claimedFinalState
-    ) external payable {
-        if (msg.value < challengerBond) revert BondTooSmall();
-        games[id] = Game({
-            defender: defender,
-            challenger: msg.sender,
-            lo: 0,
-            hi: steps,
-            loState: initialState,
-            hiState: claimedFinalState,
-            deadline: uint64(block.timestamp) + responseWindow,
-            defenderToMove: true,
-            status: Status.Running
-        });
-        emit Opened(id, msg.sender, steps);
+    function state(bytes32 memRoot, uint64 k) public pure returns (bytes32) {
+        return keccak256(abi.encode(memRoot, k));
     }
 
-    /// The defender names the state at the midpoint of the disputed interval.
+    function gameId(uint256 reserveId, uint64 digest) public pure returns (bytes32) {
+        return keccak256(abi.encode(reserveId, digest));
+    }
+
+    function open(uint256 reserveId, uint64 digest, bytes32 inputRoot, bytes32 blobsHash)
+        external
+        payable
+    {
+        if (msg.value != challengerBond) revert BondTooSmall();
+        bytes32 id = gameId(reserveId, digest);
+        if (games[id].status != Status.None) revert GameExists();
+        if (keccak256(abi.encode(inputRoot, blobsHash)) != reserve.settled(reserveId, digest)) {
+            revert WrongCommitment();
+        }
+        games[id] = Game({
+            defender: reserve.agentOf(reserveId),
+            challenger: msg.sender,
+            reserveId: reserveId,
+            lo: 0,
+            hi: steps,
+            deadline: uint64(block.timestamp) + responseWindow,
+            defenderToMove: true,
+            status: Status.AwaitingFinal,
+            loState: state(inputRoot, 0),
+            hiState: bytes32(0),
+            midState: bytes32(0)
+        });
+        emit Opened(id, reserveId, digest, msg.sender);
+    }
+
+    /// The defender's claim: verification ends in this memory, which accepts.
+    function postFinal(bytes32 id, bytes32 finalRoot, bytes32[] calldata acceptPath) external {
+        Game storage g = games[id];
+        if (g.status != Status.AwaitingFinal) revert GameNotRunning();
+        if (msg.sender != g.defender) revert NotYourMove();
+        if (verifier.rootOf(bytes32(uint256(1)), acceptPath, ACCEPT_SLOT) != finalRoot
+            || acceptPath.length != memDepth) revert NotAccepting();
+        g.hiState = state(finalRoot, steps);
+        g.status = Status.Running;
+        g.defenderToMove = true;
+        g.deadline = uint64(block.timestamp) + responseWindow;
+    }
+
+    /// The defender names the state at the midpoint.
     function respond(bytes32 id, bytes32 midState) external {
         Game storage g = games[id];
         if (g.status != Status.Running) revert GameNotRunning();
         if (!g.defenderToMove || msg.sender != g.defender) revert NotYourMove();
         if (g.hi - g.lo < 2) revert IntervalTooSmall();
-        g.hiState = midState;
+        g.midState = midState;
         g.defenderToMove = false;
         g.deadline = uint64(block.timestamp) + responseWindow;
     }
 
-    /// The challenger picks the half it still disputes. `takeLower` keeps the
-    /// midpoint as the new upper end; otherwise the midpoint becomes the new
-    /// agreed lower end and the defender's earlier claim stands above it.
-    function choose(bytes32 id, bool takeLower, bytes32 upperState) external {
+    /// The challenger says which half it still disputes. Agreeing with the
+    /// midpoint moves the lower end up; disagreeing moves the upper end down.
+    /// Neither branch lets the challenger write a state of its own.
+    function choose(bytes32 id, bool agreeWithMid) external {
         Game storage g = games[id];
         if (g.status != Status.Running) revert GameNotRunning();
         if (g.defenderToMove || msg.sender != g.challenger) revert NotYourMove();
         uint64 mid = g.lo + (g.hi - g.lo) / 2;
-        if (mid <= g.lo || mid >= g.hi) revert MidpointOutOfRange();
-        if (takeLower) {
-            g.hi = mid;
-        } else {
+        if (agreeWithMid) {
             g.lo = mid;
-            g.loState = g.hiState;
-            g.hiState = upperState;
+            g.loState = g.midState;
+        } else {
+            g.hi = mid;
+            g.hiState = g.midState;
         }
         g.defenderToMove = true;
         g.deadline = uint64(block.timestamp) + responseWindow;
         emit Bisected(id, g.lo, g.hi);
     }
 
-    /// One step remains. The adjudicator for that step decides the game; here
-    /// its verdict is supplied so the surrounding protocol can be measured
-    /// without the verifier's transition function.
-    function settleOneStep(bytes32 id, bool defenderCorrect) external {
+    /// One step remains. Anyone may submit it with true operands; the
+    /// verifier reverts on false ones, so the outcome is the step's alone.
+    function settleOneStep(bytes32 id, bytes32 loMemRoot, StepVerifier.StepInput calldata s)
+        external
+    {
         Game storage g = games[id];
         if (g.status != Status.Running) revert GameNotRunning();
         if (g.hi - g.lo != 1) revert IntervalTooSmall();
-        g.status = defenderCorrect ? Status.DefenderWon : Status.ChallengerWon;
-        emit Resolved(id, g.status);
+        if (state(loMemRoot, g.lo) != g.loState) revert WrongCommitment();
+        bytes32 next = verifier.transition(programRoot, programDepth, g.lo, loMemRoot, memDepth, s);
+        _end(id, g, state(next, g.hi) == g.hiState ? Status.DefenderWon : Status.ChallengerWon);
     }
 
-    /// A party that does not move in time loses. This is what makes the game
-    /// playable against an agent that alone holds the proof.
     function timeout(bytes32 id) external {
         Game storage g = games[id];
-        if (g.status != Status.Running) revert GameNotRunning();
+        if (g.status != Status.Running && g.status != Status.AwaitingFinal) revert GameNotRunning();
         if (block.timestamp <= g.deadline) revert DeadlineNotPassed();
-        g.status = g.defenderToMove ? Status.ChallengerWon : Status.DefenderWon;
-        emit Resolved(id, g.status);
+        _end(id, g, g.defenderToMove ? Status.ChallengerWon : Status.DefenderWon);
     }
 
-    function rounds(uint64 steps) external pure returns (uint64 n) {
-        while (steps > 1) {
-            steps = (steps + 1) / 2;
-            ++n;
+    function _end(bytes32 id, Game storage g, Status outcome) private {
+        g.status = outcome;
+        emit Resolved(id, outcome);
+        address to = outcome == Status.ChallengerWon ? g.challenger : g.defender;
+        // A bond already taken by Claim or by another game is simply gone.
+        if (outcome == Status.ChallengerWon) {
+            try reserve.forfeit(g.reserveId) {} catch {}
+        }
+        (bool ok, ) = payable(to).call{value: challengerBond}("");
+        require(ok, "bond");
+    }
+
+    function rounds(uint64 n) external pure returns (uint64 r) {
+        while (n > 1) {
+            n = (n + 1) / 2;
+            ++r;
         }
     }
 }
