@@ -56,11 +56,11 @@ contract TranscriptGas is Fixture {
 
         vm.prank(principal);
         uint256 g2 = gasleft();
-        acc.revoke(id, 0, 64);
+        acc.revoke(id, 0, 64, keccak256("root1"));
         console.log("Revoke, first range", g2 - gasleft());
         vm.prank(principal);
         uint256 g3 = gasleft();
-        acc.revoke(id, 128, 64);
+        acc.revoke(id, 128, 64, keccak256("root2"));
         console.log("Revoke, later range", g3 - gasleft());
 
         uint64[2] memory secret = [uint64(7), uint64(11)];
@@ -101,7 +101,7 @@ contract TranscriptGas is Fixture {
     function testRevokeIsThePrincipals() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         vm.expectRevert(Reserve.NotPrincipal.selector);
-        acc.revoke(id, 0, 64);
+        acc.revoke(id, 0, 64, keccak256("root1"));
     }
 
     /// The signature covers the payee, so a settlement redirected to anyone

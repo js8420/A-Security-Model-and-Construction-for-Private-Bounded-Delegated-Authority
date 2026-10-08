@@ -7,15 +7,20 @@ interface IReserveD {
     function settled(uint256 id, uint64 digest) external view returns (bytes32);
     function agentOf(uint256 id) external view returns (address);
     function forfeit(uint256 id) external;
+    function domain() external view returns (uint64);
+    function commitmentOf(uint256 id) external view returns (bytes32);
+    function rootAt(uint256 id, uint64 epoch) external view returns (bytes32);
 }
 
 /// Challenge by refereed bisection over the verifier's execution.
 ///
-/// A state is keccak256(memory root, step index). The game opens at the state
-/// the settlement committed to: the agent signed keccak256(inputRoot,
-/// blobsHash), and inputRoot is the memory the verifier starts from. The
-/// agent, as defender, first names the memory root it claims verification ends
-/// in and proves the accept slot there holds 1. The two then halve the
+/// A state is keccak256(memory root, step index). Every game opens at the
+/// empty memory, so the start is no party's choice: the proof enters through
+/// the program's load steps, each checked against the blobs whose versioned
+/// hashes the agent signed at settlement, and the public values enter from
+/// the reserve's own record. The agent, as defender, first names the memory
+/// root it claims verification ends in and proves the accept slot there
+/// holds 1. The two then halve the
 /// disputed interval until one step remains, and StepVerifier decides it.
 ///
 /// Bisection needs somebody who can compute the true states, and that needs
@@ -42,7 +47,15 @@ contract Dispute {
         bytes32 loState;
         bytes32 hiState;
         bytes32 midState;
+        bytes32 blobsHash;
+        uint64 digest;
+        uint64 epoch;
     }
+
+    /// The statement's public values, in the order the circuit takes them:
+    /// the payload digest, the revocation root's four lanes, the delegation
+    /// commitment's four lanes, and the settlement domain.
+    uint256 public constant PUBLIC_VALUES = 10;
 
     /// Memory slot holding the verifier's verdict, 1 for accept.
     uint256 public constant ACCEPT_SLOT = 0;
@@ -56,8 +69,17 @@ contract Dispute {
     uint64 public immutable memDepth;
     uint64 public immutable responseWindow;
     uint256 public immutable challengerBond;
+    bytes32 public immutable emptyRoot;
 
-    mapping(bytes32 => Game) public games;
+    mapping(bytes32 => Game) private games;
+
+    function statusOf(bytes32 id) external view returns (Status) {
+        return games[id].status;
+    }
+
+    function game(bytes32 id) external view returns (Game memory) {
+        return games[id];
+    }
 
     error NotYourMove();
     error GameNotRunning();
@@ -90,6 +112,9 @@ contract Dispute {
         memDepth = memDepth_;
         responseWindow = window;
         challengerBond = bond;
+        bytes32 z;
+        for (uint256 i = 0; i < memDepth_; ++i) z = keccak256(abi.encodePacked(z, z));
+        emptyRoot = z;
     }
 
     function state(bytes32 memRoot, uint64 k) public pure returns (bytes32) {
@@ -100,14 +125,14 @@ contract Dispute {
         return keccak256(abi.encode(reserveId, digest));
     }
 
-    function open(uint256 reserveId, uint64 digest, bytes32 inputRoot, bytes32 blobsHash)
+    function open(uint256 reserveId, uint64 digest, bytes32 blobsHash, uint64 epoch)
         external
         payable
     {
         if (msg.value != challengerBond) revert BondTooSmall();
         bytes32 id = gameId(reserveId, digest);
         if (games[id].status != Status.None) revert GameExists();
-        if (keccak256(abi.encode(inputRoot, blobsHash)) != reserve.settled(reserveId, digest)) {
+        if (keccak256(abi.encode(blobsHash, epoch)) != reserve.settled(reserveId, digest)) {
             revert WrongCommitment();
         }
         games[id] = Game({
@@ -119,9 +144,12 @@ contract Dispute {
             deadline: uint64(block.timestamp) + responseWindow,
             defenderToMove: true,
             status: Status.AwaitingFinal,
-            loState: state(inputRoot, 0),
+            loState: state(emptyRoot, 0),
             hiState: bytes32(0),
-            midState: bytes32(0)
+            midState: bytes32(0),
+            blobsHash: blobsHash,
+            digest: digest,
+            epoch: epoch
         });
         emit Opened(id, reserveId, digest, msg.sender);
     }
@@ -172,15 +200,62 @@ contract Dispute {
 
     /// One step remains. Anyone may submit it with true operands; the
     /// verifier reverts on false ones, so the outcome is the step's alone.
-    function settleOneStep(bytes32 id, bytes32 loMemRoot, StepVerifier.StepInput calldata s)
-        external
-    {
+    function settleOneStep(
+        bytes32 id,
+        bytes32 loMemRoot,
+        StepVerifier.StepInput calldata s,
+        bytes32[] calldata blobs,
+        bytes calldata kzg
+    ) external {
         Game storage g = games[id];
         if (g.status != Status.Running) revert GameNotRunning();
         if (g.hi - g.lo != 1) revert IntervalTooSmall();
         if (state(loMemRoot, g.lo) != g.loState) revert WrongCommitment();
-        bytes32 next = verifier.transition(programRoot, programDepth, g.lo, loMemRoot, memDepth, s);
+        bytes32 next = _next(g, loMemRoot, s, _context(g, s.kind, blobs, kzg));
         _end(id, g, state(next, g.hi) == g.hiState ? Status.DefenderWon : Status.ChallengerWon);
+    }
+
+    function _next(
+        Game storage g,
+        bytes32 loMemRoot,
+        StepVerifier.StepInput calldata s,
+        StepVerifier.Context memory c
+    ) private view returns (bytes32) {
+        StepVerifier.Frame memory f = StepVerifier.Frame({
+            programRoot: programRoot,
+            programDepth: programDepth,
+            index: g.lo,
+            memRoot: loMemRoot,
+            depth: memDepth
+        });
+        return verifier.transition(f, s, c);
+    }
+
+    function _context(
+        Game storage g,
+        StepVerifier.Step kind,
+        bytes32[] calldata blobs,
+        bytes calldata kzg
+    ) private view returns (StepVerifier.Context memory c) {
+        if (kind == StepVerifier.Step.LoadBlob) {
+            if (keccak256(abi.encodePacked(blobs)) != g.blobsHash) revert WrongCommitment();
+            c.blobs = blobs;
+            c.kzg = kzg;
+        } else if (kind == StepVerifier.Step.LoadPublic) {
+            c.pub = _publicValues(g);
+        }
+    }
+
+    function _publicValues(Game storage g) private view returns (uint256[] memory pv) {
+        pv = new uint256[](PUBLIC_VALUES);
+        pv[0] = g.digest;
+        uint256 root = uint256(reserve.rootAt(g.reserveId, g.epoch));
+        uint256 com = uint256(reserve.commitmentOf(g.reserveId));
+        for (uint256 j = 0; j < 4; ++j) {
+            pv[1 + j] = (root >> (64 * j)) & 0xFFFFFFFFFFFFFFFF;
+            pv[5 + j] = (com >> (64 * j)) & 0xFFFFFFFFFFFFFFFF;
+        }
+        pv[9] = reserve.domain();
     }
 
     function timeout(bytes32 id) external {

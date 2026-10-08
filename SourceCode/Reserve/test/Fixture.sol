@@ -20,6 +20,9 @@ contract Fixture is Test {
     uint64 constant VELOCITY = 1_000;
     uint64 constant WINDOW = 86_400;
     uint256 constant AGENT_PK = 0xA6E47;
+    /// D.com and the first revocation root, four Goldilocks lanes each.
+    bytes32 constant COM = bytes32(uint256(11) | uint256(12) << 64 | uint256(13) << 128 | uint256(14) << 192);
+    bytes32 constant ROOT0 = bytes32(uint256(21) | uint256(22) << 64 | uint256(23) << 128 | uint256(24) << 192);
 
     MockToken token;
     address permit2;
@@ -61,7 +64,7 @@ contract Fixture is Test {
         vm.prank(principal);
         id = acc.register{value: 1 ether}(
             agent, CAP, VELOCITY, WINDOW, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            f, f == Reserve.Funding.Deposit ? BUDGET : 0
+            f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0
         );
     }
 
@@ -82,8 +85,9 @@ contract Fixture is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    /// Stands for the hash of a proof's blob list.
     function _commit(uint256 id, uint64 digest) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("proof", id, digest));
+        return keccak256(abi.encodePacked("blobs", id, digest));
     }
 
     function _settleWith(uint256 id, uint64 digest, bytes32 c) internal {

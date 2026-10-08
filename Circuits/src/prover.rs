@@ -1048,6 +1048,7 @@ pub struct VerifierWork {
     pub permutations: u64,
     pub constraints: usize,
     pub constraint_ops: usize,
+    pub proof_bytes: usize,
 }
 
 /// One verification of the composed circuit as deployed, with every Poseidon2
@@ -1068,8 +1069,15 @@ pub fn verifier_work<
     PERMUTATIONS.store(0, std::sync::atomic::Ordering::Relaxed);
     let verifies = verify(&cfg, &air, &proof, &pv).is_ok();
     let permutations = PERMUTATIONS.load(std::sync::atomic::Ordering::Relaxed);
+    let proof_bytes = bincode::serialize(&proof).expect("proof serialises").len();
     let cs = p3_air::get_symbolic_constraints::<Val, _>(&air, p3_air::AirLayout::from_air::<Val>(&air));
-    VerifierWork { verifies, permutations, constraints: cs.len(), constraint_ops: constraint_ops(&cs) }
+    VerifierWork {
+        verifies,
+        permutations,
+        constraints: cs.len(),
+        constraint_ops: constraint_ops(&cs),
+        proof_bytes,
+    }
 }
 
 /// The proof-of-work search a deployed proof performs, timed on its own.

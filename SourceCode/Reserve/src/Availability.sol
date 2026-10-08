@@ -16,11 +16,12 @@ interface IReserveA {
 /// dispute game against it, so the dispute no longer depends on the agent's
 /// cooperation.
 ///
-/// The EVM cannot read blob contents, only their versioned hashes, so the proof
-/// commitment the agent signed at settlement is
-///     keccak256(abi.encode(inputRoot, keccak256(abi.encodePacked(versionedHashes))))
-/// and resolution checks the hashes of the blobs carried by the resolving
-/// transactions against that list. A transaction carries at most six blobs, so
+/// The EVM cannot read blob contents, only their versioned hashes, so the agent
+/// signs the list of its proof's versioned hashes at settlement and the reserve
+/// records keccak256(abi.encode(keccak256(abi.encodePacked(list)), epoch));
+/// resolution checks the hashes of the blobs carried by the resolving
+/// transactions against that list. Whether the blobs hold a valid proof is
+/// the dispute's question, decided by its load steps. A transaction carries at most six blobs, so
 /// a proof of n blobs resolves over ceil(n / 6) calls.
 ///
 /// After the pattern of the OP Stack's data-availability challenge: the bond
@@ -88,7 +89,7 @@ contract Availability {
     function resolve(
         uint256 id,
         uint64 digest,
-        bytes32 inputRoot,
+        uint64 epoch,
         bytes32[] calldata versionedHashes,
         uint256 offset
     ) external {
@@ -99,7 +100,7 @@ contract Availability {
         uint256 n = versionedHashes.length;
         if (n > 256) revert TooManyBlobs();
         bytes32 blobsHash = keccak256(abi.encodePacked(versionedHashes));
-        if (keccak256(abi.encode(inputRoot, blobsHash)) != reserve.settled(id, digest)) {
+        if (keccak256(abi.encode(blobsHash, epoch)) != reserve.settled(id, digest)) {
             revert WrongCommitment();
         }
 

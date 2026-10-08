@@ -5,6 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {StepVerifier} from "../src/StepVerifier.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {Sparse} from "./Sparse.sol";
+import {KzgVectors} from "./KzgVectors.sol";
 
 /// The adjudicator has to be right before its cost means anything, so the
 /// field arithmetic is checked against identities that hold only if it is.
@@ -128,13 +129,24 @@ contract StepGas is Test {
         return Sparse.root(MEM_DEPTH, idx, lv);
     }
 
+    function _frame(Built memory b, uint256 at) internal pure returns (StepVerifier.Frame memory) {
+        return StepVerifier.Frame({
+            programRoot: b.programRoot, programDepth: PROG_DEPTH, index: at,
+            memRoot: b.memRoot, depth: MEM_DEPTH
+        });
+    }
+
+    function _none() internal pure returns (StepVerifier.Context memory c) {}
+
     function _measure(string memory label, StepVerifier.Step kind, uint256[] memory values)
         internal
         view
     {
         Built memory b = _build(kind, values, 12345);
+        StepVerifier.Frame memory f = _frame(b, 12345);
+        StepVerifier.Context memory c = _none();
         uint256 g = gasleft();
-        bytes32 next = v.transition(b.programRoot, PROG_DEPTH, 12345, b.memRoot, MEM_DEPTH, b.s);
+        bytes32 next = v.transition(f, b.s, c);
         uint256 used = g - gasleft();
         assertEq(next, b.expectedNext);
         console.log(label, used);
@@ -176,23 +188,124 @@ contract StepGas is Test {
     /// A false operand, a different instruction, or a wrong program index
     /// does not change the outcome; it reverts.
     function testFalseInputsRevert() public {
-        uint256[] memory f = new uint256[](4);
-        f[0] = 1000; f[1] = 400; f[2] = 5; f[3] = 7;
-        Built memory b = _build(StepVerifier.Step.Fold, f, 9);
+        uint256[] memory fv = new uint256[](4);
+        fv[0] = 1000; fv[1] = 400; fv[2] = 5; fv[3] = 7;
+        Built memory b = _build(StepVerifier.Step.Fold, fv, 9);
 
         StepVerifier.StepInput memory s = b.s;
         s.values[0] = 1001;
+        StepVerifier.Frame memory f = _frame(b, 9);
+        StepVerifier.Context memory c = _none();
         vm.expectRevert(StepVerifier.BadPath.selector);
-        v.transition(b.programRoot, PROG_DEPTH, 9, b.memRoot, MEM_DEPTH, s);
+        v.transition(f, s, c);
 
-        b = _build(StepVerifier.Step.Fold, f, 9);
+        b = _build(StepVerifier.Step.Fold, fv, 9);
         s = b.s;
         s.kind = StepVerifier.Step.Linear;
+        f = _frame(b, 9);
         vm.expectRevert(StepVerifier.BadInstruction.selector);
-        v.transition(b.programRoot, PROG_DEPTH, 9, b.memRoot, MEM_DEPTH, s);
+        v.transition(f, s, c);
 
-        b = _build(StepVerifier.Step.Fold, f, 9);
+        b = _build(StepVerifier.Step.Fold, fv, 9);
+        f = _frame(b, 10);
         vm.expectRevert(StepVerifier.BadInstruction.selector);
-        v.transition(b.programRoot, PROG_DEPTH, 10, b.memRoot, MEM_DEPTH, b.s);
+        v.transition(f, b.s, c);
+    }
+
+    // ---------------------------------------------------------------------
+    // Loads. The proof enters the run only through these.
+    // ---------------------------------------------------------------------
+
+    /// A load names its immediates in the instruction and reads no memory,
+    /// so its paths are the program path and the write path.
+    function _load(StepVerifier.Step kind, uint256[] memory imm, uint256 write, uint256 expected)
+        internal
+        view
+        returns (Built memory b)
+    {
+        uint256[] memory pidx = new uint256[](1);
+        bytes32[] memory pleaf = new bytes32[](1);
+        pidx[0] = 12345;
+        pleaf[0] = v.instructionLeaf(kind, imm, write);
+        b.programRoot = Sparse.root(PROG_DEPTH, pidx, pleaf);
+        uint256[] memory none = new uint256[](0);
+        bytes32[] memory nol = new bytes32[](0);
+        b.memRoot = Sparse.root(MEM_DEPTH, none, nol);
+        bytes32[] memory paths = new bytes32[](PROG_DEPTH + MEM_DEPTH);
+        bytes32[] memory pp = Sparse.path(PROG_DEPTH, 12345, pidx, pleaf);
+        for (uint256 i = 0; i < PROG_DEPTH; ++i) paths[i] = pp[i];
+        bytes32[] memory wp = Sparse.path(MEM_DEPTH, write, none, nol);
+        for (uint256 i = 0; i < MEM_DEPTH; ++i) paths[PROG_DEPTH + i] = wp[i];
+        uint256[] memory widx = new uint256[](1);
+        bytes32[] memory wl = new bytes32[](1);
+        widx[0] = write;
+        wl[0] = bytes32(expected);
+        b.expectedNext = Sparse.root(MEM_DEPTH, widx, wl);
+        b.s = StepVerifier.StepInput({
+            kind: kind, reads: imm, write: write, values: new uint256[](0), oldValue: 0, paths: paths
+        });
+    }
+
+    function _blobs(uint256 n) internal pure returns (bytes32[] memory bl) {
+        bl = new bytes32[](n);
+        bl[0] = KzgVectors.VERSIONED_HASH;
+        for (uint256 i = 1; i < n; ++i) bl[i] = keccak256(abi.encode("blob", i));
+    }
+
+    function testLoadBlobReadsTheProof() public view {
+        for (uint256 lane = 0; lane < 3; ++lane) {
+            uint256 want = (KzgVectors.Y_777 >> (64 * lane)) & 0xFFFFFFFFFFFFFFFF;
+            uint256[] memory imm = new uint256[](3);
+            imm[0] = 0; imm[1] = 777; imm[2] = lane;
+            Built memory b = _load(StepVerifier.Step.LoadBlob, imm, 3, want);
+            StepVerifier.Context memory c;
+            c.blobs = _blobs(53);
+            c.kzg = KzgVectors.kzg(KzgVectors.Y_777, KzgVectors.PROOF_777);
+            StepVerifier.Frame memory f = _frame(b, 12345);
+            uint256 g = gasleft();
+            bytes32 next = v.transition(f, b.s, c);
+            uint256 used = g - gasleft();
+            assertEq(next, b.expectedNext);
+            if (lane == 0) console.log("load step, one proof word from a blob, gas", used);
+        }
+    }
+
+    function testLoadBlobRejectsAFalseOpening() public {
+        uint256[] memory imm = new uint256[](3);
+        imm[0] = 0; imm[1] = 777; imm[2] = 0;
+        Built memory b = _load(StepVerifier.Step.LoadBlob, imm, 3, 0);
+        StepVerifier.Context memory c;
+        c.blobs = _blobs(53);
+        StepVerifier.Frame memory f = _frame(b, 12345);
+        // a value the blob does not hold at that element
+        c.kzg = KzgVectors.kzg(KzgVectors.Y_777 + 1, KzgVectors.PROOF_777);
+        vm.expectRevert(StepVerifier.BadOpening.selector);
+        v.transition(f, b.s, c);
+        // the right value, opened at the wrong element
+        imm[1] = 776;
+        b = _load(StepVerifier.Step.LoadBlob, imm, 3, 0);
+        f = _frame(b, 12345);
+        c.kzg = KzgVectors.kzg(KzgVectors.Y_777, KzgVectors.PROOF_777);
+        vm.expectRevert(StepVerifier.BadOpening.selector);
+        v.transition(f, b.s, c);
+    }
+
+    function testEvaluationPointsMatchTheBlobLayout() public view {
+        assertEq(v.evaluationPoint(0), 1);
+        assertEq(v.evaluationPoint(1), 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000);
+    }
+
+    function testLoadPublic() public view {
+        uint256[] memory imm = new uint256[](1);
+        imm[0] = 9;
+        Built memory b = _load(StepVerifier.Step.LoadPublic, imm, 4, 8453);
+        StepVerifier.Context memory c;
+        c.pub = new uint256[](10);
+        c.pub[9] = 8453;
+        StepVerifier.Frame memory f = _frame(b, 12345);
+        uint256 g = gasleft();
+        bytes32 next = v.transition(f, b.s, c);
+        console.log("load step, one public value, gas", g - gasleft());
+        assertEq(next, b.expectedNext);
     }
 }

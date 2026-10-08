@@ -20,8 +20,24 @@ interface IPoseidon2 {
 /// Field elements are Goldilocks, p = 2^64 - 2^32 + 1, so products fit in 128
 /// bits and mulmod on 256-bit words is exact. A Poseidon2 digest is four
 /// elements packed into one 256-bit leaf, lowest lane in the low bits.
+///
+/// Every game starts from the empty memory, so nothing about the run's input
+/// is the agent's to choose. Input enters only through two step kinds. A
+/// LoadBlob step reads one word of the proof from a published blob: the proof
+/// is carried as Goldilocks elements, three to a blob field element, and the
+/// step opens that field element with the EIP-4844 point-evaluation
+/// precompile against the blob's versioned hash. A LoadPublic step reads one
+/// of the statement's public values from what the reserve recorded.
 contract StepVerifier {
     uint256 internal constant P = 0xFFFFFFFF00000001;
+    uint256 internal constant BLS_MODULUS =
+        0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001;
+    /// A primitive 4096-th root of unity in the BLS12-381 scalar field,
+    /// 7^((r-1)/4096). Blob element j is the polynomial's value at
+    /// OMEGA^bitrev12(j).
+    uint256 internal constant OMEGA =
+        0x564c0a11a0f704f4fc3e8acfe0f8245f0ad1347b378fbf96e206da11a5d36306;
+    uint256 internal constant LANES = 3;
 
     IPoseidon2 public immutable algebraic;
 
@@ -35,13 +51,26 @@ contract StepVerifier {
         Algebraic, // one level of the proof's own Poseidon2 trees
         Linear,    // a linear combination, as constraint batching uses
         Squeeze,   // derive a challenge from transcript state
-        Eq         // 1 if two values agree, else 0; how the verifier records a check
+        Eq,        // 1 if two values agree, else 0; how the verifier records a check
+        LoadBlob,  // one proof word from a published blob
+        LoadPublic // one public value of the statement
+    }
+
+    /// What a load step reads from outside the memory. `pub` is assembled by
+    /// the dispute contract from the reserve's record, never by a party.
+    /// `kzg` is the claimed field element, the blob's KZG commitment and the
+    /// opening proof: 32 + 48 + 48 bytes.
+    struct Context {
+        uint256[] pub;
+        bytes32[] blobs;
+        bytes kzg;
     }
 
     error BadOperand();
     error PathTooLong();
     error BadPath();
     error BadInstruction();
+    error BadOpening();
 
     function inv(uint256 a) public view returns (uint256 r) {
         if (a == 0 || a >= P) revert BadOperand();
@@ -116,6 +145,48 @@ contract StepVerifier {
         return uint256(keccak256(abi.encodePacked(v))) % P;
     }
 
+    function _modexp(uint256 b, uint256 e, uint256 m) internal view returns (uint256 r) {
+        bytes memory input = abi.encode(uint256(32), uint256(32), uint256(32), b, e, m);
+        bytes memory out = new bytes(32);
+        bool ok;
+        assembly {
+            ok := staticcall(gas(), 0x05, add(input, 32), 192, add(out, 32), 32)
+        }
+        require(ok, "modexp");
+        r = abi.decode(out, (uint256));
+    }
+
+    function _rev12(uint256 x) internal pure returns (uint256 r) {
+        for (uint256 i = 0; i < 12; ++i) {
+            r = (r << 1) | (x & 1);
+            x >>= 1;
+        }
+    }
+
+    /// The point at which blob element j is the polynomial's value.
+    function evaluationPoint(uint256 j) public view returns (uint256) {
+        if (j >= 4096) revert BadInstruction();
+        return _modexp(OMEGA, _rev12(j), BLS_MODULUS);
+    }
+
+    /// Lane `lane` of element `j` of blob `b`, proved against the blob's
+    /// versioned hash. A lane that is not a Goldilocks element is no word of
+    /// an honestly encoded proof, and the step does not decide on it.
+    function loadBlob(bytes32 versionedHash, uint256 j, uint256 lane, bytes calldata kzg)
+        public
+        view
+        returns (uint256)
+    {
+        if (kzg.length != 128 || lane >= LANES) revert BadOpening();
+        uint256 y = uint256(bytes32(kzg[0:32]));
+        bytes memory input = abi.encodePacked(versionedHash, evaluationPoint(j), kzg);
+        (bool ok, bytes memory out) = address(0x0A).staticcall(input);
+        if (!ok || out.length != 64) revert BadOpening();
+        uint256 w = (y >> (64 * lane)) & 0xFFFFFFFFFFFFFFFF;
+        if (w >= P) revert BadOperand();
+        return w;
+    }
+
     function rootOf(bytes32 leaf, bytes32[] calldata path, uint256 idx)
         public
         pure
@@ -154,20 +225,34 @@ contract StepVerifier {
     /// The memory root after the step at `index`, from the agreed root before
     /// it. Reverts on any proof that does not check, so a party submitting
     /// false operands gains nothing: the step is decided only on true ones.
-    function transition(
-        bytes32 programRoot,
-        uint256 programDepth,
-        uint256 index,
-        bytes32 memRoot,
-        uint256 depth,
-        StepInput calldata s
-    ) external view returns (bytes32) {
-        uint256 n = s.reads.length;
+    /// For the two load kinds, `reads` holds the instruction's immediates
+    /// (blob, element, lane; or the public value's position) and no memory is
+    /// read.
+    /// Where a step sits: the program it belongs to, its index, and the
+    /// agreed memory before it.
+    struct Frame {
+        bytes32 programRoot;
+        uint256 programDepth;
+        uint256 index;
+        bytes32 memRoot;
+        uint256 depth;
+    }
+
+    function transition(Frame calldata f, StepInput calldata s, Context calldata c)
+        external
+        view
+        returns (bytes32)
+    {
+        uint256 programDepth = f.programDepth;
+        uint256 depth = f.depth;
+        bytes32 memRoot = f.memRoot;
+        bool load = s.kind == Step.LoadBlob || s.kind == Step.LoadPublic;
+        uint256 n = load ? 0 : s.reads.length;
         if (s.values.length != n || s.paths.length != programDepth + (n + 1) * depth) {
             revert BadPath();
         }
-        if (rootOf(instructionLeaf(s.kind, s.reads, s.write), s.paths[0:programDepth], index)
-            != programRoot) revert BadInstruction();
+        if (rootOf(instructionLeaf(s.kind, s.reads, s.write), s.paths[0:programDepth], f.index)
+            != f.programRoot) revert BadInstruction();
 
         uint256 at = programDepth;
         for (uint256 i = 0; i < n; ++i) {
@@ -179,7 +264,17 @@ contract StepVerifier {
         bytes32[] calldata wp = s.paths[at:at + depth];
         if (rootOf(bytes32(s.oldValue), wp, s.write) != memRoot) revert BadPath();
 
-        uint256 result = execute(s.kind, s.values);
+        uint256 result;
+        if (s.kind == Step.LoadBlob) {
+            if (s.reads.length != 3 || s.reads[0] >= c.blobs.length) revert BadInstruction();
+            result = loadBlob(c.blobs[s.reads[0]], s.reads[1], s.reads[2], c.kzg);
+        } else if (s.kind == Step.LoadPublic) {
+            if (s.reads.length != 1 || s.reads[0] >= c.pub.length) revert BadInstruction();
+            result = c.pub[s.reads[0]];
+            if (result >= P) revert BadOperand();
+        } else {
+            result = execute(s.kind, s.values);
+        }
         return rootOf(bytes32(result), wp, s.write);
     }
 }

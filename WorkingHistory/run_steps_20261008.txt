@@ -1,0 +1,23 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:637
++ ... DSC12_submission\Circuits"; cargo run --release -- steps 2>&1 | Out-F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 49.65s
+     Running `target\release\delegation-circuit.exe steps`
+
+ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED
+==============================================================================
+  composed circuit, 128 rows, verifies                 true
+  Poseidon2 permutations during verify               160099
+  constraints                                         13942
+  distinct operations evaluating them                308164
+  folding them into one, two per constraint           27884
+  proof bytes                                       5137181
+  loading the proof, one element per step            642148
+  loading the public values                              10
+  blobs, three elements to a blob element                53
+  lower bound on steps                              1138305  (2^20.12)
+  rounds of bisection                                    21

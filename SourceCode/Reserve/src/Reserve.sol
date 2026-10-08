@@ -39,9 +39,13 @@ contract Reserve {
         uint64 windowW;
         Funding funding;
         bool bondPaid;
+        uint64 epoch;
         uint256 deposit;
         uint256 bond;
         bytes32 secretHash;
+        /// The delegation commitment D.com, four Goldilocks lanes packed low
+        /// lane first. A proof's public values must carry it.
+        bytes32 commitment;
     }
 
     struct Window {
@@ -63,9 +67,13 @@ contract Reserve {
 
     mapping(uint256 => Delegation) public delegations;
     mapping(uint256 => Window) private windows;
-    /// Proof commitment of each settled digest. Non-zero means settled, so the
-    /// freshness check and the record a challenge needs share one slot.
+    /// What each settled digest was settled against: the hash of the agent's
+    /// blob list together with the revocation epoch in force. Non-zero means
+    /// settled, so the freshness check and the record a challenge needs share
+    /// one slot.
     mapping(uint256 => mapping(uint64 => bytes32)) public settled;
+    /// The revocation accumulator's root at each epoch, four lanes packed.
+    mapping(uint256 => mapping(uint64 => bytes32)) public rootAt;
     mapping(uint256 => mapping(uint256 => uint256)) private transcript;
     mapping(uint256 => uint256) private transcriptLen;
     mapping(uint256 => uint64[2][]) private revoked;
@@ -110,7 +118,9 @@ contract Reserve {
         uint64 windowW,
         bytes32 secretHash,
         Funding funding,
-        uint256 deposit
+        uint256 deposit,
+        bytes32 commitment,
+        bytes32 revocationRoot
     ) external payable returns (uint256 id) {
         id = nextId++;
         delegations[id] = Delegation({
@@ -121,10 +131,13 @@ contract Reserve {
             windowW: windowW,
             funding: funding,
             bondPaid: false,
+            epoch: 0,
             deposit: funding == Funding.Deposit ? deposit : 0,
             bond: msg.value,
-            secretHash: secretHash
+            secretHash: secretHash,
+            commitment: commitment
         });
+        rootAt[id][0] = revocationRoot;
         if (funding == Funding.Deposit && deposit != 0) {
             require(token.transferFrom(msg.sender, address(this), deposit), "deposit");
         }
@@ -141,11 +154,11 @@ contract Reserve {
         uint64 amount,
         uint64 digest,
         uint64[] calldata elems,
-        bytes32 proofCommitment,
+        bytes32 blobsHash,
         bytes calldata signature
     ) external {
-        _checkAgentSignature(id, payee, amount, digest, elems, proofCommitment, signature);
-        _admit(id, amount, digest, proofCommitment);
+        _checkAgentSignature(id, payee, amount, digest, elems, blobsHash, signature);
+        _admit(id, amount, digest, blobsHash);
         _append(id, elems);
         _pay(id, payee, amount);
         emit Settled(id, digest, amount, payee);
@@ -158,11 +171,11 @@ contract Reserve {
         uint64 amount,
         uint64 digest,
         uint64[] calldata elems,
-        bytes32 proofCommitment,
+        bytes32 blobsHash,
         bytes calldata signature
     ) external {
-        _checkAgentSignature(id, payee, amount, digest, elems, proofCommitment, signature);
-        _admit(id, amount, digest, proofCommitment);
+        _checkAgentSignature(id, payee, amount, digest, elems, blobsHash, signature);
+        _admit(id, amount, digest, blobsHash);
         emit Transcript(id, digest, elems);
         _pay(id, payee, amount);
         emit Settled(id, digest, amount, payee);
@@ -174,11 +187,11 @@ contract Reserve {
         uint64 amount,
         uint64 digest,
         bytes32 elemsHash,
-        bytes32 proofCommitment
+        bytes32 blobsHash
     ) public view returns (bytes32) {
         return keccak256(
             abi.encode(block.chainid, address(this), domain, id, payee, amount, digest,
-                       elemsHash, proofCommitment)
+                       elemsHash, blobsHash)
         );
     }
 
@@ -188,11 +201,11 @@ contract Reserve {
         uint64 amount,
         uint64 digest,
         uint64[] calldata elems,
-        bytes32 proofCommitment,
+        bytes32 blobsHash,
         bytes calldata signature
     ) private view {
         bytes32 h = signedDigest(id, payee, amount, digest,
-                                 keccak256(abi.encodePacked(elems)), proofCommitment);
+                                 keccak256(abi.encodePacked(elems)), blobsHash);
         if (signature.length != 65) revert BadSignature();
         bytes32 r;
         bytes32 s;
@@ -209,9 +222,9 @@ contract Reserve {
         if (signer == address(0) || signer != delegations[id].agent) revert BadSignature();
     }
 
-    function _admit(uint256 id, uint64 amount, uint64 digest, bytes32 proofCommitment) private {
+    function _admit(uint256 id, uint64 amount, uint64 digest, bytes32 blobsHash) private {
         Delegation storage d = delegations[id];
-        if (proofCommitment == bytes32(0)) revert ZeroCommitment();
+        if (blobsHash == bytes32(0)) revert ZeroCommitment();
         if (settled[id][digest] != bytes32(0)) revert IndexAlreadySettled();
         if (amount > d.cap) revert AmountAboveCap();
 
@@ -223,7 +236,9 @@ contract Reserve {
         }
         if (w.count + 1 > d.velocityN) revert VelocityExceeded();
         w.count += 1;
-        settled[id][digest] = proofCommitment;
+        // The epoch is the reserve's, not the agent's: a proof against a root
+        // revocation has since replaced is a proof the dispute rejects.
+        settled[id][digest] = keccak256(abi.encode(blobsHash, d.epoch));
     }
 
     function _pay(uint256 id, address payee, uint64 amount) private {
@@ -282,10 +297,21 @@ contract Reserve {
         require(ok, "bond");
     }
 
-    function revoke(uint256 id, uint64 start, uint64 length) external {
-        if (msg.sender != delegations[id].principal) revert NotPrincipal();
+    /// The principal computes the accumulator's new root off chain and the
+    /// reserve records it; a wrong root misleads only the principal's own
+    /// revocations.
+    function revoke(uint256 id, uint64 start, uint64 length, bytes32 newRoot) external {
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.principal) revert NotPrincipal();
         revoked[id].push([start, length]);
+        uint64 e = d.epoch + 1;
+        d.epoch = e;
+        rootAt[id][e] = newRoot;
         emit Revoked(id, start, length);
+    }
+
+    function commitmentOf(uint256 id) external view returns (bytes32) {
+        return delegations[id].commitment;
     }
 
     function agentOf(uint256 id) external view returns (address) {
