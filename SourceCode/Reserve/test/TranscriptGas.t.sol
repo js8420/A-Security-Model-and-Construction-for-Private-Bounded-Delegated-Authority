@@ -92,7 +92,7 @@ contract TranscriptGas is Fixture {
     /// Call data alone, at 16 gas a non-zero byte, for presenting the proof
     /// the harness measures. Not a call: it exceeds the per-transaction cap.
     function testChallengeCallDataBudget() public pure {
-        uint256 proofBytes = 5_112_773;
+        uint256 proofBytes = 5_137_181;
         console.log("challenge call data alone, gas", proofBytes * 16);
         console.log("proof bytes", proofBytes);
         console.log("over the 2^24 per-transaction cap x100", proofBytes * 16 * 100 / (1 << 24));

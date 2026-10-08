@@ -10,14 +10,14 @@ import {Fixture} from "./Fixture.sol";
 ///
 /// A blob holds 4,096 field elements of BLS12-381. Packing 31 bytes into each
 /// keeps every element below the modulus, so a blob carries 126,976 bytes and
-/// the harness's 5,112,421-byte proof needs 41 blobs. A transaction carries at
+/// the harness's 5,137,181-byte proof needs 41 blobs. A transaction carries at
 /// most six, so resolution takes seven calls.
 contract AvailabilityGas is Fixture {
     Availability av;
     address challenger = address(0xC14);
     uint256 constant BOND = 0.05 ether;
     uint64 constant WINDOW_S = 4 days;
-    uint256 constant PROOF_BYTES = 5_112_773;
+    uint256 constant PROOF_BYTES = 5_137_181;
     uint256 constant BLOB_PAYLOAD = 4096 * 31;
     uint256 constant PER_TX = 6;
 
