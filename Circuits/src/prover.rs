@@ -41,6 +41,9 @@ pub const SALT_ELEMS: usize = 2;
 /// the quotient decomposition panics below two.
 pub const NUM_RANDOM_CODEWORDS: usize = 2;
 
+// Fixed seeds survive only in config_fixed_seed, which exists to show what
+// they cost: two proofs made under one seed share their blinding. Every proof
+// the paper reports is made under fresh randomness from the operating system.
 const INPUT_SALT_SEED: u64 = 0x5350_454e_4400_0001;
 const FRI_SALT_SEED: u64 = 0x5350_454e_4400_0004;
 const CODEWORD_SEED: u64 = 0x5350_454e_4400_0002;
@@ -74,6 +77,11 @@ pub struct SaltRng(ChaCha12Rng);
 impl SaltRng {
     fn seeded(seed: u64) -> Self {
         Self(ChaCha12Rng::seed_from_u64(seed))
+    }
+
+    /// Seeded from the operating system, so no two proofs share blinding.
+    fn fresh() -> Self {
+        Self(ChaCha12Rng::try_from_rng(&mut rand10::rngs::SysRng).expect("operating-system randomness"))
     }
 }
 
@@ -164,10 +172,38 @@ pub const NUM_QUERIES: usize = 40;
 pub const LOG_BLOWUP: usize = 4;
 pub const POW_BITS: usize = 20;
 
+/// Degree of the challenge field over Goldilocks.
+pub const EXT_DEGREE: usize = 2;
+
+/// The hiding commitment blinds a trace of height n with n random rows, so
+/// each column has n random values to hide what a proof opens of it: one
+/// value per FRI query, and the out-of-domain points, of which the verifier
+/// opens two (zeta and the next row), each an extension element worth
+/// EXT_DEGREE base values. Haboeck and Kindi, "A note on adding zero-knowledge
+/// to STARKs", conditions (19) and (20), state the requirement as
+/// n >= 2 (e + q); counting both out-of-domain points it is n >= 2 (2e + q).
+/// The second is the stricter, and the height is the next power of two.
+pub const ZK_MIN_ROWS: usize = (2 * (2 * EXT_DEGREE + NUM_QUERIES)).next_power_of_two();
+
+/// The height every proof in the paper is made at.
+pub const ROWS: usize = 128;
+const _: () = assert!(ROWS >= ZK_MIN_ROWS, "trace too short for zero knowledge");
+
 /// The hiding configuration at a chosen FRI setting. `config` is this at the
 /// deployment's parameters; the sweep of `sweep.rs` is this at others. There is
 /// one constructor so a parameter added here cannot be missed there.
 pub(crate) fn config_with(num_queries: usize, log_blowup: usize, pow_bits: usize) -> Config {
+    config_seeded(num_queries, log_blowup, pow_bits, false)
+}
+
+/// The deployed configuration with the constant seeds this crate used to
+/// build every proof with. Kept only so the harness can show what they cost.
+pub(crate) fn config_fixed_seed() -> Config {
+    config_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, true)
+}
+
+fn config_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Config {
+    let rng = |seed: u64| if fixed { SaltRng::seeded(seed) } else { SaltRng::fresh() };
     let perm = default_goldilocks_poseidon2_8();
     let hash = Hash::new(perm.clone());
     let compress = Compress::new(perm.clone());
@@ -177,9 +213,9 @@ pub(crate) fn config_with(num_queries: usize, log_blowup: usize, pow_bits: usize
         hash.clone(),
         compress.clone(),
         0,
-        SaltRng::seeded(INPUT_SALT_SEED),
+        rng(INPUT_SALT_SEED),
     );
-    let fri_mmcs = ValMmcs::new(hash, compress, 0, SaltRng::seeded(FRI_SALT_SEED));
+    let fri_mmcs = ValMmcs::new(hash, compress, 0, rng(FRI_SALT_SEED));
     let challenge_mmcs = ChallengeMmcs::new(fri_mmcs);
     let fri_params = FriParameters {
         log_blowup,
@@ -195,7 +231,7 @@ pub(crate) fn config_with(num_queries: usize, log_blowup: usize, pow_bits: usize
         val_mmcs,
         fri_params,
         NUM_RANDOM_CODEWORDS,
-        SaltRng::seeded(CODEWORD_SEED),
+        rng(CODEWORD_SEED),
     );
     StarkConfig::new(pcs, Challenger::new(perm))
 }
@@ -464,13 +500,13 @@ pub fn zk_degree_bound() -> (bool, bool) {
     let cfg = config();
     let deg7 = {
         let air = new_hash_air::<0>();
-        let trace = air.generate_trace_rows(64, 0);
+        let trace = air.generate_trace_rows(ROWS, 0);
         let proof = prove(&cfg, &air, trace, &vec![]);
         verify(&cfg, &air, &proof, &vec![]).is_ok()
     };
     let deg3 = {
         let air = new_hash_air::<1>();
-        let trace = air.generate_trace_rows(64, 0);
+        let trace = air.generate_trace_rows(ROWS, 0);
         let proof = prove(&cfg, &air, trace, &vec![]);
         verify(&cfg, &air, &proof, &vec![]).is_ok()
     };
@@ -611,10 +647,9 @@ pub struct CostRow {
 /// verification time. Variants are interleaved inside each batch so drift hits
 /// them equally, exactly as elsewhere.
 ///
-/// Every variant is a real AIR proved at 32 rows, not an arithmetic combination
+/// Every variant is a real AIR proved at the deployed height, not an arithmetic combination
 /// of other rows. The marginal costs are differences between measured rows.
 pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<CostRow> {
-    const ROWS: usize = 32;
 
     // Proved with grinding off. The search adds a random cost whose spread
     // swamps the differences between variants; it is the same search for
@@ -958,8 +993,8 @@ fn counting_config() -> CConfig {
     let perm = Counting(default_goldilocks_poseidon2_8());
     let hash = CHash::new(perm.clone());
     let compress = CCompress::new(perm.clone());
-    let val_mmcs = CValMmcs::new(hash.clone(), compress.clone(), 0, SaltRng::seeded(INPUT_SALT_SEED));
-    let fri_mmcs = CValMmcs::new(hash, compress, 0, SaltRng::seeded(FRI_SALT_SEED));
+    let val_mmcs = CValMmcs::new(hash.clone(), compress.clone(), 0, SaltRng::fresh());
+    let fri_mmcs = CValMmcs::new(hash, compress, 0, SaltRng::fresh());
     let fri_params = FriParameters {
         log_blowup: LOG_BLOWUP,
         log_final_poly_len: 3,
@@ -974,7 +1009,7 @@ fn counting_config() -> CConfig {
         val_mmcs,
         fri_params,
         NUM_RANDOM_CODEWORDS,
-        SaltRng::seeded(CODEWORD_SEED),
+        SaltRng::fresh(),
     );
     StarkConfig::new(pcs, CChallenger::new(perm))
 }
@@ -1053,4 +1088,162 @@ pub fn grinding_cost(samples: usize) -> Stats {
         us.push(t.elapsed().as_micros());
     }
     summarise(us, 1)
+}
+
+// ---------------------------------------------------------------------------
+// Does a proof hide its trace? An attack, run against a real proof.
+//
+// The hiding commitment interleaves the trace with as many random rows as it
+// has real ones and commits to the polynomial through all of them, of degree
+// below 2n. A column that holds the same value in every real row --- the
+// agent's secret, its root key, the budget, every policy field, since one
+// delegation proves all its payments --- is then fixed by n + 1 unknowns: the
+// value, and the n random entries. A proof opens the column at one point per
+// FRI query. If the openings outnumber the unknowns, the value is the unique
+// solution of a linear system anyone holding the proof can write down.
+//
+// The attacker uses nothing but the proof. It finds each query's position by
+// trying every index of the extended domain until the commitment accepts the
+// opened row, and it never reads the trace except to score its answer.
+// ---------------------------------------------------------------------------
+
+pub struct LeakReport {
+    pub rows: usize,
+    pub openings: usize,
+    pub unknowns: usize,
+    pub rank: usize,
+    pub columns: usize,
+    pub recovered: usize,
+    pub secret_recovered: bool,
+    pub budget_recovered: bool,
+}
+
+fn rev_bits(mut x: usize, bits: usize) -> usize {
+    let mut r = 0;
+    for _ in 0..bits {
+        r = (r << 1) | (x & 1);
+        x >>= 1;
+    }
+    r
+}
+
+pub fn zk_leak<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+) -> LeakReport {
+    use p3_commit::{BatchOpeningRef, Mmcs};
+    use p3_field::{PrimeCharacteristicRing, TwoAdicField};
+    use p3_matrix::{Dimensions, Matrix};
+
+    type F = Goldilocks;
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+    let width = BaseAir::<F>::width(&air);
+    let (t, pv) = composed_case::<R, MD, RD, DEPTH, COVER>(rows, None);
+    let truth: Vec<F> = t.row_slice(0).expect("row").to_vec();
+    let proof = prove(&config(), &air, t, &pv);
+
+    // Only what any holder of the proof has.
+    let perm = default_goldilocks_poseidon2_8();
+    let mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, SaltRng::seeded(0));
+    let n2 = 2 * rows;
+    let log_lde = n2.trailing_zeros() as usize + LOG_BLOWUP;
+    let height = 1usize << log_lde;
+    let committed = width + NUM_RANDOM_CODEWORDS;
+    let dims = [Dimensions { width: committed, height }];
+
+    let mut points: Vec<(usize, Vec<F>)> = Vec::new();
+    for q in &proof.opening_proof.1.query_proofs {
+        let Some(b) = q.input_proof.iter().find(|b| {
+            b.opened_values.len() == 1 && b.opened_values[0].len() == committed
+        }) else { continue };
+        for idx in 0..height {
+            if mmcs.verify_batch(&proof.commitments.trace, &dims, idx, BatchOpeningRef::from(b)).is_ok() {
+                if !points.iter().any(|(i, _)| *i == idx) {
+                    points.push((idx, b.opened_values[0].clone()));
+                }
+                break;
+            }
+        }
+    }
+
+    // Lagrange weights over the 2n-point domain the randomised trace lives on,
+    // at each opened point of the extended coset. Even positions are real
+    // rows, odd positions are random.
+    let g = F::two_adic_generator(n2.trailing_zeros() as usize);
+    let w = F::two_adic_generator(log_lde);
+    let n_inv = F::from_u64(n2 as u64).inverse();
+    let unknowns = rows + 1;
+    let m = points.len();
+    let mut a: Vec<Vec<F>> = Vec::with_capacity(m);
+    let mut y: Vec<Vec<F>> = Vec::with_capacity(m);
+    for (idx, vals) in &points {
+        let x = F::GENERATOR * w.exp_u64(rev_bits(*idx, log_lde) as u64);
+        let z = x.exp_u64(n2 as u64) - F::ONE;
+        let mut row = vec![F::ZERO; unknowns];
+        let mut gk = F::ONE;
+        for k in 0..n2 {
+            let l = gk * z * n_inv * (x - gk).inverse();
+            if k % 2 == 0 { row[0] += l; } else { row[1 + k / 2] = l; }
+            gk *= g;
+        }
+        a.push(row);
+        y.push(vals[..width].to_vec());
+    }
+
+    // Row reduction, applied to every column's right-hand side at once.
+    let mut rank = 0;
+    let mut pivots: Vec<usize> = Vec::new();
+    for c in 0..unknowns {
+        let Some(p) = (rank..m).find(|&r| a[r][c] != F::ZERO) else { continue };
+        a.swap(rank, p);
+        y.swap(rank, p);
+        let inv = a[rank][c].inverse();
+        for j in 0..unknowns { a[rank][j] *= inv; }
+        for j in 0..width { y[rank][j] *= inv; }
+        for r in 0..m {
+            if r != rank && a[r][c] != F::ZERO {
+                let f = a[r][c];
+                for j in 0..unknowns { let v = a[rank][j]; a[r][j] -= f * v; }
+                for j in 0..width { let v = y[rank][j]; y[r][j] -= f * v; }
+            }
+        }
+        pivots.push(c);
+        rank += 1;
+    }
+
+    let mut recovered = 0;
+    let mut answer = vec![None; width];
+    if rank == unknowns && pivots[0] == 0 {
+        for j in 0..width {
+            answer[j] = Some(y[0][j]);
+            if y[0][j] == truth[j] { recovered += 1; }
+        }
+    }
+    let whole_w = BaseAir::<F>::width(&WholeAir::<R, MD, RD>::new());
+    let hit = |col: usize| answer[col] == Some(truth[col]);
+    LeakReport {
+        rows,
+        openings: m,
+        unknowns,
+        rank,
+        columns: width,
+        recovered,
+        secret_recovered: (0..crate::spend::SECRET_ELEMS).all(|j| hit(whole_w + crate::spend::COL_SECRET + j)),
+        budget_recovered: hit(crate::air::COL_B),
+    }
+}
+
+/// Whether two proofs of one trace share their blinding.
+pub fn blinding_reused(fixed: bool) -> bool {
+    let air = ComposedAir::<{ REGISTERS }, 8, 8, 16, 14>::new();
+    let (t, pv) = composed_case::<{ REGISTERS }, 8, 8, 16, 14>(ROWS, None);
+    let (c1, c2) = if fixed { (config_fixed_seed(), config_fixed_seed()) } else { (config(), config()) };
+    let p1 = prove(&c1, &air, t.clone(), &pv);
+    let p2 = prove(&c2, &air, t, &pv);
+    p1.commitments.trace == p2.commitments.trace
 }

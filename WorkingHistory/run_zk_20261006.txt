@@ -1,0 +1,31 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:97
++ ... 4_TDSC12_submission\Circuits"; cargo run --release -- zk 2>&1 | Out-F ...
++                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 45.81s
+     Running `target\release\delegation-circuit.exe zk`
+ZERO KNOWLEDGE: THE HEIGHT CONDITION, AND AN ATTACK ON A REAL PROOF
+==============================================================================
+  extension degree e, FRI queries q               2       40
+  base values one proof opens per column          44
+  rows required, next power of two               128
+  rows every reported proof is made at           128
+
+  rows        openings  unknowns   rank    recovered   secret   budget
+  32                39        33     33  14198/14198     true     true
+    attack recovers the secret below the bound         true
+  128               40       129     40      0/14198    false    false
+    attack recovers nothing at the deployed height         true
+
+  two proofs share blinding, constant seeds            true
+  two proofs share blinding, fresh seeds              false
+
+  A column the same in every row is fixed by its value and the n
+  random entries beside it. With more openings than that, the value
+  is the unique solution of a linear system, and the attack finds it.
+  Its failure at the deployed height is a check, not the argument;
+  the argument is the height condition above.
+

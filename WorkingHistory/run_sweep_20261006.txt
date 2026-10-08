@@ -1,0 +1,122 @@
+﻿cargo :     Finished `release` profile [optimized] target(s) in 3.26s
+At line:1 char:97
++ ... DSC12_submission\Circuits"; cargo run --release -- sweep 2>&1 | Out-F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 3.26s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running `target\release\delegation-circuit.exe sweep`
+
+ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED
+==============================================================================
+  composed circuit, 128 rows, verifies                 true
+  Poseidon2 permutations during verify               160099
+  constraints                                         13942
+  distinct operations evaluating them                308164
+  folding them into one, two per constraint           27884
+  lower bound on steps                               496147  (2^18.92)
+  rounds of bisection                                    19
+
+ONE CONFIGURATION REUSED, AGAINST A FRESH ONE PER PROOF
+==============================================================================
+  Same circuit, same prebuilt trace, 20 proofs each. The only
+  difference is whether the hiding configuration is rebuilt.
+
+  configuration                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  shared                  11843.77  12163.03  12554.24  12825.94    662.91
+  rebuilt each proof      11763.06  11959.18  12244.55  12584.99    625.81
+
+  If sharing is the cause, the shared row is the wide one.
+
+WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED
+==============================================================================
+  Same circuit, same rate, 24 interleaved pairs. Only the grinding
+  bits differ. Both settings are below the rate this circuit needs to
+  verify, so neither proof is accepted (true); the timing is the point.
+
+  grinding bits                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  0                       11750.97  11917.09  12111.32  12298.30    381.21
+  20                      11973.04  12512.89  12855.02  13469.94    957.06
+
+  median difference 743.69 ms, spread difference 575.85 ms.
+  A geometric search over 2^20 hashes has a mean and a standard
+  deviation of the same order, so if grinding is the source these two
+  differences should be comparable and the 0-bit row should be tight.
+
+DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?
+==============================================================================
+  allowlist / revocation / depth / cover, rows     verifies
+  ---------------------------------------------- ----------
+  8 / 8 / 16 / 14, deployed height                     true
+  16 / 32 / 16 / 14, deployed height                   true
+  16 / 32 / 16 / 64, deployed height (the paper's)       true
+
+FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 128 ROWS
+==============================================================================
+  queries  blowup   pow   conj.  Johnson  proof bytes   prove ms  verify ms  verifies
+  ------- ------- ----- ------- -------- ------------ ---------- ----------
+       40       4     8      88       48      5121821    4286.56    177.343     false
+       40       2     8      48       28      5114141    2866.73    183.109     false
+       40       8     8     126       68      5129501    6380.29    176.538      true
+       20       4     8      48       28      2789121    4345.29    130.644     false
+       30       4     8      68       38      3955471    4244.92    143.181     false
+       60       4     8     126       68      7454521    4313.45    228.200     false
+       80       4     8     126       88      9787221    4292.19    286.969     false
+       40       4     0      80       40      5121821    4292.93    169.582     false
+       40       4    16      96       56      5121821    4312.98    170.355     false
+       84       8    16     126      126     10269889    6559.31    298.859      true
+       40      16    20     126      100      5137181   11964.25    172.798      true
+       54       8    20     126      101      6765079    6605.32    219.882      true
+       80       4    20     126      100      9787221    4343.73    288.743     false
+
+  Blowup is the reciprocal rate. Conjectured soundness assumes a query
+  costs the full rate; Johnson is what holds without that conjecture and
+  is the figure to size a secret or a bond against. Both are capped at
+  126 bits, the challenge field.
+
+  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.
+  queries  blowup   pow  commitments       opened      opening opening%
+  ------- ------- ----- ------------ ------------ ------------ -------
+       40       4     8          121       455044      4666648   91.1%
+       40       2     8          121       455044      4658968   91.1%
+       40       8     8          121       455044      4674328   91.1%
+       20       4     8          121       455044      2333948   83.7%
+       30       4     8          121       455044      3500298   88.5%
+       60       4     8          121       455044      6999348   93.9%
+       80       4     8          121       455044      9332048   95.3%
+       40       4     0          121       455044      4666648   91.1%
+       40       4    16          121       455044      4666648   91.1%
+       84       8    16          121       455044      9814716   95.6%
+       40      16    20          121       455044      4682008   91.1%
+       54       8    20          121       455044      6309906   93.3%
+       80       4    20          121       455044      9332048   95.3%
+
+WHAT A SETTLEMENT DOMAIN CAN CARRY
+==============================================================================
+  call data in one 30M-gas block, at 16 gas a byte         1875000
+  one EIP-4844 blob                                         131072
+
+   proof bytes    Johnson       blocks        blobs
+  ------------ ---------- ------------ ------------
+       5121821         48         2.73         39.1
+       5114141         28         2.73         39.0
+       5129501         68         2.74         39.1
+       2789121         28         1.49         21.3
+       3955471         38         2.11         30.2
+       7454521         68         3.98         56.9
+       9787221         88         5.22         74.7
+       5121821         40         2.73         39.1
+       5121821         56         2.73         39.1
+      10269889        126         5.48         78.4
+       5137181        100         2.74         39.2
+       6765079        101         3.61         51.6
+       9787221        100         5.22         74.7
+
+  The smallest proof measured here is 2789121 bytes at 28 provable bits,
+  which is 21.3 blobs. No setting in this sweep brings a proof of this
+  circuit within one block of call data: the opening proof dominates and
+  it shrinks only with the query count, which is what soundness buys.
+  A backend meeting a settlement domain's budget has to replace the
+  opening argument, not tune it.

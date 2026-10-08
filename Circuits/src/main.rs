@@ -116,6 +116,42 @@ fn emit_verify_table() {
     }
 }
 
+/// Whether a proof hides its trace, tested by attacking one. The attack must
+/// succeed below the height zero knowledge needs, or it tests nothing, and
+/// fail at the height every reported proof is made at.
+fn zk_section() {
+    println!("ZERO KNOWLEDGE: THE HEIGHT CONDITION, AND AN ATTACK ON A REAL PROOF");
+    println!("{}", "=".repeat(78));
+    println!("  extension degree e, FRI queries q        {:>8} {:>8}", prover::EXT_DEGREE, prover::NUM_QUERIES);
+    println!("  base values one proof opens per column    {:>8}", prover::NUM_QUERIES + 2 * prover::EXT_DEGREE);
+    println!("  rows required, next power of two          {:>8}", prover::ZK_MIN_ROWS);
+    println!("  rows every reported proof is made at      {:>8}", prover::ROWS);
+    println!();
+    println!("  {:<10} {:>9} {:>9} {:>6} {:>12} {:>8} {:>8}",
+             "rows", "openings", "unknowns", "rank", "recovered", "secret", "budget");
+    for rows in [32usize, prover::ROWS] {
+        let r = prover::zk_leak::<{ prover::REGISTERS }, 16, 32, 16, 64>(rows);
+        println!("  {:<10} {:>9} {:>9} {:>6} {:>6}/{:<5} {:>8} {:>8}",
+                 r.rows, r.openings, r.unknowns, r.rank, r.recovered, r.columns,
+                 r.secret_recovered, r.budget_recovered);
+        if rows < prover::ZK_MIN_ROWS {
+            diagnostic("  attack recovers the secret below the bound", r.secret_recovered, true);
+        } else {
+            diagnostic("  attack recovers nothing at the deployed height", r.recovered == 0, true);
+        }
+    }
+    println!();
+    diagnostic("two proofs share blinding, constant seeds", prover::blinding_reused(true), true);
+    diagnostic("two proofs share blinding, fresh seeds", prover::blinding_reused(false), false);
+    println!();
+    println!("  A column the same in every row is fixed by its value and the n");
+    println!("  random entries beside it. With more openings than that, the value");
+    println!("  is the unique solution of a linear system, and the attack finds it.");
+    println!("  Its failure at the deployed height is a check, not the argument;");
+    println!("  the argument is the height condition above.");
+    println!();
+}
+
 /// Every proof the paper relies on, proved and verified, and every control
 /// that must be refused.
 fn controls() {
@@ -124,27 +160,27 @@ fn controls() {
     println!("{}", "=".repeat(78));
     println!("  {:<44} {:>12}", "trace", "verifies");
     println!("  {:<44} {:>12}", "-".repeat(44), "-".repeat(12));
-    check("satisfying assignment, 64 rows", prover::roundtrip(64, false), true);
-    check("one gap decomposition corrupted", prover::roundtrip(64, true), false);
-    check("policy composed with C9, 64 rows", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, None), true);
-    check("  ... C9 binding broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Binding)), false);
-    check("  ... sponge chaining broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Chaining)), false); 
-    check("  ... permutation round state broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(64, Some(trace::Break::Permutation)), false);
-    check("merkle inclusion, depth 8, 64 rows", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, None), true);
-    check("  ... direction bit perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(8)), false);
-    check("  ... sibling digest perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(64, Some(4)), false);
-    check("non-revocation, depth 8, 64 rows", prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(64, None), true);
+    check("satisfying assignment", prover::roundtrip(prover::ROWS, false), true);
+    check("one gap decomposition corrupted", prover::roundtrip(prover::ROWS, true), false);
+    check("policy composed with C9", prover::roundtrip_composed::<{ prover::REGISTERS }>(prover::ROWS, None), true);
+    check("  ... C9 binding broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(prover::ROWS, Some(trace::Break::Binding)), false);
+    check("  ... sponge chaining broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(prover::ROWS, Some(trace::Break::Chaining)), false); 
+    check("  ... permutation round state broken", prover::roundtrip_composed::<{ prover::REGISTERS }>(prover::ROWS, Some(trace::Break::Permutation)), false);
+    check("merkle inclusion, depth 8", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(prover::ROWS, None), true);
+    check("  ... direction bit perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(prover::ROWS, Some(8)), false);
+    check("  ... sibling digest perturbed", prover::roundtrip_merkle::<{ prover::REGISTERS }, 8>(prover::ROWS, Some(4)), false);
+    check("non-revocation, depth 8", prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(prover::ROWS, None), true);
     for (label, b) in [
         ("  ... a gap decomposition perturbed", trace::RevokeBreak::GapDecomposition),
         ("  ... run starts inside the revoked range", trace::RevokeBreak::RunStartsInsideRange),
         ("  ... run reaches the next revoked range", trace::RevokeBreak::RunReachesNextRange),
         ("  ... run ends before it starts", trace::RevokeBreak::RunInverted),
     ] {
-        check(label, prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(64, Some(b)), false);
+        check(label, prover::roundtrip_nonmembership::<{ prover::REGISTERS }, 8>(prover::ROWS, Some(b)), false);
     }
     let pl = spend_trace::PAYLOAD_DIGEST;
     let dm = spend_trace::DOMAIN_ID;
-    check("spend component, depth 16, 64 rows", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, None, pl, dm), true);
+    check("spend component, depth 16", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(prover::ROWS, None, pl, dm), true);
     for (label, b) in [
         ("  ... published share altered", spend_trace::SpendBreak::Share),
         ("  ... key taken from another unit", spend_trace::SpendBreak::Key),
@@ -157,22 +193,22 @@ fn controls() {
         ("  ... a slot spanning two units", spend_trace::SpendBreak::CoarseSpan),
         ("  ... run ends past the budget", spend_trace::SpendBreak::RunPastBudget),
     ] {
-        check(label, prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, Some(b), pl, dm), false);
+        check(label, prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(prover::ROWS, Some(b), pl, dm), false);
     }
-    check("  ... wrong public payload digest", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, None, pl + 1, dm), false);
-    check("  ... wrong public domain", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(64, None, pl, dm + 1), false);
+    check("  ... wrong public payload digest", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(prover::ROWS, None, pl + 1, dm), false);
+    check("  ... wrong public domain", prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(prover::ROWS, None, pl, dm + 1), false);
     let a10 = trace::whole_public_values_amount::<{ prover::REGISTERS }, 16, 32>(10);
     let a13 = trace::whole_public_values_amount::<{ prover::REGISTERS }, 16, 32>(13);
     check("commitment does not move with the payment", a10[5..9] == a13[5..9], true);
     check("payload digest does move with the payment", a10[0] != a13[0], true);
-    check("second-invocation nullifier, depth 16, cover 14, 64 rows",
-          prover::roundtrip_spend_two::<{ prover::REGISTERS }, 16, 14>(64), true);
+    check("second-invocation nullifier, depth 16, cover 14",
+          prover::roundtrip_spend_two::<{ prover::REGISTERS }, 16, 14>(prover::ROWS), true);
     check("a policy the commitment does not open to, under the real circuit",
-          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(64, true), false);
+          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(prover::ROWS, true), false);
     check("  ... the same trace with C9's binding removed",
-          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(64, false), true);
-    let (okc, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(64, None);
-    check("COMPOSED CIRCUIT, depth 16, cover 14, 64 rows", okc, true);
+          prover::roundtrip_vacuous::<{ prover::REGISTERS }, 8, 8>(prover::ROWS, false), true);
+    let (okc, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, None);
+    check("COMPOSED CIRCUIT, depth 16, cover 14", okc, true);
     for (label, b) in [
         ("  ... run start disagrees with C8's run", trace::ComposedBreak::RunStartMismatch),
         ("  ... amount exceeds the units charged", trace::ComposedBreak::AmountRaised),
@@ -182,18 +218,17 @@ fn controls() {
         ("  ... settlement domain not the one the digest covers", trace::ComposedBreak::DomainAltered),
         ("  ... shares formed under a domain the payload does not name", trace::ComposedBreak::ShareDomain),
     ] {
-        let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(64, Some(b));
+        let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, Some(b));
         check(label, got, false);
     }
-    let (ok32, ms32) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, None);
-    check("WHOLE CIRCUIT at full parameters, 32 rows", ok32, true);
-    let (bad32, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, Some(0));
+    let (ok32, ms32) = prover::roundtrip_whole::<{ prover::REGISTERS }>(prover::ROWS, None);
+    check("WHOLE CIRCUIT at full parameters", ok32, true);
+    let (bad32, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(prover::ROWS, Some(0));
     check("  ... a policy column perturbed", bad32, false);
-    let (badpl, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(32, Some(air::COL_NONCE));
+    let (badpl, _) = prover::roundtrip_whole::<{ prover::REGISTERS }>(prover::ROWS, Some(air::COL_NONCE));
     check("  ... a payment field altered, digest not recomputed", badpl, false);
     println!();
-    println!("  Whole circuit proved and verified in {} ms at 32 rows, against the", ms32);
-    println!("  554 ms projected from a per-cell rate, not measured.");
+    println!("  Whole circuit proved and verified in {} ms at {} rows.", ms32, prover::ROWS);
     println!();
     println!("  {} controls, every one rejected; {} positive checks, every one holding.",
              CONTROLS.load(Ordering::Relaxed), POSITIVES.load(Ordering::Relaxed));
@@ -216,12 +251,16 @@ fn main() {
         reference_permutation();
         return;
     }
-    // Every positive check and negative control, in minutes rather than the
-    // hours the full run takes.
+    if std::env::args().any(|a| a == "zk") {
+        zk_section();
+        return;
+    }
     if std::env::args().any(|a| a == "steps") {
         sweep::step_count();
         return;
     }
+    // Every positive check and negative control, in minutes rather than the
+    // hours the full run takes.
     if std::env::args().any(|a| a == "controls") {
         controls();
         return;
@@ -480,6 +519,7 @@ fn main() {
     println!("  the witness sets are disjoint and the cost is the binding, not a");
     println!("  saving. What composition buys is one proof rather than two.");
 
+    zk_section();
     controls();
     println!();
     emit_verify_table();
@@ -492,7 +532,7 @@ fn main() {
     println!();
     println!("WHOLE-CIRCUIT PROVING COST, AS BUILT, HIDING PCS");
     println!("{}", "=".repeat(78));
-    let heights = [8usize, 16, 32];
+    let heights = [prover::ROWS, 2 * prover::ROWS];
     let (rows, drift) = prover::whole_timing::<{ prover::REGISTERS }>(TIMING_BATCHES, TIMING_PER_BATCH, 10, &heights);
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "rows", "min", "q1", "median", "q3", "per payment");
     println!("  {:>6} {:>11} {:>11} {:>11} {:>11} {:>13}", "-".repeat(6), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(11), "-".repeat(13));
@@ -525,19 +565,19 @@ fn main() {
     println!("{}", "=".repeat(78));
     println!("  smallest trace height these FRI parameters admit  {:>10}",
         prover::min_admissible_height());
-    let (pw, pc, po, pp) = prover::proof_bytes::<{ prover::REGISTERS }>(32);
-    println!("  {:<48} {:>10}", "proof, bincode bytes, 32-row trace", pw);
+    let (pw, pc, po, pp) = prover::proof_bytes::<{ prover::REGISTERS }>(prover::ROWS);
+    println!("  {:<48} {:>10}", "proof, bincode bytes, deployed height", pw);
     println!("  {:<48} {:>10}", "  of which commitments", pc);
     println!("  {:<48} {:>10}", "  of which opened values", po);
     println!("  {:<48} {:>10}", "  of which opening proof", pp);
-    println!("  {:<48} {:>10.0}", "bytes per payment at 32 rows", pw as f64 / 32.0);
+    println!("  {:<48} {:>10.0}", "bytes per payment at the deployed height", pw as f64 / prover::ROWS as f64);
     println!();
     println!("  Deterministic at fixed parameters, so one run is a measurement.");
     println!();
-    let cbytes = prover::composed_proof_bytes::<{ prover::REGISTERS }, 16, 32, 16, 64>(32);
+    let cbytes = prover::composed_proof_bytes::<{ prover::REGISTERS }, 16, 32, 16, 64>(prover::ROWS);
     let (cw2, _, _) = composed::measure::<{ prover::REGISTERS }, 16, 32, 16, 64>();
-    let sep = prover::proof_bytes::<{ prover::REGISTERS }>(32).0 + prover::spend_proof_bytes::<{ prover::REGISTERS }, 16, 64>(32);
-    println!("  {:<48} {:>10}", "composed proof, bincode bytes, 32-row trace", cbytes);
+    let sep = prover::proof_bytes::<{ prover::REGISTERS }>(prover::ROWS).0 + prover::spend_proof_bytes::<{ prover::REGISTERS }, 16, 64>(prover::ROWS);
+    println!("  {:<48} {:>10}", "composed proof, bincode bytes, deployed height", cbytes);
     println!("  {:<48} {:>10}", "two separate proofs, same payments", sep);
     println!("  {:<48} {:>10}", "saved by proving once", sep as i64 - cbytes as i64);
     println!("  {:<48} {:>10}", "composed width for reference", cw2);
@@ -638,7 +678,7 @@ fn main() {
              COST_BATCHES * COST_PER_BATCH);
     println!("  Traces are built once and cloned before the timer starts, so no row");
     println!("  is charged for generating its own witness.");
-    println!("  Every row is a real AIR proved at 32 rows, not a sum of other rows.");
+    println!("  Every row is a real AIR proved at the deployed height, not a sum of other rows.");
     println!("  Marginal costs are differences between measured rows:");
     let find = |lab: &str| study.iter().find(|r| r.label == lab)
         .unwrap_or_else(|| panic!("cost-structure row missing: {lab}"));
@@ -687,7 +727,7 @@ fn main() {
         println!("  {:<28} {:>8.2} {:>8.2} {:>8.2} {:>8.2} {:>12}",
                  "two halves, verification", p.verify.min, p.verify.q1, p.verify.median, p.verify.q3, "");
         println!();
-        println!("  Milliseconds per payment at 32 rows. Both rows are timed the same");
+        println!("  Milliseconds per payment at the deployed height. Both rows are timed the same");
         println!("  way: one region covering everything a settlement pays for. The two");
         println!("  halves are two proofs inside one region rather than two medians");
         println!("  added, which is not the median of a sum.");
@@ -774,8 +814,8 @@ fn main() {
     {
         let (w1, c1, d1) = composed::measure::<1, 16, 32, 16, 64>();
         let (w0, c0, d0) = composed::measure::<0, 16, 32, 16, 64>();
-        let v1 = prover::composed_verifies::<1, 16, 32, 16, 64>(32);
-        let v0 = prover::composed_verifies::<0, 16, 32, 16, 64>(32);
+        let v1 = prover::composed_verifies::<1, 16, 32, 16, 64>(prover::ROWS);
+        let v0 = prover::composed_verifies::<0, 16, 32, 16, 64>(prover::ROWS);
         println!("  {:<34} {:>10} {:>13} {:>7} {:>9}", "one register, as built", w1, c1, d1, v1);
         println!("  {:<34} {:>10} {:>13} {:>7} {:>9}", "zero registers", w0, c0, d0, v0);
         println!();

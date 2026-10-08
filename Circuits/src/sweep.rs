@@ -66,9 +66,9 @@ fn grinding() {
     let mut ok_all = true;
     for _ in 0..ITERS {
         let (_, _, _, _, us0, _, o0) =
-            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, 40, 4, 0);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, 40, 4, 0);
         let (_, _, _, _, us1, _, o1) =
-            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, 40, 4, 20);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, 40, 4, 20);
         off.push(us0 as f64 / 1000.0);
         on.push(us1 as f64 / 1000.0);
         ok_all &= o0 && o1;
@@ -103,8 +103,8 @@ fn grinding() {
 /// One hiding configuration reused, against a fresh one per proof.
 fn config_reuse() {
     const ITERS: usize = 20;
-    let shared = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, ITERS, true);
-    let fresh  = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, ITERS, false);
+    let shared = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, ITERS, true);
+    let fresh  = crate::prover::composed_times::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, ITERS, false);
     let q = |v: &Vec<u128>| {
         let mut w: Vec<f64> = v.iter().map(|&x| x as f64 / 1000.0).collect();
         w.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -138,12 +138,12 @@ fn config_reuse() {
 /// step. FRI's own folding and the batched reduction of the opened values are
 /// further work on top, so the total is a lower bound on the program's length.
 pub fn step_count() {
-    let w = crate::prover::verifier_work::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32);
+    let w = crate::prover::verifier_work::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS);
     let total = w.permutations as usize + w.constraint_ops + 2 * w.constraints;
     println!();
     println!("ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED");
     println!("{}", "=".repeat(78));
-    println!("  composed circuit, 32 rows, verifies          {:>12}", w.verifies);
+    println!("  composed circuit, {} rows, verifies         {:>12}", crate::prover::ROWS, w.verifies);
     println!("  Poseidon2 permutations during verify         {:>12}", w.permutations);
     println!("  constraints                                  {:>12}", w.constraints);
     println!("  distinct operations evaluating them          {:>12}", w.constraint_ops);
@@ -164,18 +164,14 @@ pub fn run() {
     println!("{}", "=".repeat(78));
     println!("  {:<46} {:>10}", "allowlist / revocation / depth / cover, rows", "verifies");
     println!("  {:<46} {:>10}", "-".repeat(46), "-".repeat(10));
-    println!("  {:<46} {:>10}", "8 / 8 / 16 / 14, 64 rows",
-             composed_verifies::<{ crate::prover::REGISTERS }, 8, 8, 16, 14>(64));
-    println!("  {:<46} {:>10}", "16 / 32 / 16 / 14, 64 rows",
-             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 14>(64));
-    println!("  {:<46} {:>10}", "16 / 32 / 16 / 14, 32 rows",
-             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 14>(32));
-    println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, 64 rows",
-             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(64));
-    println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, 32 rows (what the paper quotes)",
-             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32));
+    println!("  {:<46} {:>10}", "8 / 8 / 16 / 14, deployed height",
+             composed_verifies::<{ crate::prover::REGISTERS }, 8, 8, 16, 14>(crate::prover::ROWS));
+    println!("  {:<46} {:>10}", "16 / 32 / 16 / 14, deployed height",
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 14>(crate::prover::ROWS));
+    println!("  {:<46} {:>10}", "16 / 32 / 16 / 64, deployed height (the paper's)",
+             composed_verifies::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS));
     println!();
-    println!("FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 32 ROWS");
+    println!("FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT {} ROWS", crate::prover::ROWS);
     println!("{}", "=".repeat(78));
 
     // Chosen rather than swept exhaustively: three blowups at a fixed query
@@ -203,7 +199,7 @@ pub fn run() {
     let mut rows: Vec<Row> = Vec::new();
     for (q, b, p) in settings {
         let (bytes, commit, opened, opening, prove_us, verify_us, ok) =
-            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(32, q, b, p);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, q, b, p);
         rows.push(Row {
             queries: q,
             blowup: b,
