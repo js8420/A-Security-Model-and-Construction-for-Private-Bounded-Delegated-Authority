@@ -342,3 +342,226 @@ pub fn run() -> Report {
         landings,
     }
 }
+
+// ---------------------------------------------------------------------------
+// The out-of-domain identity, constraint by constraint.
+//
+// Plonky3 folds every constraint at zeta into one accumulator and compares it
+// with the quotient. A dispute over that comparison needs what the fold is
+// made of: each constraint's value at zeta and the running sum after it. This
+// builder evaluates the AIR exactly as the verifier's folder does and keeps
+// both, so the defender's assertion for this target can be generated and its
+// total checked against the verifier's own verdict.
+// ---------------------------------------------------------------------------
+
+use p3_air::{Air as _, AirBuilder, RowWindow};
+use p3_commit::PolynomialSpace;
+use p3_uni_stark::recompose_quotient_from_chunks;
+
+pub struct PerConstraint<'a> {
+    current: &'a [Challenge],
+    next: &'a [Challenge],
+    empty: RowWindow<'a, Challenge>,
+    public_values: &'a [Val],
+    is_first_row: Challenge,
+    is_last_row: Challenge,
+    is_transition: Challenge,
+    alpha: Challenge,
+    pub accumulator: Challenge,
+    pub values: Vec<Challenge>,
+    pub sums: Vec<Challenge>,
+}
+
+impl<'a> AirBuilder for PerConstraint<'a> {
+    type F = Val;
+    type Expr = Challenge;
+    type Var = Challenge;
+    type PreprocessedWindow = RowWindow<'a, Challenge>;
+    type MainWindow = RowWindow<'a, Challenge>;
+    type PublicVar = Val;
+    type PeriodicVar = Challenge;
+
+    fn main(&self) -> Self::MainWindow {
+        RowWindow::from_two_rows(self.current, self.next)
+    }
+
+    fn preprocessed(&self) -> &Self::PreprocessedWindow {
+        &self.empty
+    }
+
+    fn is_first_row(&self) -> Challenge {
+        self.is_first_row
+    }
+
+    fn is_last_row(&self) -> Challenge {
+        self.is_last_row
+    }
+
+    fn is_transition(&self) -> Challenge {
+        self.is_transition
+    }
+
+    fn assert_zero<I: Into<Challenge>>(&mut self, x: I) {
+        let v = x.into();
+        self.accumulator = self.accumulator * self.alpha + v;
+        self.values.push(v);
+        self.sums.push(self.accumulator);
+    }
+
+    fn public_values(&self) -> &[Val] {
+        self.public_values
+    }
+
+    fn periodic_values(&self) -> &[Challenge] {
+        &[]
+    }
+}
+
+pub struct Identity {
+    pub constraints: usize,
+    pub holds: bool,
+    /// Field elements in the defender's assertion for this target: every
+    /// constraint's value and every running sum, both in the extension.
+    pub assertion_elements: usize,
+}
+
+fn drawn(events: &[Event]) -> Vec<Val> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Drawn { value, .. } => Some(value.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// The identity at zeta from the opened values alone, with alpha and zeta
+/// taken from the recorded transcript.
+fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) -> Identity {
+    let e = drawn(events);
+    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[i..i + 2]).expect("two");
+    let (alpha, zeta) = (ext(0), ext(2));
+
+    let pcs = deployed_pcs();
+    let degree = 1usize << proof.degree_bits;
+    let init = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, degree >> 1);
+    let sels = init.selectors_at_point(zeta);
+
+    let trace_domain = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, degree);
+    let chunks = proof.opened_values.quotient_chunks.len();
+    let log_chunks = chunks.trailing_zeros() as usize - 1;
+    let quotient_domain = trace_domain.create_disjoint_domain(1usize << (proof.degree_bits + log_chunks));
+    let domains = quotient_domain.split_domains(chunks);
+    let quotient =
+        recompose_quotient_from_chunks::<RConfig>(&domains, &proof.opened_values.quotient_chunks, zeta);
+
+    let local = &proof.opened_values.trace_local;
+    let zeros = vec![Challenge::ZERO; local.len()];
+    let next = proof.opened_values.trace_next.as_deref().unwrap_or(&zeros);
+    let mut b = PerConstraint {
+        current: local,
+        next,
+        empty: RowWindow::from_two_rows(&[], &[]),
+        public_values: pv,
+        is_first_row: sels.is_first_row,
+        is_last_row: sels.is_last_row,
+        is_transition: sels.is_transition,
+        alpha,
+        accumulator: Challenge::ZERO,
+        values: Vec::new(),
+        sums: Vec::new(),
+    };
+    air.eval(&mut b);
+    Identity {
+        constraints: b.values.len(),
+        holds: b.accumulator * sels.inv_vanishing == quotient,
+        assertion_elements: 2 * (b.values.len() + b.sums.len()),
+    }
+}
+
+/// What deciding one constraint on chain would read and compute: its own
+/// operations, counting a subexpression it uses twice once, and the distinct
+/// opened values it reads.
+pub struct LeafCost {
+    pub max_ops: usize,
+    pub median_ops: usize,
+    pub max_reads: usize,
+    pub median_reads: usize,
+}
+
+fn leaf_costs(air: &Air) -> LeafCost {
+    use p3_air::symbolic::SymbolicExpr;
+    use p3_air::{BaseEntry, BaseLeaf};
+    use std::collections::HashSet;
+    type E = SymbolicExpr<BaseLeaf<Val>>;
+    fn walk(e: &E, seen: &mut HashSet<*const E>, ops: &mut usize, reads: &mut HashSet<(usize, usize)>) {
+        let kids: Vec<&std::sync::Arc<E>> = match e {
+            SymbolicExpr::Leaf(BaseLeaf::Variable(v)) => {
+                if let BaseEntry::Main { offset } = v.entry {
+                    reads.insert((offset, v.index));
+                }
+                return;
+            }
+            SymbolicExpr::Leaf(_) => return,
+            SymbolicExpr::Add { x, y, .. }
+            | SymbolicExpr::Sub { x, y, .. }
+            | SymbolicExpr::Mul { x, y, .. } => vec![x, y],
+            SymbolicExpr::Neg { x, .. } => vec![x],
+        };
+        *ops += 1;
+        for k in kids {
+            if seen.insert(std::sync::Arc::as_ptr(k)) {
+                walk(k, seen, ops, reads);
+            }
+        }
+    }
+    let cs = p3_air::get_symbolic_constraints::<Val, _>(air, p3_air::AirLayout::from_air::<Val>(air));
+    let mut ops_all = Vec::with_capacity(cs.len());
+    let mut reads_all = Vec::with_capacity(cs.len());
+    for c in &cs {
+        let (mut seen, mut ops, mut reads) = (HashSet::new(), 0usize, HashSet::new());
+        walk(c, &mut seen, &mut ops, &mut reads);
+        ops_all.push(ops);
+        reads_all.push(reads.len());
+    }
+    ops_all.sort_unstable();
+    reads_all.sort_unstable();
+    LeafCost {
+        max_ops: *ops_all.last().unwrap_or(&0),
+        median_ops: ops_all[ops_all.len() / 2],
+        max_reads: *reads_all.last().unwrap_or(&0),
+        median_reads: reads_all[reads_all.len() / 2],
+    }
+}
+
+pub struct OodReport {
+    pub honest: Identity,
+    pub controls: Vec<(&'static str, bool, bool)>,
+    pub leaf: LeafCost,
+}
+
+/// The identity for the honest proof and for the three controls, each judged
+/// both by this decomposition and by Plonky3.
+pub fn run_identity() -> OodReport {
+    let air = Air::new();
+    let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let proof: RProof = prove(&config().0, &air, t, &pv);
+    let (ev, _) = record(&air, &proof, &pv);
+    let honest = identity(&air, &proof, &pv, &ev);
+
+    let mut controls = Vec::new();
+    for (label, b) in [
+        ("run start disagrees with C8", ComposedBreak::RunStartMismatch),
+        ("amount exceeds the units", ComposedBreak::AmountRaised),
+        ("shares under another domain", ComposedBreak::ShareDomain),
+    ] {
+        let (t, pvb) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(b));
+        let pb: RProof = prove(&config().0, &air, t, &pvb);
+        let (ev, verdict) = record(&air, &pb, &pvb);
+        let ours = identity(&air, &pb, &pvb, &ev).holds;
+        let theirs = !verdict.err().map(|e| e.contains("OodEvaluationMismatch")).unwrap_or(false);
+        controls.push((label, ours, theirs));
+    }
+    OodReport { honest, controls, leaf: leaf_costs(&air) }
+}

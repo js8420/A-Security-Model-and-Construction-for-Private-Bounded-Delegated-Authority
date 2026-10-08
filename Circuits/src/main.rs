@@ -142,6 +142,18 @@ fn naysay_section() {
         diagnostic(&format!("  {} is rejected", l.label), l.rejected, true);
     }
     println!();
+
+    let o = naysay::run_identity();
+    println!("  THE OUT-OF-DOMAIN IDENTITY, CONSTRAINT BY CONSTRAINT");
+    println!("  constraints evaluated at zeta                {:>10}", o.honest.constraints);
+    check("the decomposition's total equals the quotient, honest proof", o.honest.holds, true);
+    println!("  field elements in the defender's assertion   {:>10}", o.honest.assertion_elements);
+    for (label, ours, theirs) in &o.controls {
+        check(&format!("  {}: identity fails here and in Plonky3", label), !*ours && !*theirs, true);
+    }
+    println!("  one constraint on chain, operations: median {:>6}, max {:>6}", o.leaf.median_ops, o.leaf.max_ops);
+    println!("  one constraint on chain, opened values read: median {:>3}, max {:>4}", o.leaf.median_reads, o.leaf.max_reads);
+    println!();
 }
 
 /// Whether a proof hides its trace, tested by attacking one. The attack must
