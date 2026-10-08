@@ -26,11 +26,11 @@ use crate::revocation::NonMembershipAir;
 use crate::trace::{composed_case, composed_public_values, full_public_values, vacuous_trace, whole_public_values, broken_composed, broken_nonmembership, broken_trace, composed_air_trace, composed_trace, corrupt, merkle_trace, nonmembership_trace, policy_trace, whole_trace, Break, ComposedBreak, RevokeBreak};
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
-type Val = Goldilocks;
-type Challenge = BinomialExtensionField<Val, 2>;
-type Perm = Poseidon2Goldilocks<8>;
-type Hash = PaddingFreeSponge<Perm, 8, 4, 4>;
-type Compress = TruncatedPermutation<Perm, 2, 4, 8>;
+pub(crate) type Val = Goldilocks;
+pub(crate) type Challenge = BinomialExtensionField<Val, 2>;
+pub(crate) type Perm = Poseidon2Goldilocks<8>;
+pub(crate) type Hash = PaddingFreeSponge<Perm, 8, 4, 4>;
+pub(crate) type Compress = TruncatedPermutation<Perm, 2, 4, 8>;
 
 /// Salt elements per leaf. The crate's rule is that SALT_ELEMS times the size
 /// of a value must reach the target security parameter; at 64 bits a piece,
@@ -53,7 +53,7 @@ const CODEWORD_SEED: u64 = 0x5350_454e_4400_0002;
 // plain MerkleTreeMmcs and is not hiding. ChaCha12 is the cipher StdRng uses,
 // named directly because StdRng is neither Clone nor portable across releases.
 // SmallRng, which the upstream tests use for salts, is documented as insecure.
-type ValMmcs = MerkleTreeHidingMmcs<
+pub(crate) type ValMmcs = MerkleTreeHidingMmcs<
     <Val as Field>::Packing,
     <Val as Field>::Packing,
     Hash,
@@ -63,9 +63,9 @@ type ValMmcs = MerkleTreeHidingMmcs<
     4,
     SALT_ELEMS,
 >;
-type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-type Dft = Radix2DitParallel<Val>;
-type Pcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SaltRng>;
+pub(crate) type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+pub(crate) type Dft = Radix2DitParallel<Val>;
+pub(crate) type Pcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SaltRng>;
 
 /// ChaCha12 with a Clone that reconstructs the stream rather than approximating
 /// it. chacha20 derives nothing on its RNGs, and the only Clone generator in the
@@ -75,12 +75,12 @@ type Pcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SaltRng>;
 pub struct SaltRng(ChaCha12Rng);
 
 impl SaltRng {
-    fn seeded(seed: u64) -> Self {
+    pub(crate) fn seeded(seed: u64) -> Self {
         Self(ChaCha12Rng::seed_from_u64(seed))
     }
 
     /// Seeded from the operating system, so no two proofs share blinding.
-    fn fresh() -> Self {
+    pub(crate) fn fresh() -> Self {
         Self(ChaCha12Rng::try_from_rng(&mut rand10::rngs::SysRng).expect("operating-system randomness"))
     }
 }
@@ -117,7 +117,7 @@ impl TryRng for SaltRng {
 }
 
 impl TryCryptoRng for SaltRng {}
-type Challenger = DuplexChallenger<Val, Perm, 8, 4>;
+pub(crate) type Challenger = DuplexChallenger<Val, Perm, 8, 4>;
 type Config = StarkConfig<Pcs, Challenge, Challenger>;
 
 // The non-hiding pair, kept only so the cost of zero knowledge can be measured
@@ -203,6 +203,19 @@ pub(crate) fn config_fixed_seed() -> Config {
 }
 
 fn config_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Config {
+    StarkConfig::new(
+        pcs_seeded(num_queries, log_blowup, pow_bits, fixed),
+        Challenger::new(default_goldilocks_poseidon2_8()),
+    )
+}
+
+/// The deployed commitment scheme, fresh randomness, for code that pairs it
+/// with a challenger of its own.
+pub(crate) fn deployed_pcs() -> Pcs {
+    pcs_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
+}
+
+fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Pcs {
     let rng = |seed: u64| if fixed { SaltRng::seeded(seed) } else { SaltRng::fresh() };
     let perm = default_goldilocks_poseidon2_8();
     let hash = Hash::new(perm.clone());
@@ -233,7 +246,7 @@ fn config_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: 
         NUM_RANDOM_CODEWORDS,
         rng(CODEWORD_SEED),
     );
-    StarkConfig::new(pcs, Challenger::new(perm))
+    pcs
 }
 
 fn config() -> Config {

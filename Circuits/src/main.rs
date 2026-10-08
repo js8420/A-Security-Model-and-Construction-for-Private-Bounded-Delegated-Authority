@@ -50,6 +50,7 @@ mod composed;
 mod vacuous;
 mod spend2;
 mod sweep;
+mod naysay;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -114,6 +115,33 @@ fn emit_verify_table() {
                      "", trimmed, if *want { "holds" } else { "yes" });
         }
     }
+}
+
+/// Stage one of the structure-aware dispute: the transcript a challenged
+/// defender would assert, recorded from the real verifier, and the check
+/// Plonky3 rejects each kind of false proof at.
+fn naysay_section() {
+    let r = naysay::run();
+    println!("DISPUTING A PROOF BY ITS STRUCTURE, STAGE ONE");
+    println!("{}", "=".repeat(78));
+    check("honest proof verifies under the recording challenger", r.honest_verifies, true);
+    let t = &r.transcript;
+    println!("  base elements absorbed into the transcript   {:>10}", t.absorbed);
+    println!("  challenges drawn (incl. proof-of-work)       {:>10}", t.challenges);
+    println!("  challenge elements                           {:>10}", t.challenge_elements);
+    println!("  query positions drawn, bits each             {:>10} {:>4}", t.positions.len(), t.position_bits);
+    println!("  checkpoints a defender asserts               {:>10}", t.checkpoints);
+    println!("  field elements in those checkpoints          {:>10}", t.checkpoint_elements);
+    check("every challenge redraws the same from its asserted state", t.replays, true);
+    check("positions match the attacker's search on every query",
+          r.search_agrees == r.search_total && r.search_total > 0, true);
+    println!();
+    println!("  {:<44} {:>9} {:>9}  {}", "corruption", "rejected", "moves Q?", "Plonky3 rejects at");
+    for l in &r.landings {
+        println!("  {:<44} {:>9} {:>9}  {}", l.label, l.rejected, l.positions_moved, l.error);
+        diagnostic(&format!("  {} is rejected", l.label), l.rejected, true);
+    }
+    println!();
 }
 
 /// Whether a proof hides its trace, tested by attacking one. The attack must
@@ -249,6 +277,10 @@ fn main() {
     }
     if std::env::args().any(|a| a == "permute") {
         reference_permutation();
+        return;
+    }
+    if std::env::args().any(|a| a == "naysay") {
+        naysay_section();
         return;
     }
     if std::env::args().any(|a| a == "zk") {

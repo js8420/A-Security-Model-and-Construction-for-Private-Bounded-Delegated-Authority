@@ -1,0 +1,45 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:97
++ ... SC12_submission\Circuits"; cargo run --release -- naysay 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 50.44s
+     Running `target\release\delegation-circuit.exe naysay`
+DISPUTING A PROOF BY ITS STRUCTURE, STAGE ONE
+==============================================================================
+  honest proof verifies under the recording challenger         true
+  base elements absorbed into the transcript        56993
+  challenges drawn (incl. proof-of-work)               13
+  challenge elements                                   12
+  query positions drawn, bits each                     40   12
+  checkpoints a defender asserts                       53
+  field elements in those checkpoints                 527
+  every challenge redraws the same from its asserted state         true
+  positions match the attacker's search on every query         true
+
+  corruption                                    rejected  moves Q?  Plonky3 rejects at
+  opened trace value at zeta                        true      true  InvalidOpeningArgument InvalidPowWitness
+    opened trace value at zeta is rejected             true
+  opened trace value at the next row                true      true  InvalidOpeningArgument InvalidPowWitness
+    opened trace value at the next row is rejected         true
+  opened quotient chunk                             true      true  InvalidOpeningArgument InvalidPowWitness
+    opened quotient chunk is rejected                  true
+  final polynomial                                  true      true  InvalidOpeningArgument InvalidPowWitness
+    final polynomial is rejected                       true
+  query proof-of-work witness                       true      true  InvalidOpeningArgument InvalidPowWitness
+    query proof-of-work witness is rejected            true
+  a fold's sibling value, one query                 true      true  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch
+    a fold's sibling value, one query is rejected         true
+  an opened input row, one query                    true      true  InvalidOpeningArgument InputError CapMismatch
+    an opened input row, one query is rejected         true
+  a public value                                    true      true  InvalidOpeningArgument InvalidPowWitness
+    a public value is rejected                         true
+  control: run start disagrees with C8              true      true  OodEvaluationMismatch index None
+    control: run start disagrees with C8 is rejected         true
+  control: amount exceeds the units                 true      true  OodEvaluationMismatch index None
+    control: amount exceeds the units is rejected         true
+  control: shares under another domain              true      true  OodEvaluationMismatch index None
+    control: shares under another domain is rejected         true
+
