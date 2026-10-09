@@ -137,7 +137,7 @@ fn config_plain() -> PlainConfig {
     let challenge_mmcs = PlainChallengeMmcs::new(val_mmcs.clone());
     let fri_params = FriParameters {
         log_blowup: LOG_BLOWUP,
-        log_final_poly_len: 3,
+        log_final_poly_len: LOG_FINAL_POLY_LEN,
         max_log_arity: 2,
         num_queries: NUM_QUERIES,
         commit_proof_of_work_bits: 0,
@@ -171,6 +171,7 @@ pub const REGISTERS: usize = 0;
 pub const NUM_QUERIES: usize = 40;
 pub const LOG_BLOWUP: usize = 4;
 pub const POW_BITS: usize = 20;
+pub const LOG_FINAL_POLY_LEN: usize = 3;
 
 /// Degree of the challenge field over Goldilocks.
 pub const EXT_DEGREE: usize = 2;
@@ -232,7 +233,7 @@ fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: boo
     let challenge_mmcs = ChallengeMmcs::new(fri_mmcs);
     let fri_params = FriParameters {
         log_blowup,
-        log_final_poly_len: 3,
+        log_final_poly_len: LOG_FINAL_POLY_LEN,
         max_log_arity: 2,
         num_queries,
         commit_proof_of_work_bits: 0,
@@ -1010,7 +1011,7 @@ fn counting_config() -> CConfig {
     let fri_mmcs = CValMmcs::new(hash, compress, 0, SaltRng::fresh());
     let fri_params = FriParameters {
         log_blowup: LOG_BLOWUP,
-        log_final_poly_len: 3,
+        log_final_poly_len: LOG_FINAL_POLY_LEN,
         max_log_arity: 2,
         num_queries: NUM_QUERIES,
         commit_proof_of_work_bits: 0,

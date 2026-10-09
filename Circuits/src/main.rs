@@ -154,6 +154,43 @@ fn naysay_section() {
     println!("  one constraint on chain, operations: median {:>6}, max {:>6}", o.leaf.median_ops, o.leaf.max_ops);
     println!("  one constraint on chain, opened values read: median {:>3}, max {:>4}", o.leaf.median_reads, o.leaf.max_reads);
     println!();
+
+    let q = naysay::run_query_phase();
+    let s = &q.shape;
+    println!("  THE QUERY PHASE, ONE QUERY AT A TIME");
+    println!("  queries                                      {:>10}", q.queries);
+    println!("  global height, bits                          {:>10}", s.log_global);
+    println!("  fold arities, log                            {:>10}", format!("{:?}", s.log_arities));
+    println!("  input leaves, elements hashed (rand, trace, quotient) {:?}", s.input_leaf);
+    println!("  input leaves, permutations                   {:>10}",
+             format!("{:?}", s.input_leaf.iter().map(|n| n.div_ceil(4)).collect::<Vec<_>>()));
+    println!("  input path, compressions                     {:>10}", s.input_path);
+    println!("  layer leaves, elements hashed                {:>10}", format!("{:?}", s.layer_leaf));
+    println!("  layer paths, compressions                    {:>10}", format!("{:?}", s.layer_path));
+    println!("  terms in the reduced opening                 {:>10}", s.reduced_terms);
+    println!("  field elements a defender asserts per query  {:>10}", q.assertion_per_query);
+    println!("  ... for all queries                          {:>10}", q.assertion_per_query * q.queries);
+    check("honest proof: every comparison of every query holds", q.honest_all_hold, true);
+    check("honest proof: library agrees on every root, fold and final value", q.honest_library_agrees, true);
+    for (label, held, theirs) in &q.controls {
+        check(&format!("  {}: every query holds, Plonky3 rejects at {}", label, theirs),
+              *held && theirs.starts_with("OodEvaluationMismatch"), true);
+    }
+    println!();
+    println!("  {:<28} {:>5} {:>6}  {:<28} {:<15} {}", "corruption", "query", "index", "Plonky3", "port, first", "port, every failing");
+    let mut agree = 0;
+    for l in &q.landings {
+        let first = l.first.map(|(_, p)| p.name()).unwrap_or_else(|| "none".into());
+        let all = l.all.iter().map(|p| p.name()).collect::<Vec<_>>().join(", ");
+        let index = q.indices.get(l.query).copied().unwrap_or(0);
+        println!("  {:<28} {:>5} {:>6}  {:<28} {:<15} {}", l.label, l.query, index, l.plonky3, first, all);
+        let ok = l.agrees() && l.isolated && l.transcript_unchanged && l.library_agrees;
+        diagnostic("    same check, same query, nothing else fails", ok, true);
+        agree += ok as usize;
+    }
+    println!("  corruptions where the port and Plonky3 agree {:>6} of {}", agree, q.landings.len());
+    println!("  values each query asserts in its chain (reduced opening, then folds) {}", q.chain_len);
+    println!();
 }
 
 /// Whether a proof hides its trace, tested by attacking one. The attack must
