@@ -1,0 +1,24 @@
+warning: dispute-verifier-script@0.1.0: rustc +succinct --version: "rustc 1.96.0-dev\n"
+warning: dispute-verifier-script@0.1.0: dispute-verifier built at 2026-10-09 05:10:20
+    Finished `release` profile [optimized] target(s) in 4m 51s
+     Running `target/release/dispute-verifier-script`
+stderr: 
+stderr: thread '<unnamed>' (1) panicked at src/main.rs:107:42:
+stderr: the proof verifies: InvalidOpeningArgument(InvalidPowWitness)
+stderr: stack backtrace:
+stderr: note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+stderr: the proof verifies: InvalidOpeningArgument(InvalidPowWitness)
+DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1
+==============================================================================
+  proof bytes read                                    5137269
+  the proof verifies inside the zkVM                     true
+  public values committed                                  10
+  instructions executed                            2478094305
+  light execution, seconds                               39.3
+  counting execution, seconds                             2.3
+  instructions, gas metering                       2478094305
+  trace chunks metered                                      2
+  prover gas                                       2416710424
+  syscalls                                                  0
+  gas metering, seconds                                  54.7
+  a tampered proof is refused inside the zkVM            true
