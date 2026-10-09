@@ -219,35 +219,38 @@ pub(crate) fn deployed_pcs() -> Pcs {
 fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Pcs {
     let rng = |seed: u64| if fixed { SaltRng::seeded(seed) } else { SaltRng::fresh() };
     let perm = default_goldilocks_poseidon2_8();
-    let hash = Hash::new(perm.clone());
-    let compress = Compress::new(perm.clone());
-    // Separate seeds. Cloning one MMCS into the other would blind both
-    // commitments from an identical stream, which is not independent blinding.
-    let val_mmcs = ValMmcs::new(
-        hash.clone(),
-        compress.clone(),
-        0,
-        rng(INPUT_SALT_SEED),
-    );
-    let fri_mmcs = ValMmcs::new(hash, compress, 0, rng(FRI_SALT_SEED));
-    let challenge_mmcs = ChallengeMmcs::new(fri_mmcs);
-    let fri_params = FriParameters {
+    let val_mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, rng(INPUT_SALT_SEED));
+    Pcs::new(
+        Dft::default(),
+        val_mmcs,
+        fri_seeded(num_queries, log_blowup, pow_bits, fixed),
+        NUM_RANDOM_CODEWORDS,
+        rng(CODEWORD_SEED),
+    )
+}
+
+/// The FRI half of the configuration, on its own salt stream. Separate seeds:
+/// cloning the input MMCS into this one would blind both commitments from an
+/// identical stream, which is not independent blinding.
+fn fri_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> FriParameters<ChallengeMmcs> {
+    let salts = if fixed { SaltRng::seeded(FRI_SALT_SEED) } else { SaltRng::fresh() };
+    let perm = default_goldilocks_poseidon2_8();
+    let fri_mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, salts);
+    FriParameters {
         log_blowup,
         log_final_poly_len: LOG_FINAL_POLY_LEN,
         max_log_arity: 2,
         num_queries,
         commit_proof_of_work_bits: 0,
         query_proof_of_work_bits: pow_bits,
-        mmcs: challenge_mmcs,
-    };
-    let pcs = Pcs::new(
-        Dft::default(),
-        val_mmcs,
-        fri_params,
-        NUM_RANDOM_CODEWORDS,
-        rng(CODEWORD_SEED),
-    );
-    pcs
+        mmcs: ChallengeMmcs::new(fri_mmcs),
+    }
+}
+
+/// The deployed FRI parameters, fresh salts, for code that runs the FRI
+/// prover itself.
+pub(crate) fn deployed_fri() -> FriParameters<ChallengeMmcs> {
+    fri_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
 }
 
 fn config() -> Config {

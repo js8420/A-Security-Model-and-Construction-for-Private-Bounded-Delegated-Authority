@@ -1,0 +1,47 @@
+﻿cargo :     Finished `release` profile [optimized] target(s) in 2.82s
+At line:1 char:474
++ ... 61008a.txt" -Encoding utf8; cargo run --release -- forge 2>&1 | Out-F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 2.82s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running `target\release\delegation-circuit.exe forge`
+DISPUTING A PROOF BY ITS STRUCTURE: THE FORGER'S BEST RESPONSE
+==============================================================================
+  the ported opening, telling no lie, gives a proof Plonky3 accepts         true
+
+  forgery                                                  runs  Plonky3                            identity     failing q  first failing comparison
+  true statement, trace value at zeta                         8  InvalidOpeningArgument FinalPolyMismatch    false    34  38  40  final value x301
+      every run: port and library reject where Plonky3 does         true
+  true statement, trace value at next row                     8  InvalidOpeningArgument FinalPolyMismatch     true    33  38  39  final value x297
+      every run: port and library reject where Plonky3 does         true
+  true statement, quotient chunk at zeta                      8  InvalidOpeningArgument FinalPolyMismatch    false    35  38  39  final value x298
+      every run: port and library reject where Plonky3 does         true
+  public value changed, proved again                          1  OodEvaluationMismatch index None      false     0   0   0  none
+      every run: port and library reject where Plonky3 does         true
+  run start disagrees with C8, no lie                         1  OodEvaluationMismatch index None      false     0   0   0  none
+      every run: port and library reject where Plonky3 does         true
+  run start disagrees with C8, identity balanced              8  InvalidOpeningArgument FinalPolyMismatch     true    36  38  39  final value x302
+      every run: port and library reject where Plonky3 does         true
+  run start disagrees with C8, balanced, layer 0 smoothed     8  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch     true    40  40  40  layer root 0 x320
+      every run: port and library reject where Plonky3 does         true
+  amount exceeds the units, no lie                            1  OodEvaluationMismatch index None      false     0   0   0  none
+      every run: port and library reject where Plonky3 does         true
+  amount exceeds the units, identity balanced                 8  InvalidOpeningArgument FinalPolyMismatch     true    36  39  40  final value x306
+      every run: port and library reject where Plonky3 does         true
+  amount exceeds the units, balanced, layer 0 smoothed        8  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch     true    40  40  40  layer root 0 x320
+      every run: port and library reject where Plonky3 does         true
+  shares under another domain, no lie                         1  OodEvaluationMismatch index None      false     0   0   0  none
+      every run: port and library reject where Plonky3 does         true
+  shares under another domain, identity balanced              8  InvalidOpeningArgument FinalPolyMismatch     true    34  39  40  final value x302
+      every run: port and library reject where Plonky3 does         true
+  shares under another domain, balanced, layer 0 smoothed     8  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch     true    40  40  40  layer root 0 x320
+      every run: port and library reject where Plonky3 does         true
+
+  failing q is min, median and max over the runs, of 40 queries.
+  A lie folded honestly passes a query only where it lands on one of the 8
+  last-layer values the final polynomial was read from. A smoothed lie fails
+  every query at layer 0. Both checked on every query of every run.
+  queries passed, lies folded honestly, all runs    114 of 1920
+  expected share at 8 of 128 last-layer points         0.0625  observed 0.0594
+

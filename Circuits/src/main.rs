@@ -51,6 +51,7 @@ mod vacuous;
 mod spend2;
 mod sweep;
 mod naysay;
+mod forge;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -193,6 +194,52 @@ fn naysay_section() {
     println!();
 }
 
+/// Stage one, fourth part: forgeries made the way a forger would make them,
+/// lying at the out-of-domain point and redoing the rest honestly, judged by
+/// Plonky3 and by the port.
+fn forge_section() {
+    let r = forge::run();
+    println!("DISPUTING A PROOF BY ITS STRUCTURE: THE FORGER'S BEST RESPONSE");
+    println!("{}", "=".repeat(78));
+    check("the ported opening, telling no lie, gives a proof Plonky3 accepts", r.honest_port_accepted, true);
+    println!();
+    println!("  {:<56} {:>4}  {:<34} {:>8}  {:>12}  {}", "forgery", "runs", "Plonky3", "identity", "failing q", "first failing comparison");
+    let (mut passed, mut drawn) = (0, 0);
+    for row in &r.rows {
+        let f = &row.runs[0];
+        let (lo, mid, hi) = row.failing();
+        let mut at: Vec<(String, usize)> = Vec::new();
+        for g in &row.runs {
+            for (p, n) in &g.first_at {
+                match at.iter_mut().find(|(q, _)| *q == p.name()) {
+                    Some((_, m)) => *m += n,
+                    None => at.push((p.name(), *n)),
+                }
+            }
+        }
+        let at = at.iter().map(|(p, n)| format!("{p} x{n}")).collect::<Vec<_>>().join(", ");
+        let same = |g: &forge::Forgery| g.plonky3 == f.plonky3 && g.identity_holds == f.identity_holds;
+        println!("  {:<56} {:>4}  {:<34} {:>8}  {:>4}{:>4}{:>4}  {}", row.label, row.runs.len(), f.plonky3,
+                 f.identity_holds, lo, mid, hi, if at.is_empty() { "none".to_string() } else { at });
+        diagnostic("    every run: port and library reject where Plonky3 does", row.holds() && row.runs.iter().all(same), true);
+        if row.lying() {
+            passed += row.passed();
+            drawn += row.runs.len() * prover::NUM_QUERIES;
+        }
+    }
+    println!();
+    println!("  failing q is min, median and max over the runs, of {} queries.", prover::NUM_QUERIES);
+    println!("  A lie folded honestly passes a query only where it lands on one of the {}",
+             1 << prover::LOG_FINAL_POLY_LEN);
+    println!("  last-layer values the final polynomial was read from. A smoothed lie fails");
+    println!("  every query at layer 0. Both checked on every query of every run.");
+    println!("  queries passed, lies folded honestly, all runs {:>6} of {}", passed, drawn);
+    println!("  expected share at {} of {} last-layer points      {:>9.4}  observed {:.4}",
+             1 << prover::LOG_FINAL_POLY_LEN, 1 << (prover::LOG_FINAL_POLY_LEN + prover::LOG_BLOWUP),
+             1.0 / (1u32 << prover::LOG_BLOWUP) as f64, passed as f64 / drawn.max(1) as f64);
+    println!();
+}
+
 /// Whether a proof hides its trace, tested by attacking one. The attack must
 /// succeed below the height zero knowledge needs, or it tests nothing, and
 /// fail at the height every reported proof is made at.
@@ -330,6 +377,10 @@ fn main() {
     }
     if std::env::args().any(|a| a == "naysay") {
         naysay_section();
+        return;
+    }
+    if std::env::args().any(|a| a == "forge") {
+        forge_section();
         return;
     }
     if std::env::args().any(|a| a == "zk") {

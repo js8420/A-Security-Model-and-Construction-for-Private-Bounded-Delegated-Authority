@@ -1,0 +1,166 @@
+﻿cargo :     Finished `release` profile [optimized] target(s) in 2.67s
+At line:1 char:574
++ ... 1008b.txt" -Encoding utf8; cargo run --release -- naysay 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 2.67s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running `target\release\delegation-circuit.exe naysay`
+DISPUTING A PROOF BY ITS STRUCTURE, STAGE ONE
+==============================================================================
+  honest proof verifies under the recording challenger         true
+  base elements absorbed into the transcript        56993
+  challenges drawn (incl. proof-of-work)               13
+  challenge elements                                   12
+  query positions drawn, bits each                     40   12
+  checkpoints a defender asserts                       53
+  field elements in those checkpoints                 527
+  every challenge redraws the same from its asserted state         true
+  positions match the attacker's search on every query         true
+
+  corruption                                    rejected  moves Q?  Plonky3 rejects at
+  opened trace value at zeta                        true      true  InvalidOpeningArgument InvalidPowWitness
+    opened trace value at zeta is rejected             true
+  opened trace value at the next row                true      true  InvalidOpeningArgument InvalidPowWitness
+    opened trace value at the next row is rejected         true
+  opened quotient chunk                             true      true  InvalidOpeningArgument InvalidPowWitness
+    opened quotient chunk is rejected                  true
+  final polynomial                                  true      true  InvalidOpeningArgument InvalidPowWitness
+    final polynomial is rejected                       true
+  query proof-of-work witness                       true      true  InvalidOpeningArgument InvalidPowWitness
+    query proof-of-work witness is rejected            true
+  a fold's sibling value, one query                 true     false  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch
+    a fold's sibling value, one query is rejected         true
+  an opened input row, one query                    true     false  InvalidOpeningArgument InputError CapMismatch
+    an opened input row, one query is rejected         true
+  a public value                                    true      true  InvalidOpeningArgument InvalidPowWitness
+    a public value is rejected                         true
+  control: run start disagrees with C8              true      true  OodEvaluationMismatch index None
+    control: run start disagrees with C8 is rejected         true
+  control: amount exceeds the units                 true      true  OodEvaluationMismatch index None
+    control: amount exceeds the units is rejected         true
+  control: shares under another domain              true      true  OodEvaluationMismatch index None
+    control: shares under another domain is rejected         true
+
+  THE OUT-OF-DOMAIN IDENTITY, CONSTRAINT BY CONSTRAINT
+  constraints evaluated at zeta                     13942
+  the decomposition's total equals the quotient, honest proof         true
+  field elements in the defender's assertion        55768
+    run start disagrees with C8: identity fails here and in Plonky3         true
+    amount exceeds the units: identity fails here and in Plonky3         true
+    shares under another domain: identity fails here and in Plonky3         true
+  one constraint on chain, operations: median     94, max    816
+  one constraint on chain, opened values read: median   9, max   65
+
+  THE QUERY PHASE, ONE QUERY AT A TIME
+  queries                                              40
+  global height, bits                                  12
+  fold arities, log                             [2, 2, 1]
+  input leaves, elements hashed (rand, trace, quotient) [6, 14202, 96]
+  input leaves, permutations                   [2, 3551, 24]
+  input path, compressions                             12
+  layer leaves, elements hashed                [10, 10, 6]
+  layer paths, compressions                    [10, 8, 7]
+  terms in the reduced opening                      28468
+  field elements a defender asserts per query          32
+  ... for all queries                                1280
+  honest proof: every comparison of every query holds         true
+  honest proof: library agrees on every root, fold and final value         true
+    run start disagrees with C8: every query holds, Plonky3 rejects at OodEvaluationMismatch index None         true
+    amount exceeds the units: every query holds, Plonky3 rejects at OodEvaluationMismatch index None         true
+    shares under another domain: every query holds, Plonky3 rejects at OodEvaluationMismatch index None         true
+
+  corruption                   query  index  Plonky3                      port, first     port, every failing
+  opened randomisation row         0     96  InvalidOpeningArgument InputError CapMismatch input root 0    input root 0, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened trace row                 0     96  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened quotient row              0     96  InvalidOpeningArgument InputError CapMismatch input root 2    input root 2, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  trace row's salt                 0     96  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 0              0     96  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 11             0     96  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  layer 0 sibling value            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 0 salt                     0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 0 path, level 0            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 1 sibling value            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 1 salt                     0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 1 path, level 0            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 2 sibling value            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 2 salt                     0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  layer 2 path, level 0            0     96  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  opened randomisation row         7   3687  InvalidOpeningArgument InputError CapMismatch input root 0    input root 0, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened trace row                 7   3687  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened quotient row              7   3687  InvalidOpeningArgument InputError CapMismatch input root 2    input root 2, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  trace row's salt                 7   3687  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 0              7   3687  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 11             7   3687  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  layer 0 sibling value            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 0 salt                     7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 0 path, level 0            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 1 sibling value            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 1 salt                     7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 1 path, level 0            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 2 sibling value            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 2 salt                     7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  layer 2 path, level 0            7   3687  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  opened randomisation row        39   1366  InvalidOpeningArgument InputError CapMismatch input root 0    input root 0, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened trace row                39   1366  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  opened quotient row             39   1366  InvalidOpeningArgument InputError CapMismatch input root 2    input root 2, layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  trace row's salt                39   1366  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 0             39   1366  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  trace path, level 11            39   1366  InvalidOpeningArgument InputError CapMismatch input root 1    input root 1
+      same check, same query, nothing else fails         true
+  layer 0 sibling value           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0, layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 0 salt                    39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 0 path, level 0           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 0    layer root 0
+      same check, same query, nothing else fails         true
+  layer 1 sibling value           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1, layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 1 salt                    39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 1 path, level 0           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 1    layer root 1
+      same check, same query, nothing else fails         true
+  layer 2 sibling value           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2, final value
+      same check, same query, nothing else fails         true
+  layer 2 salt                    39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  layer 2 path, level 0           39   1366  InvalidOpeningArgument CommitPhaseMmcsError CapMismatch layer root 2    layer root 2
+      same check, same query, nothing else fails         true
+  corruptions where the port and Plonky3 agree     45 of 45
+  values each query asserts in its chain (reduced opening, then folds) 4
+

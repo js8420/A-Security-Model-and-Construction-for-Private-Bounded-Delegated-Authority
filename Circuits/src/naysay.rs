@@ -123,17 +123,17 @@ impl GrindingChallenger for Recording {
     }
 }
 
-type RConfig = StarkConfig<Pcs, Challenge, Recording>;
-type RProof = Proof<RConfig>;
+pub(crate) type RConfig = StarkConfig<Pcs, Challenge, Recording>;
+pub(crate) type RProof = Proof<RConfig>;
 
 /// A configuration and a handle on its challenger's log. Every challenger the
 /// configuration hands out is a clone sharing that log.
-fn config() -> (RConfig, Recording) {
+pub(crate) fn config() -> (RConfig, Recording) {
     let r = Recording::new();
     (StarkConfig::new(deployed_pcs(), r.clone()), r)
 }
 
-type Air = ComposedAir<{ crate::prover::REGISTERS }, 16, 32, 16, 64>;
+pub(crate) type Air = ComposedAir<{ crate::prover::REGISTERS }, 16, 32, 16, 64>;
 
 /// What a challenged defender asserts: every challenge, in order, with the
 /// state it was drawn from.
@@ -217,8 +217,22 @@ fn pow_state(events: &[Event]) -> Option<Vec<Val>> {
     })
 }
 
+/// Every query position, drawn from the state the proof-of-work was checked
+/// in, as verify_fri draws them. A recording stops where the verifier stopped,
+/// which for a failing query phase is before the last position.
+pub(crate) fn all_positions(events: &[Event], log_global: usize, queries: usize) -> Vec<usize> {
+    let Some(mut c) = events.iter().find_map(|e| match e {
+        Event::Bits { bits, before, .. } if *bits == crate::prover::POW_BITS => Some(before.clone()),
+        _ => None,
+    }) else {
+        return Vec::new();
+    };
+    c.sample_bits(crate::prover::POW_BITS);
+    (0..queries).map(|_| c.sample_bits(log_global)).collect()
+}
+
 /// Verify with the recording challenger; the transcript and the verdict.
-fn record(air: &Air, proof: &RProof, pv: &[Val]) -> (Vec<Event>, Result<(), String>) {
+pub(crate) fn record(air: &Air, proof: &RProof, pv: &[Val]) -> (Vec<Event>, Result<(), String>) {
     let (cfg, log) = config();
     let r = verify(&cfg, air, proof, pv).map_err(|e| format!("{:?}", e));
     (log.take(), r)
@@ -261,7 +275,7 @@ pub struct Landing {
     pub positions_moved: bool,
 }
 
-fn first_word(e: &str) -> String {
+pub(crate) fn first_word(e: &str) -> String {
     e.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).take(3).collect::<Vec<_>>().join(" ")
 }
 
@@ -458,29 +472,31 @@ fn drawn(events: &[Event]) -> Vec<Val> {
         .collect()
 }
 
-/// The identity at zeta from the opened values alone, with alpha and zeta
-/// taken from the recorded transcript.
-fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) -> Identity {
-    let e = drawn(events);
-    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[i..i + 2]).expect("two");
-    let (alpha, zeta) = (ext(0), ext(2));
-
+/// Both sides of the identity at zeta, from opened values: the constraints
+/// folded by alpha over the vanishing polynomial, and the quotient
+/// recomposed from its chunks. Also the number of constraints.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sides(
+    air: &Air,
+    local: &[Challenge],
+    next: &[Challenge],
+    chunks: &[Vec<Challenge>],
+    pv: &[Val],
+    alpha: Challenge,
+    zeta: Challenge,
+    degree_bits: usize,
+) -> (Challenge, Challenge, usize) {
     let pcs = deployed_pcs();
-    let degree = 1usize << proof.degree_bits;
+    let degree = 1usize << degree_bits;
     let init = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, degree >> 1);
     let sels = init.selectors_at_point(zeta);
 
     let trace_domain = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, degree);
-    let chunks = proof.opened_values.quotient_chunks.len();
-    let log_chunks = chunks.trailing_zeros() as usize - 1;
-    let quotient_domain = trace_domain.create_disjoint_domain(1usize << (proof.degree_bits + log_chunks));
-    let domains = quotient_domain.split_domains(chunks);
-    let quotient =
-        recompose_quotient_from_chunks::<RConfig>(&domains, &proof.opened_values.quotient_chunks, zeta);
+    let log_chunks = chunks.len().trailing_zeros() as usize - 1;
+    let quotient_domain = trace_domain.create_disjoint_domain(1usize << (degree_bits + log_chunks));
+    let domains = quotient_domain.split_domains(chunks.len());
+    let quotient = recompose_quotient_from_chunks::<RConfig>(&domains, chunks, zeta);
 
-    let local = &proof.opened_values.trace_local;
-    let zeros = vec![Challenge::ZERO; local.len()];
-    let next = proof.opened_values.trace_next.as_deref().unwrap_or(&zeros);
     let mut b = PerConstraint {
         current: local,
         next,
@@ -495,11 +511,21 @@ fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) -> Identity
         sums: Vec::new(),
     };
     air.eval(&mut b);
-    Identity {
-        constraints: b.values.len(),
-        holds: b.accumulator * sels.inv_vanishing == quotient,
-        assertion_elements: 2 * (b.values.len() + b.sums.len()),
-    }
+    (b.accumulator * sels.inv_vanishing, quotient, b.values.len())
+}
+
+/// The identity at zeta from the opened values alone, with alpha and zeta
+/// taken from the recorded transcript.
+pub(crate) fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) -> Identity {
+    let e = drawn(events);
+    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[i..i + 2]).expect("two");
+    let (alpha, zeta) = (ext(0), ext(2));
+    let local = &proof.opened_values.trace_local;
+    let zeros = vec![Challenge::ZERO; local.len()];
+    let next = proof.opened_values.trace_next.as_deref().unwrap_or(&zeros);
+    let (lhs, rhs, n) =
+        sides(air, local, next, &proof.opened_values.quotient_chunks, pv, alpha, zeta, proof.degree_bits);
+    Identity { constraints: n, holds: lhs == rhs, assertion_elements: 4 * n }
 }
 
 /// What deciding one constraint on chain would read and compute: its own
@@ -667,6 +693,9 @@ pub struct QueryRun {
     /// Each comparison judged a second time by the library itself, and each
     /// fold and the final evaluation recomputed by it: true when all agree.
     pub library_agrees: bool,
+    /// The query's index in the last layer, which the final polynomial is
+    /// checked at.
+    pub final_index: usize,
 }
 
 /// The FRI transcript outputs a query needs, read from a recorded run.
@@ -677,7 +706,7 @@ pub struct Outputs {
     pub positions: Vec<usize>,
 }
 
-fn outputs(events: &[Event], rounds: usize) -> Outputs {
+pub(crate) fn outputs(events: &[Event], rounds: usize) -> Outputs {
     let e = drawn(events);
     let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[2 * i..2 * i + 2]).expect("two");
     // Drawn in order: the constraint alpha, zeta, the FRI batching alpha,
@@ -956,7 +985,7 @@ fn run_query(
             reduced_terms: terms,
         });
     }
-    QueryRun { index, reduced: first, folds, leaves, failed, library_agrees: agrees }
+    QueryRun { index, reduced: first, folds, leaves, failed, library_agrees: agrees, final_index: di }
 }
 
 /// Every query of one proof, given the transcript outputs it was verified
