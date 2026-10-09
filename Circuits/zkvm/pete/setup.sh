@@ -31,6 +31,14 @@ rustc --version
 echo "== Rust packages"
 (cd "$ZKVM/script" && cargo fetch --locked -q)
 (cd "$ZKVM/program" && cargo fetch --locked -q)
+# SP1's executor runner builds a helper program with its own lock files.
+rm -rf /scratch/jshital/paper04/crate-src && mkdir -p /scratch/jshital/paper04/crate-src
+for c in sp1-core-executor-runner-6.8.1 sp1-core-executor-runner-binary-6.8.1; do
+  f=$(ls $CARGO_HOME/registry/cache/*/$c.crate | sed -n 1p)
+  tar -xzf "$f" -C /scratch/jshital/paper04/crate-src
+  (cd /scratch/jshital/paper04/crate-src/$c && cargo fetch -q && cargo metadata --format-version 1 > /dev/null)
+  echo "$c packages fetched"
+done
 
 echo "== Go modules for gnark"
 CRATE=$(ls $CARGO_HOME/registry/cache/*/sp1-recursion-gnark-ffi-6.8.1.crate | sed -n 1p)
