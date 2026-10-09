@@ -1,0 +1,26 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:440
++ ... plit-Path $_.Path -Leaf)" }; cargo run --release -- leaf 2>&1 | Out-F ...
++                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 56.94s
+     Running `target\release\delegation-circuit.exe leaf`
+ONE CONSTRAINT AS A PROGRAM: WHAT AN IDENTITY LEAF READS AND COMPUTES
+==============================================================================
+  constraints compiled                              13942
+  every program, run alone, gives the folder's value         true
+  operations in all programs                      2595008
+  per constraint                       median      p90      p99      max
+  operations                               94      606      816      816
+  opened values read                        9       27       30       65
+  program bytes                           470     3030     4080     4080
+  multiproof siblings                      15       18       25      114
+  worst by operations, constraint                   12702
+  worst by values read, constraint                  13814
+  median, constraint                                 3398
+  Siblings: a multiproof in a tree of 32-byte leaves, four lanes a leaf,
+  over the opened values laid out column by column, zeta then next row.
+  vectors written to ../SourceCode/Reserve/test/ConstraintVectors.sol
+

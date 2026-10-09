@@ -1,0 +1,221 @@
+﻿Compiling 3 files with Solc 0.8.28
+Solc 0.8.28 finished in 1.17s
+Compiler run successful!
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+Logs:
+  one Merkle level over the proof's trees, gas 282435
+
+[PASS] testPermutationGas() (gas: 284058)
+Logs:
+  one permutation, gas 280499
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 3.66ms (10.98ms CPU time)
+
+Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
+[PASS] testLateResolutionRejected() (gas: 743019)
+[PASS] testResolveByBlobs() (gas: 963509)
+Logs:
+  blobs for the proof 53
+  challenge, gas 40638
+  resolve calls 9
+  resolve, execution gas over all calls 186307
+  blob gas, 131072 a blob 6946816
+
+[PASS] testWithheldForfeits() (gas: 738950)
+Logs:
+  withheld: expire, gas 24802
+
+[PASS] testWrongBlobRejected() (gas: 744819)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 25.99ms (7.94ms CPU time)
+
+Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1140319)
+Logs:
+  Open, deposit 256196
+  Open, permit2 168248
+  Settle logged, cover 64 180145
+  Revoke, first range 71928
+  Revoke, later range 50029
+  Claim 11509
+
+[PASS] testChallengeCallDataBudget() (gas: 4953)
+Logs:
+  challenge call data alone, gas 82194896
+  proof bytes 5137181
+  over the 2^24 per-transaction cap x100 489
+
+[PASS] testDepositAgainstPermit2() (gas: 1625545)
+Logs:
+  settle logged, cover 64, deposit 180137
+  settle logged, cover 64, permit2 182009
+    permit2 minus deposit 1872
+
+[PASS] testDigestSettlesOnce() (gas: 425202)
+[PASS] testLoggedAgainstPreventive() (gas: 1089016)
+Logs:
+  accountable, logged, cover 64 180129
+  preventive 32434
+  ratio x100 555
+
+[PASS] testPayeeIsBound() (gas: 302584)
+[PASS] testRevokeIsThePrincipals() (gas: 258016)
+[PASS] testStoredAgainstLogged() (gas: 14281690)
+Logs:
+  cover 14
+    stored 319654
+    logged 70302
+    ratio x100 454
+  cover 30
+    stored 628515
+    logged 105620
+    ratio x100 595
+  cover 64
+    stored 1274261
+    logged 181724
+    ratio x100 701
+  cover 128
+    stored 2514134
+    logged 329208
+    ratio x100 763
+
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 37.90ms (36.12ms CPU time)
+
+Ran 9 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testCannotReopen() (gas: 2557827)
+[PASS] testChallengerSilent() (gas: 2895215)
+[PASS] testCostByVerificationLength() (gas: 34827473)
+Logs:
+  steps 2^ 10
+    rounds 10
+    open and final claim 186136
+    bisection 92170
+    last step, fold, with bonds moving 99822
+    total 378128
+  steps 2^ 14
+    rounds 14
+    open and final claim 186854
+    bisection 121078
+    last step, fold, with bonds moving 106087
+    total 414019
+  steps 2^ 18
+    rounds 18
+    open and final claim 187606
+    bisection 149986
+    last step, fold, with bonds moving 112828
+    total 450420
+  steps 2^ 20
+    rounds 20
+    open and final claim 188389
+    bisection 164440
+    last step, fold, with bonds moving 118890
+    total 471719
+  steps 2^ 21
+    rounds 21
+    open and final claim 189190
+    bisection 171667
+    last step, fold, with bonds moving 124588
+    total 485445
+  steps 2^ 24
+    rounds 24
+    open and final claim 190016
+    bisection 193348
+    last step, fold, with bonds moving 132010
+    total 515374
+
+[PASS] testDearerSteps() (gas: 32054782)
+Logs:
+  steps 2^ 20
+    last step, Poseidon2 level, with bonds moving 362758
+    total 713379
+    last step, load from a blob, with bonds moving 126286
+    total 477484
+  steps 2^ 21
+    last step, Poseidon2 level, with bonds moving 365587
+    total 724519
+    last step, load from a blob, with bonds moving 131995
+    total 491518
+  steps 2^ 24
+    last step, Poseidon2 level, with bonds moving 372420
+    total 754158
+    last step, load from a blob, with bonds moving 139277
+    total 521645
+
+[PASS] testDefenderSilent() (gas: 2555901)
+Logs:
+  defender silent: challenger wins on timeout, gas 22195
+
+[PASS] testEpochIsTheReserves() (gas: 2633428)
+[PASS] testFalseVerdictLoses() (gas: 3760444)
+Logs:
+  false verdict: decided at step 6 agent's bond to the principal
+
+[PASS] testRunOverAnotherProofLoses() (gas: 3495270)
+Logs:
+  run over another proof: decided at the first load
+
+[PASS] testTrueRunStands() (gas: 3715884)
+Logs:
+  true run: defender wins and keeps the challenger's bond
+
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 2.81s (5.61s CPU time)
+
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+Logs:
+  median
+    operations 94
+    slots read and constants 17
+    evaluation gas 50148
+
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+Logs:
+  worst by operations
+    operations 816
+    slots read and constants 45
+    evaluation gas 369331
+
+[PASS] testWorstByReads() (gas: 56036)
+Logs:
+  worst by values read
+    operations 64
+    slots read and constants 65
+    evaluation gas 45783
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.87s (4.08ms CPU time)
+
+Ran 11 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
+[PASS] testEvaluationPointsMatchTheBlobLayout() (gas: 10160)
+[PASS] testFalseInputsRevert() (gas: 3098376)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11514)
+[PASS] testFoldLinearInBeta() (gas: 13510)
+[PASS] testInverseIsAnInverse() (gas: 15138)
+[PASS] testLoadBlobReadsTheProof() (gas: 1291079)
+Logs:
+  load step, one proof word from a blob, gas 90955
+
+[PASS] testLoadBlobRejectsAFalseOpening() (gas: 1072699741)
+[PASS] testLoadPublic() (gas: 316239)
+Logs:
+  load step, one public value, gas 32802
+
+[PASS] testPackRoundTrip() (gas: 11074)
+[PASS] testStepCosts() (gas: 5589125)
+Logs:
+  memory depth 22
+  program depth 20
+  fold step, gas 78212
+  Poseidon2 Merkle level step, gas 337100
+  linear step, 8 terms, gas 150855
+  equality step, gas 63130
+
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.87s (5.64s CPU time)
+
+Ran 6 test suites in 2.88s (8.62s CPU time): 42 tests passed, 0 failed, 0 skipped (42 total tests)

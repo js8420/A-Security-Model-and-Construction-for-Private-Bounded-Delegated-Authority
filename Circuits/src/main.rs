@@ -53,6 +53,7 @@ mod sweep;
 mod naysay;
 mod forge;
 mod assertion;
+mod leaf;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -275,6 +276,31 @@ fn assertion_section() {
     println!();
 }
 
+/// One constraint as a program a contract runs: every constraint compiled,
+/// run against the verifier's folder, profiled, and the worst and median
+/// written as Solidity vectors.
+fn leaf_section() {
+    let path = "../SourceCode/Reserve/test/ConstraintVectors.sol";
+    let p = leaf::profile(path);
+    println!("ONE CONSTRAINT AS A PROGRAM: WHAT AN IDENTITY LEAF READS AND COMPUTES");
+    println!("{}", "=".repeat(78));
+    println!("  constraints compiled                         {:>10}", p.constraints);
+    check("every program, run alone, gives the folder's value", p.agree, true);
+    println!("  operations in all programs                   {:>10}", p.total_ops);
+    println!("  {:<34} {:>8} {:>8} {:>8} {:>8}", "per constraint", "median", "p90", "p99", "max");
+    for (name, q) in [("operations", p.ops), ("opened values read", p.reads),
+                      ("program bytes", p.bytes), ("multiproof siblings", p.siblings)] {
+        println!("  {:<34} {:>8} {:>8} {:>8} {:>8}", name, q[0], q[1], q[2], q[3]);
+    }
+    println!("  worst by operations, constraint              {:>10}", p.worst_ops);
+    println!("  worst by values read, constraint             {:>10}", p.worst_reads_index);
+    println!("  median, constraint                           {:>10}", p.median_index);
+    println!("  Siblings: a multiproof in a tree of 32-byte leaves, four lanes a leaf,");
+    println!("  over the opened values laid out column by column, zeta then next row.");
+    println!("  vectors written to {path}");
+    println!();
+}
+
 /// Whether a proof hides its trace, tested by attacking one. The attack must
 /// succeed below the height zero knowledge needs, or it tests nothing, and
 /// fail at the height every reported proof is made at.
@@ -412,6 +438,10 @@ fn main() {
     }
     if std::env::args().any(|a| a == "naysay") {
         naysay_section();
+        return;
+    }
+    if std::env::args().any(|a| a == "leaf") {
+        leaf_section();
         return;
     }
     if std::env::args().any(|a| a == "assert") {
