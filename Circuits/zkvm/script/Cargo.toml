@@ -1,0 +1,11 @@
+[package]
+name = "dispute-verifier-script"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sp1-sdk = { version = "=6.8.1", features = ["blocking"] }
+sp1-core-executor = "=6.8.1"
+
+[build-dependencies]
+sp1-build = "=6.8.1"

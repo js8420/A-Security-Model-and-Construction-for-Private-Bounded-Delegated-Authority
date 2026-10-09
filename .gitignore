@@ -21,3 +21,5 @@ SourceCode/Reserve/lib/
 SourceCode/Reserve/out/
 SourceCode/Reserve/cache/
 _RefAudit/
+Circuits/zkvm/program/target/
+Circuits/zkvm/script/target/

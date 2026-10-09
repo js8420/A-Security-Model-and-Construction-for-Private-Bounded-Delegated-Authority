@@ -263,6 +263,19 @@ pub(crate) fn all_positions(events: &[Event], log_global: usize, queries: usize)
     (0..queries).map(|_| c.sample_bits(log_global)).collect()
 }
 
+/// One real 128-row proof of the composed circuit and its public values,
+/// written with bincode for the zkVM verifier to read. Returns the bytes
+/// written and whether the proof verifies natively.
+pub fn export(path: &str) -> (usize, bool) {
+    let air = Air::new();
+    let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let proof: RProof = prove(&config().0, &air, t, &pv);
+    let ok = record(&air, &proof, &pv).1.is_ok();
+    let bytes = bincode::serialize(&(&proof, &pv)).expect("serialise");
+    std::fs::write(path, &bytes).expect("write proof");
+    (bytes.len(), ok)
+}
+
 /// Verify with the recording challenger; the transcript element by element,
 /// with the events and the verdict.
 pub(crate) fn record_ops(air: &Air, proof: &RProof, pv: &[Val]) -> (Vec<Event>, Vec<Op>, Result<(), String>) {

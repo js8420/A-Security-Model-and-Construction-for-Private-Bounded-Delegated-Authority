@@ -440,6 +440,12 @@ fn main() {
         naysay_section();
         return;
     }
+    if std::env::args().any(|a| a == "export") {
+        let path = "target/proof_128.bin";
+        let (bytes, ok) = naysay::export(path);
+        println!("  proof and public values written to {path}: {bytes} bytes, verifies natively {ok}");
+        return;
+    }
     if std::env::args().any(|a| a == "leaf") {
         leaf_section();
         return;
