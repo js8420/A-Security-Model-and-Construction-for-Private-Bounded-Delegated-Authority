@@ -1,6 +1,6 @@
 #!/bin/bash
-# Pete login node, once. Downloads everything the build and the proof need,
-# so both batch jobs run without internet. Compiles nothing.
+# Run by setup.sbatch on a compute node. Gets the tools and downloads
+# everything the build and the proof need. Compiles nothing.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ZKVM=$(cd "$HERE/.." && pwd)
@@ -13,6 +13,7 @@ sha256sum "$ELF" "$PROOF"
 
 echo "== tools: gcc 13, Go 1.24, clang 18, protoc (conda-forge, glibc 2.17 sysroot)"
 if [ ! -x "$E/bin/go" ]; then
+  rm -rf "$E"
   /scratch/jshital/miniforge3/bin/conda create -y -q -p "$E" -c conda-forge --override-channels \
     go=1.24.13 gcc=13 gxx=13 sysroot_linux-64=2.17 clang=18 libclang=18 libprotobuf=5.28
 fi
