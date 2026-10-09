@@ -6,6 +6,21 @@ edition = "2021"
 [dependencies]
 sp1-sdk = { version = "=6.8.1", features = ["blocking"] }
 sp1-core-executor = "=6.8.1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[features]
+# The Groth16 wrap through gnark's Go library, built natively. Needed only by
+# the prove binary; it needs Go 1.24 at build time, and no Docker.
+prove = ["sp1-sdk/native-gnark"]
+
+[[bin]]
+name = "dispute-verifier-script"
+path = "src/main.rs"
+
+[[bin]]
+name = "prove"
+path = "src/bin/prove.rs"
+required-features = ["prove"]
 
 [build-dependencies]
 sp1-build = "=6.8.1"
