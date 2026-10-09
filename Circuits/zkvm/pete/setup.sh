@@ -17,7 +17,11 @@ if [ ! -x "$E/bin/go" ]; then
   /scratch/jshital/miniforge3/bin/conda create -y -q -p "$E" -c conda-forge --override-channels \
     go=1.24.13 gcc=13 gxx=13 sysroot_linux-64=2.17 clang=18 libclang=18 libprotobuf=5.28
 fi
+if [ ! -x "$E/bin/git" ]; then
+  /scratch/jshital/miniforge3/bin/conda install -y -q -p "$E" -c conda-forge --override-channels git
+fi
 $CC --version | sed -n 1p
+git --version
 go version
 clang --version | sed -n 1p
 $PROTOC --version
@@ -32,6 +36,7 @@ echo "== Go modules for gnark"
 CRATE=$(ls $CARGO_HOME/registry/cache/*/sp1-recursion-gnark-ffi-6.8.1.crate | sed -n 1p)
 rm -rf /scratch/jshital/paper04/gnark-src && mkdir -p /scratch/jshital/paper04/gnark-src
 tar -xzf "$CRATE" -C /scratch/jshital/paper04/gnark-src
+go env GOPROXY GOFLAGS GONOSUMDB GOPRIVATE
 (cd /scratch/jshital/paper04/gnark-src/sp1-recursion-gnark-ffi-6.8.1/go && go mod download)
 echo "go modules cached in $GOPATH/pkg/mod"
 
