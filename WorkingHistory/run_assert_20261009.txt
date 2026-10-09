@@ -1,0 +1,69 @@
+﻿cargo :    Compiling delegation-circuit v0.1.0 (E:\ZK_Delegated_Authority_for_Agentic_Payments\ResearchPaper04_TDSC12_submission\Circuits)
+At line:1 char:377
++ ... it-Path $_.Path -Leaf)" }; cargo run --release -- assert 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...ssion\Circuits):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 55.79s
+     Running `target\release\delegation-circuit.exe assert`
+DISPUTING A PROOF BY ITS STRUCTURE: WHAT A DEFENDER ASSERTS
+==============================================================================
+  chain                                    steps rounds  state  interactive       full
+  transcript, one permutation a step       14259     14      8          112     114080
+  identity, one constraint a step          13942     14      2           28      27886
+  random input leaf                            2      1      8            8         24
+  trace input leaf                          3551     12      8           96      28416
+  quotient input leaf                         24      5      8           40        200
+  reduced opening, one term a step         28468     15      4           60     113876
+  State and assertion sizes in field elements; interactive is one state a
+  round, full is every state. Lower is better for both.
+
+  transcript replayed permutation by permutation gives every draw         true
+  draws checked                                        53
+  each constraint alone equals the folder's value, all of them         true
+  the identity's running sum ends where the folder does         true
+  honest proof: the identity's sum meets its target         true
+  every query's reduced-opening sum ends at the port's value         true
+  every query's three leaf sponges end at the port's digests         true
+
+  chain            defender lies                                          steps rounds  found rejected
+  transcript       state 1                                                14259     13   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  transcript       state 7129                                             14259     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  transcript       state 14259                                            14259     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         sum 1                                                  13942     13   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         sum 6971                                               13942     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         sum 13942                                              13942     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  trace leaf       state 1                                                 3551     11   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  trace leaf       state 1775                                              3551     12   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  trace leaf       state 3551                                              3551     12   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  sum 1                                                  28468     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  sum 14234                                              28468     15   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  sum 28468                                              28468     15   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         false payment, no lie at zeta; covered at sum 1        13942     13   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         false payment, no lie at zeta; covered at sum 4647     13942     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  identity         false payment, no lie at zeta; covered at sum 13942    13942     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  false payment, smoothed; covered at sum 1              28468     14   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  false payment, smoothed; covered at sum 14234          28468     15   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  reduced opening  false payment, smoothed; covered at sum 28468          28468     15   true     true
+      bisection lands on the lie and the leaf refutes it         true
+  smoothed forgery: the committed value opens layer root 0 and differs from the true sum         true
+  folded-honestly forgery: claiming the final polynomial's value fails the last fold         true
+

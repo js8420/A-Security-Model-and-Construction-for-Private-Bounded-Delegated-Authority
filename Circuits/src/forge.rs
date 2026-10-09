@@ -131,7 +131,7 @@ fn open(
     ch: &mut Challenger,
     lie: Lie,
     ood: &Ood,
-) -> (Claims, <Pcs as p3_commit::Pcs<Challenge, Challenger>>::Proof) {
+) -> (Claims, <Pcs as p3_commit::Pcs<Challenge, Challenger>>::Proof, Vec<Challenge>) {
     let perm = default_goldilocks_poseidon2_8();
     let mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, SaltRng::seeded(0));
     let mats: Vec<Vec<&RowMajorMatrix<Val>>> = rounds.iter().map(|(d, _)| mmcs.get_matrices(*d)).collect();
@@ -194,6 +194,7 @@ fn open(
 
     let folding: TwoAdicFriFoldingForMmcs<Val, ValMmcs> = p3_fri::TwoAdicFriFolding(PhantomData);
     let refs: Vec<(&Data, Vec<Vec<Challenge>>)> = rounds.iter().map(|(d, p)| (*d, p.clone())).collect();
+    let layer0 = inputs[0].clone();
     let fri = prove_fri(&folding, &deployed_fri(), inputs, ch, log_global, &refs, &mmcs);
 
     // The hiding wrapper keeps the random codewords' values out of the
@@ -206,11 +207,17 @@ fn open(
                 .collect()
         })
         .collect();
-    (claims, (hidden, fri))
+    (claims, (hidden, fri), layer0)
 }
 
 /// uni-stark's prove, step for step, with the opening replaced by the port.
 pub fn forge(air: &Air, trace: RowMajorMatrix<Val>, pv: &[Val], lie: Lie) -> RProof {
+    forge_with_layer0(air, trace, pv, lie).0
+}
+
+/// The same, with the vector the forger committed as FRI layer 0, in
+/// bit-reversed order: what it would assert a query's reduced opening to be.
+pub fn forge_with_layer0(air: &Air, trace: RowMajorMatrix<Val>, pv: &[Val], lie: Lie) -> (RProof, Vec<Challenge>) {
     let pcs = deployed_pcs();
     let nd = |d: usize| <Pcs as p3_commit::Pcs<Challenge, Challenger>>::natural_domain_for_degree(&pcs, d);
     let mut ch = Challenger::new(default_goldilocks_poseidon2_8());
@@ -263,9 +270,9 @@ pub fn forge(air: &Air, trace: RowMajorMatrix<Val>, pv: &[Val], lie: Lie) -> RPr
         (&q_data, vec![vec![zeta]; chunks]),
     ];
     let ood = Ood { air, pv, alpha, zeta, degree_bits: log_ext, width: layout.main_width };
-    let (claims, opening_proof) = open(&rounds, &mut ch, lie, &ood);
+    let (claims, opening_proof, layer0) = open(&rounds, &mut ch, lie, &ood);
 
-    Proof {
+    let proof = Proof {
         commitments: Commitments { trace: trace_commit, quotient_chunks: q_commit, random: Some(r_commit) },
         opened_values: OpenedValues {
             trace_local: claims[1][0][0].clone(),
@@ -277,7 +284,8 @@ pub fn forge(air: &Air, trace: RowMajorMatrix<Val>, pv: &[Val], lie: Lie) -> RPr
         },
         opening_proof,
         degree_bits: log_ext,
-    }
+    };
+    (proof, layer0)
 }
 
 /// One forgery, judged by Plonky3 and by the port.

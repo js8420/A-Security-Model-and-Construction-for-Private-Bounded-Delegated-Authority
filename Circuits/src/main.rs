@@ -52,6 +52,7 @@ mod spend2;
 mod sweep;
 mod naysay;
 mod forge;
+mod assertion;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -240,6 +241,40 @@ fn forge_section() {
     println!();
 }
 
+/// Stage one, fifth part: every chain a defender asserts, built from a real
+/// proof and checked against the verifier, and the bisection game played
+/// against defenders who lie.
+fn assertion_section() {
+    let r = assertion::run();
+    println!("DISPUTING A PROOF BY ITS STRUCTURE: WHAT A DEFENDER ASSERTS");
+    println!("{}", "=".repeat(78));
+    println!("  {:<38} {:>7} {:>6} {:>6} {:>12} {:>10}", "chain", "steps", "rounds", "state", "interactive", "full");
+    for z in &r.sizes {
+        println!("  {:<38} {:>7} {:>6} {:>6} {:>12} {:>10}", z.name, z.steps, z.rounds(), z.state, z.interactive(), z.full());
+    }
+    println!("  State and assertion sizes in field elements; interactive is one state a");
+    println!("  round, full is every state. Lower is better for both.");
+    println!();
+    check("transcript replayed permutation by permutation gives every draw", r.transcript_agrees, true);
+    println!("  draws checked                                {:>10}", r.transcript_draws);
+    check("each constraint alone equals the folder's value, all of them", r.identity_values_agree, true);
+    check("the identity's running sum ends where the folder does", r.identity_end_agrees, true);
+    check("honest proof: the identity's sum meets its target", r.identity_holds, true);
+    check("every query's reduced-opening sum ends at the port's value", r.reduced_agree == r.queries, true);
+    check("every query's three leaf sponges end at the port's digests", r.leaves_agree == r.queries, true);
+    println!();
+    println!("  {:<16} {:<52} {:>7} {:>6} {:>6} {:>8}", "chain", "defender lies", "steps", "rounds", "found", "rejected");
+    for g in r.games.iter().chain(&r.forgeries) {
+        println!("  {:<16} {:<52} {:>7} {:>6} {:>6} {:>8}", g.chain, g.lie, g.steps, g.rounds, g.found, g.rejects);
+        diagnostic("    bisection lands on the lie and the leaf refutes it", g.found && g.rejects, true);
+    }
+    check("smoothed forgery: the committed value opens layer root 0 and differs from the true sum",
+          r.smoothed_root_passes_with_lie, true);
+    check("folded-honestly forgery: claiming the final polynomial's value fails the last fold",
+          r.final_fold_rejects, true);
+    println!();
+}
+
 /// Whether a proof hides its trace, tested by attacking one. The attack must
 /// succeed below the height zero knowledge needs, or it tests nothing, and
 /// fail at the height every reported proof is made at.
@@ -377,6 +412,10 @@ fn main() {
     }
     if std::env::args().any(|a| a == "naysay") {
         naysay_section();
+        return;
+    }
+    if std::env::args().any(|a| a == "assert") {
+        assertion_section();
         return;
     }
     if std::env::args().any(|a| a == "forge") {

@@ -39,11 +39,20 @@ pub enum Event {
     Bits { bits: usize, value: usize, before: Challenger },
 }
 
+/// Every element in and out of the sponge, in order: what the transcript is
+/// made of, element by element.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Op {
+    In(Val),
+    Out(Val),
+}
+
 /// The deployed challenger, writing down what it is asked.
 #[derive(Clone)]
 pub struct Recording {
     inner: Challenger,
     log: Arc<Mutex<Vec<Event>>>,
+    ops: Arc<Mutex<Vec<Op>>>,
 }
 
 impl Recording {
@@ -51,7 +60,12 @@ impl Recording {
         Self {
             inner: Challenger::new(default_goldilocks_poseidon2_8()),
             log: Arc::new(Mutex::new(Vec::new())),
+            ops: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn op(&self, o: Op) {
+        self.ops.lock().expect("ops").push(o);
     }
 
     fn absorbed(&self, n: usize) {
@@ -66,11 +80,16 @@ impl Recording {
     fn take(&self) -> Vec<Event> {
         std::mem::take(&mut *self.log.lock().expect("log"))
     }
+
+    fn take_ops(&self) -> Vec<Op> {
+        std::mem::take(&mut *self.ops.lock().expect("ops"))
+    }
 }
 
 impl CanObserve<Val> for Recording {
     fn observe(&mut self, value: Val) {
         self.absorbed(1);
+        self.op(Op::In(value));
         self.inner.observe(value);
     }
 }
@@ -79,6 +98,11 @@ impl CanObserve<MerkleCap<Val, [Val; 4]>> for Recording {
     fn observe(&mut self, value: MerkleCap<Val, [Val; 4]>) {
         let n = value.as_ref().len() * 4;
         self.absorbed(n);
+        for d in value.as_ref() {
+            for v in d {
+                self.op(Op::In(*v));
+            }
+        }
         self.inner.observe(value);
     }
 }
@@ -87,6 +111,7 @@ impl CanSample<Val> for Recording {
     fn sample(&mut self) -> Val {
         let before = self.inner.clone();
         let v: Val = self.inner.sample();
+        self.op(Op::Out(v));
         self.log.lock().expect("log").push(Event::Drawn { value: vec![v], before });
         v
     }
@@ -96,6 +121,9 @@ impl CanSample<Challenge> for Recording {
     fn sample(&mut self) -> Challenge {
         let before = self.inner.clone();
         let v: Challenge = self.inner.sample();
+        for c in v.as_basis_coefficients_slice() {
+            self.op(Op::Out(*c));
+        }
         self.log
             .lock()
             .expect("log")
@@ -107,6 +135,10 @@ impl CanSample<Challenge> for Recording {
 impl CanSampleBits<usize> for Recording {
     fn sample_bits(&mut self, bits: usize) -> usize {
         let before = self.inner.clone();
+        // sample_bits draws one base element and masks it; the element is what
+        // the sponge gave out.
+        let drawn: Val = before.clone().sample();
+        self.op(Op::Out(drawn));
         let value = self.inner.sample_bits(bits);
         self.log.lock().expect("log").push(Event::Bits { bits, value, before });
         value
@@ -229,6 +261,14 @@ pub(crate) fn all_positions(events: &[Event], log_global: usize, queries: usize)
     };
     c.sample_bits(crate::prover::POW_BITS);
     (0..queries).map(|_| c.sample_bits(log_global)).collect()
+}
+
+/// Verify with the recording challenger; the transcript element by element,
+/// with the events and the verdict.
+pub(crate) fn record_ops(air: &Air, proof: &RProof, pv: &[Val]) -> (Vec<Event>, Vec<Op>, Result<(), String>) {
+    let (cfg, log) = config();
+    let r = verify(&cfg, air, proof, pv).map_err(|e| format!("{:?}", e));
+    (log.take(), log.take_ops(), r)
 }
 
 /// Verify with the recording challenger; the transcript and the verdict.
@@ -474,7 +514,7 @@ fn drawn(events: &[Event]) -> Vec<Val> {
 
 /// Both sides of the identity at zeta, from opened values: the constraints
 /// folded by alpha over the vanishing polynomial, and the quotient
-/// recomposed from its chunks. Also the number of constraints.
+/// recomposed from its chunks. Also every constraint's value.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sides(
     air: &Air,
@@ -485,7 +525,7 @@ pub(crate) fn sides(
     alpha: Challenge,
     zeta: Challenge,
     degree_bits: usize,
-) -> (Challenge, Challenge, usize) {
+) -> (Challenge, Challenge, Vec<Challenge>) {
     let pcs = deployed_pcs();
     let degree = 1usize << degree_bits;
     let init = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, degree >> 1);
@@ -511,7 +551,7 @@ pub(crate) fn sides(
         sums: Vec::new(),
     };
     air.eval(&mut b);
-    (b.accumulator * sels.inv_vanishing, quotient, b.values.len())
+    (b.accumulator * sels.inv_vanishing, quotient, b.values)
 }
 
 /// The identity at zeta from the opened values alone, with alpha and zeta
@@ -525,7 +565,7 @@ pub(crate) fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) 
     let next = proof.opened_values.trace_next.as_deref().unwrap_or(&zeros);
     let (lhs, rhs, n) =
         sides(air, local, next, &proof.opened_values.quotient_chunks, pv, alpha, zeta, proof.degree_bits);
-    Identity { constraints: n, holds: lhs == rhs, assertion_elements: 4 * n }
+    Identity { constraints: n.len(), holds: lhs == rhs, assertion_elements: 4 * n.len() }
 }
 
 /// What deciding one constraint on chain would read and compute: its own
@@ -723,14 +763,14 @@ type InputOpening = BatchOpening<Val, ValMmcs>;
 
 /// One matrix of one input round: its domain's log size and, per opening
 /// point, the point and every value at it (public, then the random codewords).
-struct Matrix {
-    log_size: usize,
-    points: Vec<(Challenge, Vec<Challenge>)>,
+pub(crate) struct Matrix {
+    pub(crate) log_size: usize,
+    pub(crate) points: Vec<(Challenge, Vec<Challenge>)>,
 }
 
 /// The rounds uni-stark hands the PCS, with the hiding wrapper's random
 /// openings appended as its verify does.
-fn rounds(proof: &RProof, zeta: Challenge) -> Vec<Vec<Matrix>> {
+pub(crate) fn rounds(proof: &RProof, zeta: Challenge) -> Vec<Vec<Matrix>> {
     let pcs = deployed_pcs();
     let degree = 1usize << proof.degree_bits;
     let nd = |d: usize| <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, d);
@@ -774,7 +814,7 @@ fn mmcs() -> ValMmcs {
 
 /// A leaf digest walked up a binary path; the root reached and the index
 /// left over, which names the cap entry.
-fn walk(leaf: [Val; 4], siblings: &[[Val; 4]], mut index: usize, c: &Compress) -> ([Val; 4], usize) {
+pub(crate) fn walk(leaf: [Val; 4], siblings: &[[Val; 4]], mut index: usize, c: &Compress) -> ([Val; 4], usize) {
     let mut d = leaf;
     for s in siblings {
         d = if index & 1 == 0 { c.compress([d, *s]) } else { c.compress([*s, d]) };
@@ -783,7 +823,7 @@ fn walk(leaf: [Val; 4], siblings: &[[Val; 4]], mut index: usize, c: &Compress) -
     (d, index)
 }
 
-fn at_root(cap: &MerkleCap<Val, [Val; 4]>, (root, i): ([Val; 4], usize)) -> bool {
+pub(crate) fn at_root(cap: &MerkleCap<Val, [Val; 4]>, (root, i): ([Val; 4], usize)) -> bool {
     i < cap.num_roots() && cap[i] == root
 }
 
@@ -804,7 +844,7 @@ fn interpolate(xs: &[Val], ys: &[Challenge], beta: Challenge) -> Challenge {
     out
 }
 
-fn fold(index: usize, log_folded: usize, log_arity: usize, beta: Challenge, evals: &[Challenge]) -> Challenge {
+pub(crate) fn fold(index: usize, log_folded: usize, log_arity: usize, beta: Challenge, evals: &[Challenge]) -> Challenge {
     let start = Val::two_adic_generator(log_folded + log_arity).exp_u64(reverse_bits_len(index, log_folded) as u64);
     let mut xs: Vec<Val> = Val::two_adic_generator(log_arity).shifted_powers(start).take(1 << log_arity).collect();
     reverse_slice_index_bits(&mut xs);
