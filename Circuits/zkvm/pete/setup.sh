@@ -1,47 +1,46 @@
 #!/bin/bash
-# Pete login node, once. Builds the Groth16 prover and downloads the circuit
-# files, so the batch job needs no internet. Run from this folder:
-#   bash setup.sh
+# Pete login node, once. Downloads everything the build and the proof need,
+# so both batch jobs run without internet. Compiles nothing.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-SCRIPT="$HERE/../script"
-ELF="$HERE/../program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier"
-PROOF="$HERE/../../target/proof_128.bin"
-GO_DIR=/scratch/jshital/go1.24
+ZKVM=$(cd "$HERE/.." && pwd)
+ELF="$ZKVM/program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier"
+PROOF="$ZKVM/../target/proof_128.bin"
 source "$HERE/env.sh"
 
 echo "== inputs"
-ls -l "$ELF" "$PROOF"
+sha256sum "$ELF" "$PROOF"
 
-echo "== Go 1.24 (gnark is written in Go)"
-if [ ! -x "$GO_DIR/bin/go" ]; then
-  mkdir -p "$GO_DIR"
-  curl -fsSL https://go.dev/dl/go1.24.4.linux-amd64.tar.gz | tar -xz -C "$GO_DIR" --strip-components=1
+echo "== tools: gcc 13, Go 1.24, clang 18, protoc (conda-forge, glibc 2.17 sysroot)"
+if [ ! -x "$E/bin/go" ]; then
+  /scratch/jshital/miniforge3/bin/conda create -y -q -p "$E" -c conda-forge --override-channels \
+    go=1.24.13 gcc=13 gxx=13 sysroot_linux-64=2.17 clang=18 libclang=18 libprotobuf=5.28
 fi
+$CC --version | sed -n 1p
 go version
-
-echo "== protoc (reads SP1's message definitions)"
-if [ -z "$PROTOC" ]; then
-  mkdir -p /scratch/jshital/protoc && cd /scratch/jshital/protoc
-  curl -fsSLO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip
-  python3 -c 'import zipfile;zipfile.ZipFile("protoc-28.3-linux-x86_64.zip").extractall(".")'
-  chmod +x bin/protoc && cd "$HERE" && source "$HERE/env.sh"
-fi
+clang --version | sed -n 1p
 $PROTOC --version
+ls "$LIBCLANG_PATH"/libclang.so* | sed -n 1p
+rustc --version
 
-echo "== libclang (reads gnark's C header)"
-if [ -z "${LIBCLANG_PATH:-}" ]; then
-  python3 -m pip install --user --quiet libclang==18.1.1
-  echo "installed; env.sh finds it from now on"
-  source "$HERE/env.sh"
+echo "== Rust packages"
+(cd "$ZKVM/script" && cargo fetch --locked -q)
+(cd "$ZKVM/program" && cargo fetch --locked -q)
+
+echo "== Go modules for gnark"
+CRATE=$(ls $CARGO_HOME/registry/cache/*/sp1-recursion-gnark-ffi-6.8.1.crate | sed -n 1p)
+rm -rf /scratch/jshital/paper04/gnark-src && mkdir -p /scratch/jshital/paper04/gnark-src
+tar -xzf "$CRATE" -C /scratch/jshital/paper04/gnark-src
+(cd /scratch/jshital/paper04/gnark-src/sp1-recursion-gnark-ffi-6.8.1/go && go mod download)
+echo "go modules cached in $GOPATH/pkg/mod"
+
+echo "== Groth16 circuit files (SP1 circuit v6.1.0)"
+G=$HOME/.sp1/circuits/groth16/v6.1.0
+if [ ! -f "$G/.complete" ]; then
+  rm -rf "$G" && mkdir -p "$G"
+  curl -fL --progress-bar https://sp1-circuits.s3-us-east-2.amazonaws.com/v6.1.0-groth16.tar.gz -o "$G/artifacts.tar.gz"
+  tar -Pxzf "$G/artifacts.tar.gz" -C "$G" && rm "$G/artifacts.tar.gz" && touch "$G/.complete"
 fi
-echo "LIBCLANG_PATH=$LIBCLANG_PATH"
-
-echo "== build (the guest program is not rebuilt; the measured ELF is used)"
-cd "$SCRIPT"
-SP1_SKIP_PROGRAM_BUILD=true cargo build --release --features prove --bin prove
-
-echo "== Groth16 circuit files"
-./target/release/prove fetch
-du -sh ~/.sp1/circuits/groth16/* 2>/dev/null || true
+ls -la "$G"
+du -sh "$G"
 echo "setup done"

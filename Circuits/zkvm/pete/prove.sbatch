@@ -1,6 +1,5 @@
 #!/bin/bash
-# One CPU Groth16 proof on a bigmem node. Submit from this folder:
-#   sbatch prove.sbatch
+# One CPU Groth16 proof on a bigmem node. Submit from this folder.
 #SBATCH --job-name=groth16
 #SBATCH --partition=bigmem
 #SBATCH --nodes=1
@@ -12,10 +11,11 @@
 set -euo pipefail
 HERE=$SLURM_SUBMIT_DIR
 source "$HERE/env.sh"
-export RUST_LOG=info
+export RUST_LOG=info TMPDIR=/scratch/jshital/tmp
 OUT="$HERE/out_$SLURM_JOB_ID"
 echo "node $(hostname), cpus $SLURM_CPUS_PER_TASK, start $(date)"
-TIMER=""; [ -x /usr/bin/time ] && TIMER="/usr/bin/time -v"
+TIMER=""
+if [ -x /usr/bin/time ]; then TIMER="/usr/bin/time -v"; fi
 $TIMER "$HERE/../script/target/release/prove" "$HERE/../../target/proof_128.bin" "$OUT"
 echo "end $(date)"
-cat "$OUT/onchain.txt" | grep -v "^proof \|^public_values "
+grep -v "^proof \|^public_values " "$OUT/onchain.txt"
