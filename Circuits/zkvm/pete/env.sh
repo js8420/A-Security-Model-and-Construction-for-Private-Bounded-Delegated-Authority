@@ -12,5 +12,5 @@ export LIBCLANG_PATH=$E/lib
 export PROTOC=$E/bin/protoc
 export GOPATH=/scratch/jshital/gopath
 export GOTOOLCHAIN=local
-export GOPROXY=https://proxy.golang.org,direct GOFLAGS= GOPRIVATE= GONOSUMDB=
+export GOPROXY=https://proxy.golang.org,https://goproxy.cn,direct GOFLAGS= GOPRIVATE= GONOSUMDB=
 true
