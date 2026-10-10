@@ -1,54 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
+import {console} from "forge-std/Test.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {Verifier} from "../src/sp1/v6.1.0/Groth16Verifier.sol";
+import {Groth16Result} from "./Groth16Result.sol";
 
 /// The dispute's validity proof on chain: Succinct's v6.1.0 Groth16 verifier
 /// checking the proof Pete made of the deployed STARK verifier.
-contract SP1Groth16Gas is Test {
-    string constant RESULT = "../../WorkingHistory/groth16_20261009/onchain.txt";
-
+contract SP1Groth16Gas is Groth16Result {
     SP1Verifier verifier;
-    bytes32 vkey;
-    bytes publicValues;
-    bytes proof;
 
     function setUp() public {
         verifier = new SP1Verifier();
-        vkey = vm.parseBytes32(field("vkey"));
-        publicValues = vm.parseBytes(field("public_values"));
-        proof = vm.parseBytes(field("proof"));
-    }
-
-    function field(string memory key) internal returns (string memory) {
-        vm.closeFile(RESULT);
-        for (uint256 i; i < 16; ++i) {
-            string memory line = vm.replace(vm.readLine(RESULT), "\r", "");
-            string[] memory kv = vm.split(line, " ");
-            if (kv.length == 2 && keccak256(bytes(kv[0])) == keccak256(bytes(key))) return kv[1];
-        }
-        revert(string.concat("no ", key, " in onchain.txt"));
-    }
-
-    function calldataGas(bytes memory data) internal pure returns (uint256 standard, uint256 floor) {
-        uint256 zeros;
-        for (uint256 i; i < data.length; ++i) {
-            if (data[i] == 0) ++zeros;
-        }
-        uint256 tokens = zeros + 4 * (data.length - zeros);
-        standard = 4 * tokens;
-        floor = 10 * tokens;
+        _load();
     }
 
     function testVerifyGas() public view {
-        uint256 g = gasleft();
-        verifier.verifyProof(vkey, publicValues, proof);
-        uint256 used = g - gasleft();
+        bytes32 k = vkey;
+        bytes memory pv = publicValues;
+        bytes memory p = proof;
+        verifier.verifyProof(k, pv, p);
+        uint256 used = vm.lastCallGas().gasTotalUsed;
 
         bytes memory data = abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof));
-        (uint256 standard, uint256 floor) = calldataGas(data);
+        (uint256 standard, uint256 floor) = _calldataGas(data);
         uint256 execution = 21000 + standard + used;
         uint256 total = execution > 21000 + floor ? execution : 21000 + floor;
 
