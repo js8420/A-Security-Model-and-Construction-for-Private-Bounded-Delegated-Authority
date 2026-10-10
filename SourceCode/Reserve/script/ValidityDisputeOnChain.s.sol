@@ -79,11 +79,12 @@ contract ValidityDisputeOnChain is Script {
         acc.settleLogged(id, address(0xBEEF), 1000, digest, e, commitment, abi.encodePacked(r, s, v));
     }
 
-    function _field(string memory key) internal returns (string memory) {
-        vm.closeFile(RESULT);
-        for (uint256 i; i < 16; ++i) {
-            string memory line = vm.replace(vm.readLine(RESULT), "\r", "");
-            string[] memory kv = vm.split(line, " ");
+    /// Reads the whole file at once: a line cursor is shared by every test
+    /// running in parallel and gave one of them another's line.
+    function _field(string memory key) internal view returns (string memory) {
+        string[] memory lines = vm.split(vm.readFile(RESULT), "\n");
+        for (uint256 i; i < lines.length; ++i) {
+            string[] memory kv = vm.split(vm.replace(lines[i], "\r", ""), " ");
             if (kv.length == 2 && keccak256(bytes(kv[0])) == keccak256(bytes(key))) return kv[1];
         }
         revert(string.concat("no ", key, " in onchain.txt"));

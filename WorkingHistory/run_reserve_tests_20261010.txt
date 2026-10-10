@@ -1,0 +1,94 @@
+﻿No files changed, compilation skipped
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+[PASS] testPermutationGas() (gas: 284058)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 4.02ms (12.30ms CPU time)
+
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175455)
+[PASS] testTamperedPublicValuesRevert() (gas: 267532)
+[FAIL: EvmError: Revert] testVerifyGas() (gas: 267310)
+[PASS] testWrongProgramRevert() (gas: 267020)
+[PASS] testWrongVerifierSelectorRevert() (gas: 50250)
+Suite result: FAILED. 4 passed; 1 failed; 0 skipped; finished in 15.27ms (15.52ms CPU time)
+
+Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
+[PASS] testLateResolutionRejected() (gas: 743019)
+[PASS] testResolveByBlobs() (gas: 963509)
+[PASS] testWithheldForfeits() (gas: 738950)
+[PASS] testWrongBlobRejected() (gas: 744819)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 15.20ms (8.06ms CPU time)
+
+Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1140319)
+[PASS] testChallengeCallDataBudget() (gas: 4953)
+[PASS] testDepositAgainstPermit2() (gas: 1625545)
+[PASS] testDigestSettlesOnce() (gas: 425202)
+[PASS] testLoggedAgainstPreventive() (gas: 1089016)
+[PASS] testPayeeIsBound() (gas: 302584)
+[PASS] testRevokeIsThePrincipals() (gas: 258016)
+[PASS] testStoredAgainstLogged() (gas: 14281690)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 29.43ms (42.06ms CPU time)
+
+Ran 12 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
+[PASS] testAnswerPaysTheAgent() (gas: 393571)
+[PASS] testEarlyExpireRefused() (gas: 79228)
+[PASS] testLateAnswerRefused() (gas: 108597)
+[PASS] testNoAnswerForfeitsTheAgentBond() (gas: 115633)
+[PASS] testNoExpireAfterAnswer() (gas: 390839)
+[PASS] testProofAfterRevocationStillAnswersItsEpoch() (gas: 474280)
+[PASS] testProofOfAnotherRecordFails() (gas: 708556)
+[PASS] testPublicValuesAreTheReserveRecord() (gas: 44516)
+[PASS] testSecondChallengeRefused() (gas: 86546)
+[PASS] testUnsettledDigestCannotOpen() (gas: 32501)
+[PASS] testWrongBondCannotOpen() (gas: 24412)
+[PASS] testWrongEpochCannotOpen() (gas: 32531)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 2.77s (20.39ms CPU time)
+
+Ran 9 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testCannotReopen() (gas: 2557827)
+[PASS] testChallengerSilent() (gas: 2895215)
+[PASS] testCostByVerificationLength() (gas: 34827473)
+[PASS] testDearerSteps() (gas: 32054782)
+[PASS] testDefenderSilent() (gas: 2555901)
+[PASS] testEpochIsTheReserves() (gas: 2633428)
+[PASS] testFalseVerdictLoses() (gas: 3760444)
+[PASS] testRunOverAnotherProofLoses() (gas: 3495270)
+[PASS] testTrueRunStands() (gas: 3715884)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 2.77s (5.47s CPU time)
+
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+[PASS] testWorstByReads() (gas: 56036)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 3.14s (5.84ms CPU time)
+
+Ran 11 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
+[PASS] testEvaluationPointsMatchTheBlobLayout() (gas: 10160)
+[PASS] testFalseInputsRevert() (gas: 3098376)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11514)
+[PASS] testFoldLinearInBeta() (gas: 13510)
+[PASS] testInverseIsAnInverse() (gas: 15138)
+[PASS] testLoadBlobReadsTheProof() (gas: 1291079)
+[PASS] testLoadBlobRejectsAFalseOpening() (gas: 1072699741)
+[PASS] testLoadPublic() (gas: 316239)
+[PASS] testPackRoundTrip() (gas: 11074)
+[PASS] testStepCosts() (gas: 5589125)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 3.14s (6.12s CPU time)
+
+Ran 8 test suites in 3.14s (11.89s CPU time): 58 tests passed, 1 failed, 0 skipped (59 total tests)
+
+Failing tests:
+Encountered 1 failing test in test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[FAIL: EvmError: Revert] testVerifyGas() (gas: 267310)
+
+Encountered a total of 1 failing tests, 58 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 1 failed test
