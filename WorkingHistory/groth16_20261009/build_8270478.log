@@ -1,0 +1,20 @@
+node n185.cluster, start Fri Oct  9 18:13:57 CDT 2026
+   Compiling sp1-core-executor-runner v6.8.1
+   Compiling tokio-rustls v0.26.6
+   Compiling dispute-verifier-script v0.1.0 (/scratch/jshital/paper04/Circuits/zkvm/script)
+   Compiling sp1-build v6.8.1
+   Compiling tonic v0.12.3
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.12.28
+warning: dispute-verifier-script@0.1.0: Build skipped for dispute-verifier at 2026-10-09 18:14:15 due to SP1_SKIP_PROGRAM_BUILD flag
+   Compiling sp1-core-machine v6.8.1
+   Compiling sp1-recursion-compiler v6.8.1
+   Compiling sp1-prover-types v6.8.1
+   Compiling sp1-recursion-gnark-ffi v6.8.1
+   Compiling sp1-recursion-circuit v6.8.1
+   Compiling sp1-prover v6.8.1
+   Compiling sp1-sdk v6.8.1
+    Finished `release` profile [optimized] target(s) in 2m 52s
+-rwxrwx--- 2 jshital jshital 79462136 Oct  9 18:16 target/release/prove
+groth16 circuit files at /home/jshital/.sp1/circuits/groth16/v6.1.0
+end Fri Oct  9 18:16:49 CDT 2026

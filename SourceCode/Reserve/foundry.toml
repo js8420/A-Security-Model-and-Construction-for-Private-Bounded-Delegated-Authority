@@ -7,5 +7,9 @@ solc = "0.8.28"
 optimizer = true
 optimizer_runs = 200
 gas_reports = ["Reserve"]
-# The tests deploy the real Permit2 from the artifact its own pinned build writes.
-fs_permissions = [{ access = "read", path = "./lib/permit2/out" }]
+# The tests deploy the real Permit2 from the artifact its own pinned build writes,
+# and read the Groth16 proof Pete made.
+fs_permissions = [
+    { access = "read", path = "./lib/permit2/out" },
+    { access = "read", path = "../../WorkingHistory/groth16_20261009" },
+]

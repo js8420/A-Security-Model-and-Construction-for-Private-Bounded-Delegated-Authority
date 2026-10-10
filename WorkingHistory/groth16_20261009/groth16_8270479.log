@@ -1,0 +1,49 @@
+node himem10.cluster, cpus 32, start Fri Oct  9 18:16:49 CDT 2026
+setup, seconds                                      25.5
+Setting environment variables took 8.289403ms
+Reading R1CS took 23.484624049s
+Reading proving key took 7.392409025s
+Reading witness file took 3.014054ms
+Deserializing JSON data took 73.638326ms
+Generating witness took 1.262441859s
+[90m23:03:25[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m8153.499883
+[90m23:03:37[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m11999.866861
+Generating proof took 20.263448723s
+[90m23:03:37[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:03:37[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:03:37[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:03:37[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m2.481161
+groth16 proof, seconds                           17181.9
+the groth16 proof verifies                          true
+program verifying key                       0x0002a32144a64f883838d7f274103152fd774802c234ef54e99a69d6fd0016e6
+public value bytes                                    88
+on-chain proof bytes                                 356
+	Command being timed: "/scratch/jshital/paper04/Circuits/zkvm/pete/../script/target/release/prove /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128.bin /scratch/jshital/paper04/Circuits/zkvm/pete/out_8270479"
+	User time (seconds): 494231.70
+	System time (seconds): 17383.37
+	Percent of CPU this job got: 2972%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 4:46:49
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 120799380
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 362678503
+	Voluntary context switches: 100931378
+	Involuntary context switches: 390942500
+	Swaps: 0
+	File system inputs: 16366968
+	File system outputs: 10928
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+end Fri Oct  9 23:03:39 CDT 2026
+vkey 0x0002a32144a64f883838d7f274103152fd774802c234ef54e99a69d6fd0016e6
+stark_bytes 5137269
+setup_seconds 25.5
+prove_seconds 17181.9
+verifies true

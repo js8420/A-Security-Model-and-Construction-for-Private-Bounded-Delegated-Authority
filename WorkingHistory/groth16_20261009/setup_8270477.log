@@ -1,0 +1,44 @@
+node n071.cluster, start Fri Oct  9 18:12:52 CDT 2026
+== inputs
+d7db0de3de2fc301e445a88ead2ee38ffbec4da6a1bdc6e1bb941e76eb17e576  /scratch/jshital/paper04/Circuits/zkvm/program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier
+f66e0a0e2c4092e1252547cc1ae856e2ecae7eb519e03c0202a15881b7c40e77  /scratch/jshital/paper04/Circuits/zkvm/../target/proof_128.bin
+== tools: gcc 13, Go 1.24, clang 18, protoc (conda-forge, glibc 2.17 sysroot)
+x86_64-conda-linux-gnu-gcc (conda-forge gcc 13.4.0-20) 13.4.0
+git version 2.56.0
+go version go1.24.13 linux/amd64
+clang version 18.1.8 (https://github.com/conda-forge/clangdev-feedstock 3c15221e001c9fe87fcc807876aa06d599616b01)
+libprotoc 28.3
+/scratch/jshital/conda-envs/gnark/lib/libclang.so
+rustc 1.95.0 (59807616e 2026-04-14)
+== Rust packages
+sp1-core-executor-runner-6.8.1 packages fetched
+sp1-core-executor-runner-binary-6.8.1 packages fetched
+== Go modules for gnark
+https://proxy.golang.org,https://goproxy.cn,direct
+
+
+
+go modules cached in /scratch/jshital/gopath/pkg/mod
+== Groth16 circuit files (SP1 circuit v6.1.0)
+total 8217836
+drwxr-x--- 2 jshital jshital       4096 Oct  9 17:22 .
+-rwxr-x--- 1 jshital jshital        163 Apr 15 15:04 ._.
+drwxrwx--- 3 jshital jshital       4096 Oct  9 17:16 ..
+-rw-rw---- 1 jshital jshital          0 Oct  9 17:22 .complete
+-rw-r----- 1 jshital jshital        163 Apr  7  2026 ._constraints.json
+-rw-r----- 1 jshital jshital  111997113 Apr  7  2026 constraints.json
+-rw-r----- 1 jshital jshital        163 Apr  7  2026 ._groth16_circuit.bin
+-rw-r----- 1 jshital jshital 2437991441 Apr  7  2026 groth16_circuit.bin
+-rw-r----- 1 jshital jshital        163 Apr  9  2026 ._groth16_pk.bin
+-rw-r----- 1 jshital jshital 5862173061 Apr  9  2026 groth16_pk.bin
+-rw-r----- 1 jshital jshital        163 Apr  9  2026 ._Groth16Verifier.sol
+-rw-r----- 1 jshital jshital      26770 Apr  9  2026 Groth16Verifier.sol
+-rw-r----- 1 jshital jshital        163 Apr  9  2026 ._groth16_vk.bin
+-rw-r----- 1 jshital jshital        492 Apr  9  2026 groth16_vk.bin
+-rw-r----- 1 jshital jshital        163 Apr  7  2026 ._groth16_witness.json
+-rw-r----- 1 jshital jshital    2802920 Apr  7  2026 groth16_witness.json
+-rw-r----- 1 jshital jshital        163 Apr 15 15:28 ._SP1VerifierGroth16.sol
+-rw-r----- 1 jshital jshital       3236 Apr 15 15:28 SP1VerifierGroth16.sol
+7.9G	/home/jshital/.sp1/circuits/groth16/v6.1.0
+setup done
+end Fri Oct  9 18:13:56 CDT 2026

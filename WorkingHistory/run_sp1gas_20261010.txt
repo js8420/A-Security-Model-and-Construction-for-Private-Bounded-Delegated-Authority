@@ -1,0 +1,22 @@
+﻿No files changed, compilation skipped
+
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175455)
+[PASS] testTamperedPublicValuesRevert() (gas: 267540)
+[PASS] testVerifyGas() (gas: 379168)
+Logs:
+  SP1 v6.1.0 Groth16 verifier, the dispute's validity proof
+    circuit version v6.1.0
+    public value bytes 88
+    proof bytes 356
+    calldata bytes 644
+    verifyProof call gas 263937
+    calldata gas, standard 7412
+    calldata gas, EIP-7623 floor 18530
+    transaction gas, verifyProof alone 292349
+
+[PASS] testWrongProgramRevert() (gas: 267028)
+[PASS] testWrongVerifierSelectorRevert() (gas: 50329)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 13.47ms (10.96ms CPU time)
+
+Ran 1 test suite in 14.77ms (13.47ms CPU time): 5 tests passed, 0 failed, 0 skipped (5 total tests)
