@@ -40,14 +40,4 @@ abstract contract Groth16Result is Test {
         for (uint256 j = 0; j < 4; ++j) w |= uint256(_pv(first + j)) << (64 * j);
         return bytes32(w);
     }
-
-    function _calldataGas(bytes memory data) internal pure returns (uint256 standard, uint256 floor) {
-        uint256 zeros;
-        for (uint256 i; i < data.length; ++i) {
-            if (data[i] == 0) ++zeros;
-        }
-        uint256 tokens = zeros + 4 * (data.length - zeros);
-        standard = 4 * tokens;
-        floor = 10 * tokens;
-    }
 }

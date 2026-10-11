@@ -1,39 +1,5 @@
 ﻿No files changed, compilation skipped
 
-Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
-[PASS] testAgainstTheCrateCounting() (gas: 282579)
-[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
-[PASS] testAgainstTheCrateZeros() (gas: 282572)
-[PASS] testMerkleLevelGas() (gas: 286007)
-[PASS] testPermutationGas() (gas: 284058)
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 4.02ms (12.30ms CPU time)
-
-Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
-[PASS] testTamperedProofRevert() (gas: 1024175455)
-[PASS] testTamperedPublicValuesRevert() (gas: 267532)
-[FAIL: EvmError: Revert] testVerifyGas() (gas: 267310)
-[PASS] testWrongProgramRevert() (gas: 267020)
-[PASS] testWrongVerifierSelectorRevert() (gas: 50250)
-Suite result: FAILED. 4 passed; 1 failed; 0 skipped; finished in 15.27ms (15.52ms CPU time)
-
-Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
-[PASS] testLateResolutionRejected() (gas: 743019)
-[PASS] testResolveByBlobs() (gas: 963509)
-[PASS] testWithheldForfeits() (gas: 738950)
-[PASS] testWrongBlobRejected() (gas: 744819)
-Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 15.20ms (8.06ms CPU time)
-
-Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
-[PASS] testAllOperationsOneWarming() (gas: 1140319)
-[PASS] testChallengeCallDataBudget() (gas: 4953)
-[PASS] testDepositAgainstPermit2() (gas: 1625545)
-[PASS] testDigestSettlesOnce() (gas: 425202)
-[PASS] testLoggedAgainstPreventive() (gas: 1089016)
-[PASS] testPayeeIsBound() (gas: 302584)
-[PASS] testRevokeIsThePrincipals() (gas: 258016)
-[PASS] testStoredAgainstLogged() (gas: 14281690)
-Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 29.43ms (42.06ms CPU time)
-
 Ran 12 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
 [PASS] testAnswerPaysTheAgent() (gas: 393571)
 [PASS] testEarlyExpireRefused() (gas: 79228)
@@ -47,19 +13,33 @@ Ran 12 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
 [PASS] testUnsettledDigestCannotOpen() (gas: 32501)
 [PASS] testWrongBondCannotOpen() (gas: 24412)
 [PASS] testWrongEpochCannotOpen() (gas: 32531)
-Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 2.77s (20.39ms CPU time)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 16.85ms (19.84ms CPU time)
 
-Ran 9 tests for test/DisputeGas.t.sol:DisputeGas
-[PASS] testCannotReopen() (gas: 2557827)
-[PASS] testChallengerSilent() (gas: 2895215)
-[PASS] testCostByVerificationLength() (gas: 34827473)
-[PASS] testDearerSteps() (gas: 32054782)
-[PASS] testDefenderSilent() (gas: 2555901)
-[PASS] testEpochIsTheReserves() (gas: 2633428)
-[PASS] testFalseVerdictLoses() (gas: 3760444)
-[PASS] testRunOverAnotherProofLoses() (gas: 3495270)
-[PASS] testTrueRunStands() (gas: 3715884)
-Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 2.77s (5.47s CPU time)
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175455)
+[PASS] testTamperedPublicValuesRevert() (gas: 267532)
+[PASS] testVerifies() (gas: 269376)
+[PASS] testWrongProgramRevert() (gas: 267020)
+[PASS] testWrongVerifierSelectorRevert() (gas: 50250)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 31.11ms (14.93ms CPU time)
+
+Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1140319)
+[PASS] testChallengeCallDataBudget() (gas: 4953)
+[PASS] testDepositAgainstPermit2() (gas: 1625545)
+[PASS] testDigestSettlesOnce() (gas: 425202)
+[PASS] testLoggedAgainstPreventive() (gas: 1089016)
+[PASS] testPayeeIsBound() (gas: 302584)
+[PASS] testRevokeIsThePrincipals() (gas: 258016)
+[PASS] testStoredAgainstLogged() (gas: 14281690)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 2.68s (37.86ms CPU time)
+
+Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
+[PASS] testLateResolutionRejected() (gas: 743019)
+[PASS] testResolveByBlobs() (gas: 963509)
+[PASS] testWithheldForfeits() (gas: 738950)
+[PASS] testWrongBlobRejected() (gas: 744819)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 2.68s (12.71ms CPU time)
 
 Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
 [PASS] testMedian() (gas: 56985)
@@ -67,7 +47,7 @@ Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
 [PASS] testOperationReadingAheadReverts() (gas: 6633)
 [PASS] testWorstByOperations() (gas: 379007)
 [PASS] testWorstByReads() (gas: 56036)
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 3.14s (5.84ms CPU time)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.78s (4.01ms CPU time)
 
 Ran 11 tests for test/StepGas.t.sol:StepGas
 [PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
@@ -81,14 +61,26 @@ Ran 11 tests for test/StepGas.t.sol:StepGas
 [PASS] testLoadPublic() (gas: 316239)
 [PASS] testPackRoundTrip() (gas: 11074)
 [PASS] testStepCosts() (gas: 5589125)
-Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 3.14s (6.12s CPU time)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.78s (5.46s CPU time)
 
-Ran 8 test suites in 3.14s (11.89s CPU time): 58 tests passed, 1 failed, 0 skipped (59 total tests)
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+[PASS] testPermutationGas() (gas: 284058)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.78s (10.94ms CPU time)
 
-Failing tests:
-Encountered 1 failing test in test/SP1Groth16Gas.t.sol:SP1Groth16Gas
-[FAIL: EvmError: Revert] testVerifyGas() (gas: 267310)
+Ran 9 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testCannotReopen() (gas: 2557827)
+[PASS] testChallengerSilent() (gas: 2895215)
+[PASS] testCostByVerificationLength() (gas: 34827473)
+[PASS] testDearerSteps() (gas: 32054782)
+[PASS] testDefenderSilent() (gas: 2555901)
+[PASS] testEpochIsTheReserves() (gas: 2633428)
+[PASS] testFalseVerdictLoses() (gas: 3760444)
+[PASS] testRunOverAnotherProofLoses() (gas: 3495270)
+[PASS] testTrueRunStands() (gas: 3715884)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 2.78s (5.51s CPU time)
 
-Encountered a total of 1 failing tests, 58 tests succeeded
-
-Tip: Run `forge test --rerun` to retry only the 1 failed test
+Ran 8 test suites in 2.79s (16.53s CPU time): 59 tests passed, 0 failed, 0 skipped (59 total tests)

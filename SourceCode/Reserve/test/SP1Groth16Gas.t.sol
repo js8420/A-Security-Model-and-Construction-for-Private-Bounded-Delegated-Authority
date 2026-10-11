@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {console} from "forge-std/Test.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {Verifier} from "../src/sp1/v6.1.0/Groth16Verifier.sol";
 import {Groth16Result} from "./Groth16Result.sol";
@@ -16,27 +15,12 @@ contract SP1Groth16Gas is Groth16Result {
         _load();
     }
 
-    function testVerifyGas() public view {
-        bytes32 k = vkey;
-        bytes memory pv = publicValues;
-        bytes memory p = proof;
-        verifier.verifyProof(k, pv, p);
-        uint256 used = vm.lastCallGas().gasTotalUsed;
-
-        bytes memory data = abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof));
-        (uint256 standard, uint256 floor) = _calldataGas(data);
-        uint256 execution = 21000 + standard + used;
-        uint256 total = execution > 21000 + floor ? execution : 21000 + floor;
-
-        console.log("SP1 v6.1.0 Groth16 verifier, the dispute's validity proof");
-        console.log("  circuit version", verifier.VERSION());
-        console.log("  public value bytes", publicValues.length);
-        console.log("  proof bytes", proof.length);
-        console.log("  calldata bytes", data.length);
-        console.log("  verifyProof call gas", used);
-        console.log("  calldata gas, standard", standard);
-        console.log("  calldata gas, EIP-7623 floor", floor);
-        console.log("  transaction gas, verifyProof alone", total);
+    /// Gas is taken from transaction receipts by script/ValidityDisputeOnChain.s.sol.
+    function testVerifies() public view {
+        assertEq(verifier.VERSION(), "v6.1.0");
+        assertEq(publicValues.length, 88);
+        assertEq(proof.length, 356);
+        verifier.verifyProof(vkey, publicValues, proof);
     }
 
     function testTamperedPublicValuesRevert() public {
