@@ -1,0 +1,71 @@
+WHERE THE DISPUTE VERIFIER'S INSTRUCTIONS GO
+==============================================================================
+  instructions executed                             321330009
+  the proof verifies                                     true
+  samples, one per 1000 instructions                     40166
+
+  phase                                      share   instructions
+  reading the proof (bincode)               16.89%       54264339
+  symbolic constraint analysis               0.00%              0
+  Merkle path checks                        11.06%       35536222
+  transcript (duplex challenger)             0.00%              0
+  constraint evaluation at zeta              2.87%        9224058
+  FRI folding and openings                  69.17%      222265390
+  quotient recomposition                     0.00%              0
+  other verifier work                        0.00%              0
+  guest main, outside the verifier           0.00%              0
+  unattributed                               0.01%          40000
+
+  functions by inclusive share
+  100.00%  __start
+  100.00%  main
+  100.00%  dispute_verifier_keccak[62ab2230d0545ec7]::main
+   82.94%  p3_uni_stark[96a683922026085b]::verifier::verify_with_preprocessed::<..>
+   82.94%  p3_uni_stark[96a683922026085b]::verifier::verify::<..>
+   79.77%  <..>::verify
+   77.70%  p3_fri[d7bd7f3aae456c2f]::verifier::verify_fri::<..>
+   75.86%  p3_fri[d7bd7f3aae456c2f]::verifier::open_input::<..>
+   16.89%  <..>::deserialize_tuple::<..>
+   16.89%  <..>::deserialize_struct::<..>
+   16.89%  <..>::visit_seq::<..>
+   11.06%  <..>::verify_batch
+    9.53%  <..>::hash_iter::<..>
+    8.61%  <..>::deserialize::<..>
+    8.23%  <..>::next
+    2.89%  __rustc[2dd512034a56dbe4]::__rust_alloc
+    2.89%  <..>::alloc
+    2.87%  p3_uni_stark[96a683922026085b]::verifier::verify_constraints::<..>
+    2.87%  <..>::eval
+    2.84%  <..>::deserialize_option::<..>
+    2.82%  <..>::constrain_with::<..>
+    2.20%  __rustc[2dd512034a56dbe4]::__rust_dealloc
+    2.08%  <..>::dealloc
+    2.04%  p3_poseidon2_air[4bbb6f2bef0c9414]::air::eval::<..>
+    1.86%  <..>::observe_slice
+
+  functions by self share
+   64.96%  p3_fri[d7bd7f3aae456c2f]::verifier::open_input::<..>
+    8.61%  <..>::deserialize::<..>
+    8.22%  <..>::next
+    3.15%  <..>::visit_seq::<..>
+    2.86%  <..>::alloc
+    2.06%  <..>::dealloc
+    1.96%  <..>::hash_iter::<..>
+    1.79%  <..>::observe_slice
+    1.04%  <..>::update
+    0.78%  p3_poseidon2_air[4bbb6f2bef0c9414]::air::eval_sbox::<..>
+    0.58%  <..>::eval
+    0.55%  <..>::deserialize_tuple::<..>
+    0.52%  <..>::internal_linear_layer::<..>
+    0.33%  <..>::mul
+    0.29%  <..>::try_inverse
+    0.28%  <..>::verify_batch
+    0.27%  memcpy
+    0.22%  <..>::external_linear_layer::<..>
+    0.21%  p3_poseidon2_air[4bbb6f2bef0c9414]::air::eval_full_round::<..>
+    0.16%  <..>::verify
+    0.13%  __rustc[2dd512034a56dbe4]::__rust_dealloc
+    0.12%  <..>::constrain_with::<..>
+    0.09%  p3_field[1eb5c1c83023d5d6]::batch_inverse::batch_multiplicative_inverse::<..>
+    0.09%  <..>::clone
+    0.07%  memset

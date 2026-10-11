@@ -1,8 +1,9 @@
 //! One real Groth16 proof that the dispute verifier accepts a settlement's
 //! STARK, made on the CPU, checked, and written out for the on-chain test.
 //!
-//!   prove fetch                  download the Groth16 circuit files (needs internet)
-//!   prove <proof file> <out dir> prove, verify, and write the results
+//!   prove fetch                           download the Groth16 circuit files (needs internet)
+//!   prove <proof file> <out dir> [keccak] prove, verify, and write the results; keccak
+//!                                         selects the verifier built for Keccak commitments
 //!
 //! The out directory receives proof_groth16.bin (the SDK's own format),
 //! and onchain.txt: the program's verifying key hash, the public values and
@@ -15,7 +16,8 @@ use std::time::Instant;
 use sp1_sdk::blocking::{CpuProver, ProveRequest, Prover};
 use sp1_sdk::{include_elf, Elf, HashableKey, ProvingKey, SP1Stdin};
 
-const ELF: Elf = include_elf!("dispute-verifier");
+const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
+const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -28,13 +30,16 @@ fn main() {
     let input = args.get(1).expect("proof file");
     let out = std::path::PathBuf::from(args.get(2).expect("out directory"));
     std::fs::create_dir_all(&out).expect("out directory");
+    let keccak = args.get(3).map(String::as_str) == Some("keccak");
+    let elf = if keccak { ELF_KECCAK } else { ELF_POSEIDON2 };
+    println!("verifier program                            {:>12}", if keccak { "keccak" } else { "poseidon2" });
     let bytes = std::fs::read(input).expect("exported proof");
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(bytes.clone());
 
     let t = Instant::now();
     let prover = CpuProver::new();
-    let pk = prover.setup(ELF).expect("setup");
+    let pk = prover.setup(elf).expect("setup");
     let setup_secs = t.elapsed().as_secs_f64();
     println!("setup, seconds                              {:>12.1}", setup_secs);
 
@@ -55,6 +60,7 @@ fn main() {
     writeln!(f, "public_values 0x{}", hex(&pv)).ok();
     writeln!(f, "proof 0x{}", hex(&onchain)).ok();
     writeln!(f, "stark_bytes {}", bytes.len()).ok();
+    writeln!(f, "hash {}", if keccak { "keccak" } else { "poseidon2" }).ok();
     writeln!(f, "setup_seconds {setup_secs:.1}").ok();
     writeln!(f, "prove_seconds {prove_secs:.1}").ok();
     writeln!(f, "verifies {ok}").ok();

@@ -1,0 +1,71 @@
+WHERE THE DISPUTE VERIFIER'S INSTRUCTIONS GO
+==============================================================================
+  instructions executed                            2185319303
+  the proof verifies                                     true
+  samples, one per 1000 instructions                    273164
+
+  phase                                      share   instructions
+  reading the proof (bincode)                2.49%       54432182
+  symbolic constraint analysis               0.00%              0
+  Merkle path checks                        79.61%     1739717814
+  transcript (duplex challenger)            17.87%      390617305
+  constraint evaluation at zeta              0.00%              0
+  FRI folding and openings                   0.02%         520002
+  quotient recomposition                     0.00%              0
+  other verifier work                        0.00%              0
+  guest main, outside the verifier           0.00%              0
+  unattributed                               0.00%          32000
+
+  functions by inclusive share
+  100.00%  dispute_verifier[3ca110fc761e79d8]::main
+  100.00%  __start
+  100.00%  main
+   97.48%  p3_uni_stark[b7abc9b5af55b23e]::verifier::verify::<..>
+   97.48%  p3_uni_stark[b7abc9b5af55b23e]::verifier::verify_with_preprocessed::<..>
+   97.01%  <..>::verify
+   89.30%  p3_fri[17190d5f4805ff50]::verifier::verify_fri::<..>
+   88.49%  p3_fri[17190d5f4805ff50]::verifier::open_input::<..>
+   79.61%  <..>::verify_batch
+   78.08%  <..>::hash_iter_slices::<..>
+   48.73%  p3_poseidon2[4c5b12dc04026434]::external::external_terminal_permute_state::<..>
+   34.86%  <..>::permute_state
+   26.49%  <..>::permute_state_initial
+    7.68%  <..>::duplexing
+    2.49%  <..>::deserialize_struct::<..>
+    2.49%  <..>::deserialize_tuple::<..>
+    2.49%  <..>::visit_seq::<..>
+    1.44%  <..>::deserialize::<..>
+    1.21%  <..>::next
+    0.80%  p3_fri[17190d5f4805ff50]::verifier::verify_query::<..>
+    0.42%  p3_uni_stark[b7abc9b5af55b23e]::verifier::verify_constraints::<..>
+    0.42%  <..>::eval
+    0.42%  <..>::alloc
+    0.42%  __rustc[2dd512034a56dbe4]::__rust_alloc
+    0.42%  <..>::deserialize_option::<..>
+
+  functions by self share
+   48.73%  p3_poseidon2[4c5b12dc04026434]::external::external_terminal_permute_state::<..>
+   34.86%  <..>::permute_state
+    9.60%  p3_fri[17190d5f4805ff50]::verifier::open_input::<..>
+    2.12%  <..>::permute_state_initial
+    1.44%  <..>::deserialize::<..>
+    1.21%  <..>::next
+    0.42%  <..>::alloc
+    0.31%  <..>::dealloc
+    0.31%  <..>::visit_seq::<..>
+    0.23%  <..>::hash_iter_slices::<..>
+    0.12%  p3_poseidon2_air[32b8089e03deac44]::air::eval_sbox::<..>
+    0.09%  <..>::eval
+    0.07%  <..>::deserialize_tuple::<..>
+    0.07%  <..>::internal_linear_layer::<..>
+    0.05%  <..>::duplexing
+    0.05%  <..>::mul
+    0.04%  <..>::verify_batch
+    0.04%  <..>::try_inverse
+    0.04%  <..>::verify
+    0.03%  p3_poseidon2_air[32b8089e03deac44]::air::eval_full_round::<..>
+    0.03%  <..>::external_linear_layer::<..>
+    0.02%  <..>::constrain_with::<..>
+    0.02%  __rustc[2dd512034a56dbe4]::__rust_dealloc
+    0.01%  memcpy
+    0.01%  <..>::clone

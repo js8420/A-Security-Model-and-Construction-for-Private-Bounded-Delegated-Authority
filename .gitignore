@@ -23,4 +23,6 @@ SourceCode/Reserve/cache/
 _RefAudit/
 Circuits/zkvm/program/target/
 Circuits/zkvm/script/target/
+Circuits/zkvm/program-keccak/target/
+Circuits/zkvm/profile/target/
 SourceCode/Reserve/broadcast/

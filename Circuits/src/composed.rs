@@ -105,6 +105,18 @@ impl<
     fn num_public_values(&self) -> usize {
         PUBLIC_VALUES + 1
     }
+
+    /// The S-box registers alone set the degree: 7 with none, 3 with one.
+    /// Stated so the verifier does not re-derive it by evaluating every
+    /// constraint symbolically, which inside the zkVM costs 293 million
+    /// instructions. `check_degree` confirms it.
+    fn max_constraint_degree(&self) -> Option<usize> {
+        match R {
+            0 => Some(7),
+            1 => Some(3),
+            _ => None,
+        }
+    }
 }
 
 impl<AB, const R: usize, const MD: usize, const RD: usize, const DEPTH: usize, const COVER: usize>
@@ -178,4 +190,35 @@ pub fn measure<
     let constraints = get_symbolic_constraints::<F, _>(&a, AirLayout::from_air::<F>(&a));
     let degree = get_max_constraint_degree::<F, _>(&a, AirLayout::from_air::<F>(&a));
     (BaseAir::<F>::width(&a), constraints.len(), degree)
+}
+
+/// Confirms the stated degree is the one symbolic evaluation finds, at every
+/// instantiation this crate proves, so the quotient is split into the same
+/// number of chunks with or without the statement.
+pub fn check_degree() -> bool {
+    fn one<const R: usize, const MD: usize, const RD: usize, const DEPTH: usize, const COVER: usize>(
+        label: &str,
+    ) -> bool {
+        let a = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
+        let layout = AirLayout::from_air::<F>(&a);
+        let symbolic = get_max_constraint_degree::<F, _>(&a, layout);
+        let stated = BaseAir::<F>::max_constraint_degree(&a);
+        let mut agree = stated == Some(symbolic);
+        for is_zk in [0usize, 1] {
+            let derived = ((symbolic + is_zk).max(2) - 1).next_power_of_two().trailing_zeros() as usize;
+            let used = p3_uni_stark::get_log_num_quotient_chunks::<F, _>(&a, layout, is_zk);
+            agree &= derived == used;
+        }
+        println!("  {:<28} {:>9} {:>9} {:>7}", label, symbolic, format!("{stated:?}"), agree);
+        agree
+    }
+    println!("  {:<28} {:>9} {:>9} {:>7}", "registers / MD RD DEPTH COVER", "symbolic", "stated", "agree");
+    let mut ok = true;
+    ok &= one::<0, 16, 32, 16, 64>("0 / 16 32 16 64");
+    ok &= one::<1, 16, 32, 16, 64>("1 / 16 32 16 64");
+    ok &= one::<0, 16, 32, 16, 14>("0 / 16 32 16 14");
+    ok &= one::<1, 16, 32, 16, 14>("1 / 16 32 16 14");
+    ok &= one::<0, 8, 8, 16, 14>("0 / 8 8 16 14");
+    ok &= one::<1, 8, 8, 16, 14>("1 / 8 8 16 14");
+    ok
 }

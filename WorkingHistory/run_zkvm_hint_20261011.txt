@@ -1,0 +1,14 @@
+DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, POSEIDON2 COMMITMENTS
+==============================================================================
+  proof bytes read                                    5137269
+  the proof verifies inside the zkVM                     true
+  public values committed                                  10
+  instructions executed                            2185319303
+  light execution, seconds                               44.0
+  counting execution, seconds                             1.9
+  instructions, gas metering                       2185319303
+  trace chunks metered                                      2
+  prover gas                                       2146560220
+  syscalls                                                  0
+  gas metering, seconds                                  46.2
+  a tampered proof is refused inside the zkVM            true

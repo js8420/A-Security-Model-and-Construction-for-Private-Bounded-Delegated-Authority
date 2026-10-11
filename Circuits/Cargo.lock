@@ -62,6 +62,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
 name = "crypto-common"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -83,6 +89,7 @@ dependencies = [
  "p3-field",
  "p3-fri",
  "p3-goldilocks",
+ "p3-keccak",
  "p3-matrix",
  "p3-merkle-tree",
  "p3-poseidon2",
@@ -329,6 +336,17 @@ dependencies = [
  "rand 0.10.2",
  "serde",
  "spin",
+]
+
+[[package]]
+name = "p3-keccak"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae50c8c37eb847c660298fb275e53c025c49b2623a8cfabf67f5322258b2b4db"
+dependencies = [
+ "p3-symmetric",
+ "p3-util",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -708,6 +726,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.4",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
+dependencies = [
+ "crunchy",
 ]
 
 [[package]]

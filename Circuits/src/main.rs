@@ -54,6 +54,7 @@ mod naysay;
 mod forge;
 mod assertion;
 mod leaf;
+mod keccak;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -444,6 +445,26 @@ fn main() {
         let path = "target/proof_128.bin";
         let (bytes, ok) = naysay::export(path);
         println!("  proof and public values written to {path}: {bytes} bytes, verifies natively {ok}");
+        return;
+    }
+    if std::env::args().any(|a| a == "export-keccak") {
+        let path = "target/proof_128_keccak.bin";
+        let (bytes, ok, secs) = keccak::export(path);
+        println!("  Keccak proof and public values written to {path}: {bytes} bytes, verifies natively {ok}, proved in {secs:.2} s");
+        return;
+    }
+    if std::env::args().any(|a| a == "degree") {
+        println!("STATED CONSTRAINT DEGREE AGAINST SYMBOLIC EVALUATION, COMPOSED CIRCUIT");
+        println!("{}", "=".repeat(78));
+        let ok = composed::check_degree();
+        println!("  stated degree equals the symbolic degree everywhere: {ok}");
+        if !ok {
+            std::process::exit(1);
+        }
+        return;
+    }
+    if std::env::args().any(|a| a == "hash-cost") {
+        keccak::hash_cost(5, 4);
         return;
     }
     if std::env::args().any(|a| a == "leaf") {

@@ -15,10 +15,13 @@ use sp1_core_executor::{ExecutionReport, GasEstimatingVMEnum, MinimalExecutorEnu
 use sp1_sdk::blocking::{LightProver, Prover};
 use sp1_sdk::{include_elf, Elf, SP1Stdin};
 
-const ELF: Elf = include_elf!("dispute-verifier");
+const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
+const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
 
 fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| "../../target/proof_128.bin".into());
+    let keccak = std::env::args().nth(2).as_deref() == Some("keccak");
+    let elf = if keccak { ELF_KECCAK } else { ELF_POSEIDON2 };
     let bytes = std::fs::read(&path).expect("exported proof");
     let stdin = || {
         let mut s = SP1Stdin::new();
@@ -27,11 +30,11 @@ fn main() {
     };
 
     let t = std::time::Instant::now();
-    let (out, _) = LightProver::new().execute(ELF, stdin()).run().expect("the guest runs to completion");
+    let (out, _) = LightProver::new().execute(elf.clone(), stdin()).run().expect("the guest runs to completion");
     let light_secs = t.elapsed().as_secs_f64();
     let pv = values(out.as_slice());
 
-    let program = Arc::new(Program::from(&ELF).expect("elf"));
+    let program = Arc::new(Program::from(&elf).expect("elf"));
     let mut ex = MinimalExecutorEnum::new(program.clone(), false, None);
     ex.with_input(&bytes);
     let t = std::time::Instant::now();
@@ -65,7 +68,7 @@ fn main() {
     .map(|code| code != 0)
     .unwrap_or(true);
 
-    println!("DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1");
+    println!("DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, {} COMMITMENTS", if keccak { "KECCAK" } else { "POSEIDON2" });
     println!("{}", "=".repeat(78));
     println!("  proof bytes read                             {:>14}", bytes.len());
     println!("  the proof verifies inside the zkVM           {:>14}", ex.exit_code() == 0 && pv.len() == 10);

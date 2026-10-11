@@ -1,0 +1,10 @@
+[package]
+name = "dispute-verifier-profile"
+version = "0.1.0"
+edition = "2021"
+
+# Separate from the script crate: SP1's profiler needs its portable executor,
+# and the SDK's runner only builds against the native one.
+[dependencies]
+sp1-core-executor = { version = "=6.8.1", features = ["profiling"] }
+serde_json = "1"

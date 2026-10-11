@@ -118,7 +118,7 @@ impl TryRng for SaltRng {
 
 impl TryCryptoRng for SaltRng {}
 pub(crate) type Challenger = DuplexChallenger<Val, Perm, 8, 4>;
-type Config = StarkConfig<Pcs, Challenge, Challenger>;
+pub(crate) type Config = StarkConfig<Pcs, Challenge, Challenger>;
 
 // The non-hiding pair, kept only so the cost of zero knowledge can be measured
 // end to end rather than inferred from column counts. Nothing in the paper's
@@ -253,7 +253,7 @@ pub(crate) fn deployed_fri() -> FriParameters<ChallengeMmcs> {
     fri_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
 }
 
-fn config() -> Config {
+pub(crate) fn config() -> Config {
     config_with(NUM_QUERIES, LOG_BLOWUP, POW_BITS)
 }
 
