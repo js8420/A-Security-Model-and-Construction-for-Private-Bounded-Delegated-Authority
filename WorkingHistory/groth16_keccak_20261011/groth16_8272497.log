@@ -1,0 +1,52 @@
+node himem08.cluster, cpus 32, hash keccak, start Sun Oct 11 17:52:00 CDT 2026
+f8b739f51708819578d5dbe5259cedf79f43aad39acd969ade50a68a785a829e  /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak.bin
+verifier program                                  keccak
+setup, seconds                                      21.4
+Setting environment variables took 33.601µs
+Reading R1CS took 20.806499034s
+Reading proving key took 3.109994388s
+Reading witness file took 3.365076ms
+Deserializing JSON data took 22.415332ms
+Generating witness took 854.180011ms
+[90m18:41:13[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m8242.931414
+[90m18:41:25[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m12083.002546
+Generating proof took 20.327154355s
+[90m18:41:25[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m18:41:25[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m18:41:25[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m18:41:25[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m2.548484
+groth16 proof, seconds                            2943.5
+the groth16 proof verifies                          true
+program verifying key                       0x006e4633eb2e74891acb05c11adf82ec0bf2b9de0dbd0d0d746fdd59cf684b3e
+public value bytes                                    88
+on-chain proof bytes                                 356
+	Command being timed: "/scratch/jshital/paper04/Circuits/zkvm/pete/../script/target/release/prove /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak.bin /scratch/jshital/paper04/Circuits/zkvm/pete/out_8272497 keccak"
+	User time (seconds): 83801.13
+	System time (seconds): 2838.82
+	Percent of CPU this job got: 2920%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 49:26.15
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 109349016
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 63759608
+	Voluntary context switches: 16357390
+	Involuntary context switches: 46325355
+	Swaps: 0
+	File system inputs: 17144
+	File system outputs: 5512
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+end Sun Oct 11 18:41:26 CDT 2026
+vkey 0x006e4633eb2e74891acb05c11adf82ec0bf2b9de0dbd0d0d746fdd59cf684b3e
+stark_bytes 5137269
+hash keccak
+setup_seconds 21.4
+prove_seconds 2943.5
+verifies true
