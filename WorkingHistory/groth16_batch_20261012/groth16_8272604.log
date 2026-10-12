@@ -1,0 +1,59 @@
+node himem08.cluster, cpus 32, hash keccak , start Mon Oct 12 08:59:38 CDT 2026
+f8b739f51708819578d5dbe5259cedf79f43aad39acd969ade50a68a785a829e  /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak.bin
+SP1_WORKER_NUM_CORE_WORKERS=1
+SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=2
+SP1_WORKER_CORE_BUFFER_SIZE=1
+SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=2
+verifier program                                  keccak
+payment proofs                                         1
+setup, seconds                                      20.8
+Setting environment variables took 45.385µs
+Reading R1CS took 23.145182293s
+Reading proving key took 6.749527406s
+Reading witness file took 3.66721ms
+Deserializing JSON data took 24.843746ms
+Generating witness took 1.460477556s
+[90m10:16:43[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m8272.452304
+[90m10:16:55[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m12011.120623
+Generating proof took 20.285626036s
+[90m10:16:55[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m10:16:55[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m10:16:55[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m10:16:55[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m2.049445
+groth16 proof, seconds                            4615.8
+the groth16 proof verifies                          true
+program verifying key                       0x006e4633eb2e74891acb05c11adf82ec0bf2b9de0dbd0d0d746fdd59cf684b3e
+public value bytes                                    88
+on-chain proof bytes                                 356
+	Command being timed: "/scratch/jshital/paper04/Circuits/zkvm/pete/../script/target/release/prove /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak.bin /scratch/jshital/paper04/Circuits/zkvm/pete/out_8272604 keccak"
+	User time (seconds): 89101.85
+	System time (seconds): 3675.92
+	Percent of CPU this job got: 2000%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:17:17
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 42903808
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 52805542
+	Voluntary context switches: 20038925
+	Involuntary context switches: 16081238
+	Swaps: 0
+	File system inputs: 16362520
+	File system outputs: 5512
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+end Mon Oct 12 10:16:56 CDT 2026
+vkey 0x006e4633eb2e74891acb05c11adf82ec0bf2b9de0dbd0d0d746fdd59cf684b3e
+stark_bytes 5137269
+hash keccak
+program keccak
+payment_proofs 1
+setup_seconds 20.8
+prove_seconds 4615.8
+verifies true

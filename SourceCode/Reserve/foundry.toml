@@ -12,4 +12,5 @@ gas_reports = ["Reserve"]
 fs_permissions = [
     { access = "read", path = "./lib/permit2/out" },
     { access = "read", path = "../../WorkingHistory/groth16_keccak_20261011" },
+    { access = "read", path = "../../WorkingHistory/groth16_batch_20261012" },
 ]
