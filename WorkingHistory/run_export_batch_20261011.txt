@@ -1,0 +1,1 @@
+  eight Keccak proofs written to target/proof_128_keccak_batch.bin: 41098224 bytes, every one verifies natively true

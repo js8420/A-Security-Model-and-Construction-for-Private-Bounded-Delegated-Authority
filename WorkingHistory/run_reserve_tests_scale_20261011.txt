@@ -1,0 +1,105 @@
+﻿Compiling 3 files with Solc 0.8.28
+Solc 0.8.28 finished in 2.58s
+Compiler run successful!
+
+Ran 14 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
+[PASS] testAnsweredSettlementCannotBeChallengedAgain() (gas: 484952)
+[PASS] testBatchAfterAnyDeadlineFails() (gas: 556358)
+[PASS] testBatchAnswersEveryChallengeAndCreditsEachAgent() (gas: 1299130)
+[PASS] testBatchNamingASettlementTwiceFails() (gas: 511221)
+[PASS] testBatchValuesAreTheSingleValuesInOrder() (gas: 569069)
+[PASS] testBatchWithAnUnchallengedSettlementFails() (gas: 466380)
+[PASS] testBatchWithWrongValuesFails() (gas: 586999)
+[PASS] testChallengerThatRefusesEtherCannotBlockForfeit() (gas: 536134)
+[PASS] testDeadlinesOfOneAgentAreSpacedBySlot() (gas: 841582)
+[PASS] testEmptyAndUnevenBatchesFail() (gas: 420088)
+[PASS] testOtherAgentsAreNotQueued() (gas: 963004)
+[PASS] testQueueDrainsOverTime() (gas: 726263)
+[PASS] testSingleAnswerUsesTheSingleKey() (gas: 478139)
+[PASS] testWithdrawWithNoCreditFails() (gas: 10572)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 6.63ms (18.26ms CPU time)
+
+Ran 4 tests for test/AvailabilityGas.t.sol:AvailabilityGas
+[PASS] testLateResolutionRejected() (gas: 743019)
+[PASS] testResolveByBlobs() (gas: 963509)
+[PASS] testWithheldForfeits() (gas: 738950)
+[PASS] testWrongBlobRejected() (gas: 744819)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 2.56s (8.69ms CPU time)
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+[PASS] testPermutationGas() (gas: 284058)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.61s (9.28ms CPU time)
+
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+[PASS] testWorstByReads() (gas: 56036)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.61s (4.00ms CPU time)
+
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175455)
+[PASS] testTamperedPublicValuesRevert() (gas: 267532)
+[PASS] testVerifies() (gas: 269376)
+[PASS] testWrongProgramRevert() (gas: 267020)
+[PASS] testWrongVerifierSelectorRevert() (gas: 50250)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.68s (15.22ms CPU time)
+
+Ran 8 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1140319)
+[PASS] testChallengeCallDataBudget() (gas: 4953)
+[PASS] testDepositAgainstPermit2() (gas: 1625545)
+[PASS] testDigestSettlesOnce() (gas: 425202)
+[PASS] testLoggedAgainstPreventive() (gas: 1089016)
+[PASS] testPayeeIsBound() (gas: 302584)
+[PASS] testRevokeIsThePrincipals() (gas: 258016)
+[PASS] testStoredAgainstLogged() (gas: 14281690)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 2.68s (34.76ms CPU time)
+
+Ran 9 tests for test/DisputeGas.t.sol:DisputeGas
+[PASS] testCannotReopen() (gas: 2557827)
+[PASS] testChallengerSilent() (gas: 2895215)
+[PASS] testCostByVerificationLength() (gas: 34827473)
+[PASS] testDearerSteps() (gas: 32054782)
+[PASS] testDefenderSilent() (gas: 2555901)
+[PASS] testEpochIsTheReserves() (gas: 2633428)
+[PASS] testFalseVerdictLoses() (gas: 3760444)
+[PASS] testRunOverAnotherProofLoses() (gas: 3495270)
+[PASS] testTrueRunStands() (gas: 3715884)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 2.68s (5.26s CPU time)
+
+Ran 12 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
+[PASS] testAnswerPaysTheAgent() (gas: 421972)
+[PASS] testEarlyExpireRefused() (gas: 104775)
+[PASS] testLateAnswerRefused() (gas: 134226)
+[PASS] testNoAnswerForfeitsTheAgentBond() (gas: 145003)
+[PASS] testNoExpireAfterAnswer() (gas: 400903)
+[PASS] testProofAfterRevocationStillAnswersItsEpoch() (gas: 484211)
+[PASS] testProofOfAnotherRecordFails() (gas: 730629)
+[PASS] testPublicValuesAreTheReserveRecord() (gas: 42970)
+[PASS] testSecondChallengeRefused() (gas: 111982)
+[PASS] testUnsettledDigestCannotOpen() (gas: 32435)
+[PASS] testWrongBondCannotOpen() (gas: 24346)
+[PASS] testWrongEpochCannotOpen() (gas: 32465)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 2.68s (20.89ms CPU time)
+
+Ran 11 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
+[PASS] testEvaluationPointsMatchTheBlobLayout() (gas: 10160)
+[PASS] testFalseInputsRevert() (gas: 3098376)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11514)
+[PASS] testFoldLinearInBeta() (gas: 13510)
+[PASS] testInverseIsAnInverse() (gas: 15138)
+[PASS] testLoadBlobReadsTheProof() (gas: 1291079)
+[PASS] testLoadBlobRejectsAFalseOpening() (gas: 1072699741)
+[PASS] testLoadPublic() (gas: 316239)
+[PASS] testPackRoundTrip() (gas: 11074)
+[PASS] testStepCosts() (gas: 5589125)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.74s (5.40s CPU time)
+
+Ran 9 test suites in 2.75s (21.26s CPU time): 73 tests passed, 0 failed, 0 skipped (73 total tests)

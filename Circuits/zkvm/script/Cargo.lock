@@ -951,6 +951,7 @@ dependencies = [
 name = "dispute-verifier-script"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "sp1-build",
  "sp1-core-executor",
  "sp1-sdk",

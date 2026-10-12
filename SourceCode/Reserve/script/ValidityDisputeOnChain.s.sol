@@ -51,6 +51,7 @@ contract ValidityDisputeOnChain is Script {
         // Gas is given because estimating at the latest block, the open's own,
         // would see the deadline not yet passed.
         vd.expire{gas: 200_000}(id, digest);
+        vd.withdraw{gas: 100_000}();
         vm.stopBroadcast();
         console.log("dispute expired", uint256(vd.challengeOf(id, digest).status) == 3);
     }
@@ -59,7 +60,7 @@ contract ValidityDisputeOnChain is Script {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0));
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, window, 0.01 ether);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, bytes32(0), window, 2 hours, 0.01 ether);
         acc.setArbiters(address(vd), address(0));
         token.mint(me, 1e15);
         token.mint(address(0xBEEF), 1);

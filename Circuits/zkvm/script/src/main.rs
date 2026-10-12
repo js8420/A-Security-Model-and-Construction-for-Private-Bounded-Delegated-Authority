@@ -17,17 +17,38 @@ use sp1_sdk::{include_elf, Elf, SP1Stdin};
 
 const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
 const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
+const ELF_BATCH: Elf = include_elf!("dispute-verifier-batch");
 
+/// `<proof file>` for the Poseidon2 verifier, `<proof file> keccak`, or
+/// `<batch file> batch <n>` for the batch verifier on the first n proofs.
 fn main() {
-    let path = std::env::args().nth(1).unwrap_or_else(|| "../../target/proof_128.bin".into());
-    let keccak = std::env::args().nth(2).as_deref() == Some("keccak");
-    let elf = if keccak { ELF_KECCAK } else { ELF_POSEIDON2 };
-    let bytes = std::fs::read(&path).expect("exported proof");
-    let stdin = || {
+    let args: Vec<String> = std::env::args().collect();
+    let path = args.get(1).cloned().unwrap_or_else(|| "../../target/proof_128.bin".into());
+    let mode = args.get(2).map(String::as_str).unwrap_or("poseidon2");
+    let raw = std::fs::read(&path).expect("exported proof");
+    let (elf, proofs, label) = match mode {
+        "keccak" => (ELF_KECCAK, vec![raw], "KECCAK COMMITMENTS".to_string()),
+        "batch" => {
+            let n: usize = args.get(3).expect("batch size").parse().expect("batch size");
+            let all: Vec<Vec<u8>> = bincode::deserialize(&raw).expect("batch file");
+            assert!(n >= 1 && n <= all.len(), "the batch file holds {} proofs", all.len());
+            (ELF_BATCH, all[..n].to_vec(), format!("BATCH OF {n}, KECCAK COMMITMENTS"))
+        }
+        _ => (ELF_POSEIDON2, vec![raw], "POSEIDON2 COMMITMENTS".to_string()),
+    };
+    let batch = mode == "batch";
+    let n = proofs.len();
+    let input = |ps: &[Vec<u8>]| {
         let mut s = SP1Stdin::new();
-        s.write_vec(bytes.clone());
+        if batch {
+            s.write(&(ps.len() as u32));
+        }
+        for p in ps {
+            s.write_vec(p.clone());
+        }
         s
     };
+    let stdin = || input(&proofs);
 
     let t = std::time::Instant::now();
     let (out, _) = LightProver::new().execute(elf.clone(), stdin()).run().expect("the guest runs to completion");
@@ -35,15 +56,20 @@ fn main() {
     let pv = values(out.as_slice());
 
     let program = Arc::new(Program::from(&elf).expect("elf"));
+    let buffers = stdin().buffer;
     let mut ex = MinimalExecutorEnum::new(program.clone(), false, None);
-    ex.with_input(&bytes);
+    for b in &buffers {
+        ex.with_input(b);
+    }
     let t = std::time::Instant::now();
     while ex.execute_chunk().is_some() {}
     let count_secs = t.elapsed().as_secs_f64();
 
     let opts = SP1CoreOpts::default();
     let mut metered = MinimalExecutorEnum::new(program.clone(), false, Some(opts.gas_trace_chunk_threshold));
-    metered.with_input(&bytes);
+    for b in &buffers {
+        metered.with_input(b);
+    }
     let mut report = ExecutionReport::default();
     let mut chunks = 0;
     let t = std::time::Instant::now();
@@ -54,13 +80,16 @@ fn main() {
     }
     let gas_secs = t.elapsed().as_secs_f64();
 
-    // One byte of the last public value changed: the transcript differs, the
-    // proof no longer verifies, and the guest must not finish cleanly.
-    let mut bad = bytes.clone();
-    let last = bad.len() - 1;
-    bad[last] ^= 1;
+    // One byte of the last proof's last public value changed: the transcript
+    // differs, that proof no longer verifies, and the guest must not finish
+    // cleanly.
+    let mut bad = proofs.clone();
+    let last = bad[n - 1].len() - 1;
+    bad[n - 1][last] ^= 1;
     let mut tampered = MinimalExecutorEnum::new(program.clone(), false, None);
-    tampered.with_input(&bad);
+    for b in &input(&bad).buffer {
+        tampered.with_input(b);
+    }
     let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         while tampered.execute_chunk().is_some() {}
         tampered.exit_code()
@@ -68,10 +97,11 @@ fn main() {
     .map(|code| code != 0)
     .unwrap_or(true);
 
-    println!("DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, {} COMMITMENTS", if keccak { "KECCAK" } else { "POSEIDON2" });
+    println!("DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, {label}");
     println!("{}", "=".repeat(78));
-    println!("  proof bytes read                             {:>14}", bytes.len());
-    println!("  the proof verifies inside the zkVM           {:>14}", ex.exit_code() == 0 && pv.len() == 10);
+    println!("  proofs verified                              {:>14}", n);
+    println!("  proof bytes read                             {:>14}", proofs.iter().map(Vec::len).sum::<usize>());
+    println!("  every proof verifies inside the zkVM         {:>14}", ex.exit_code() == 0 && pv.len() == 10 * n);
     println!("  public values committed                      {:>14}", pv.len());
     println!("  instructions executed                        {:>14}", ex.global_clk());
     println!("  light execution, seconds                     {:>14.1}", light_secs);

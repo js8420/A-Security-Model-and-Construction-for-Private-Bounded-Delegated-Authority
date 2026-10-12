@@ -148,3 +148,20 @@ pub fn hash_cost(batches: usize, per_batch: usize) {
         println!("  {name} per-batch prove medians: {}", b.join(" "));
     }
 }
+
+/// `n` fresh proofs of the same payment, each serialised as `export` writes
+/// one, gathered into one file for the batch verifier.
+pub fn export_batch(path: &str, n: usize) -> (usize, bool) {
+    let air = Air::new();
+    let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let mut all: Vec<Vec<u8>> = Vec::with_capacity(n);
+    let mut ok = true;
+    for _ in 0..n {
+        let proof: Proof<KConfig> = prove(&config(), &air, t.clone(), &pv);
+        ok &= verify(&config(), &air, &proof, &pv).is_ok();
+        all.push(bincode::serialize(&(&proof, &pv)).expect("serialise"));
+    }
+    let bytes = bincode::serialize(&all).expect("serialise");
+    std::fs::write(path, &bytes).expect("write batch");
+    (bytes.len(), ok)
+}

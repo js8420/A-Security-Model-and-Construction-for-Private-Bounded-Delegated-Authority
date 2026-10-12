@@ -1,0 +1,25 @@
+﻿MockToken                             375695 0x1
+Reserve                              1542732 0x1
+SP1Verifier                          1508005 0x1
+ValidityDispute                      1558388 0x1
+Reserve          setArbiters           46636 0x1
+MockToken        mint                  68279 0x1
+MockToken        mint                  50903 0x1
+MockToken        approve               46463 0x1
+Reserve          register             260422 0x1
+Reserve          settleLogged         107858 0x1
+SP1Verifier      verifyProof          247474 0x1
+ValidityDispute  open                 101220 0x1
+ValidityDispute  answer               304379 0x1
+MockToken                             375695 0x1
+Reserve                              1542732 0x1
+ValidityDispute                      1558352 0x1
+Reserve          setArbiters           46636 0x1
+MockToken        mint                  68279 0x1
+MockToken        mint                  50903 0x1
+MockToken        approve               46463 0x1
+Reserve          register             260422 0x1
+Reserve          settleLogged         107858 0x1
+ValidityDispute  open                 101220 0x1
+ValidityDispute  expire                75071 0x1
+ValidityDispute  withdraw              28540 0x1

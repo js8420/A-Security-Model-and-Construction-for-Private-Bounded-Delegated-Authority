@@ -20,6 +20,7 @@ contract ValidityDisputeTest is Groth16Result {
     uint256 constant AGENT_BOND = 1 ether;
     uint256 constant CHALLENGER_BOND = 0.01 ether;
     uint64 constant WINDOW = 1 days;
+    uint64 constant SLOT = 2 hours;
 
     MockToken token;
     Reserve acc;
@@ -39,7 +40,7 @@ contract ValidityDisputeTest is Groth16Result {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0));
         sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, WINDOW, CHALLENGER_BOND);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, bytes32(0), WINDOW, SLOT, CHALLENGER_BOND);
         acc.setArbiters(address(vd), address(0));
         vm.deal(principal, 10 ether);
         vm.deal(challenger, 1 ether);
@@ -84,8 +85,12 @@ contract ValidityDisputeTest is Groth16Result {
         _open();
         uint256 agentBefore = agent.balance;
         vd.answer(id, digest, proof);
-        assertEq(agent.balance, agentBefore + CHALLENGER_BOND);
+        assertEq(vd.credit(agent), CHALLENGER_BOND);
         assertEq(uint256(vd.challengeOf(id, digest).status), uint256(ValidityDispute.Status.Answered));
+        vm.prank(agent);
+        vd.withdraw();
+        assertEq(agent.balance, agentBefore + CHALLENGER_BOND);
+        assertEq(vd.credit(agent), 0);
     }
 
     function testNoAnswerForfeitsTheAgentBond() public {
@@ -95,6 +100,8 @@ contract ValidityDisputeTest is Groth16Result {
         uint256 challengerBefore = challenger.balance;
         vd.expire(id, digest);
         assertEq(principal.balance, principalBefore + AGENT_BOND);
+        vm.prank(challenger);
+        vd.withdraw();
         assertEq(challenger.balance, challengerBefore + CHALLENGER_BOND);
         assertEq(uint256(vd.challengeOf(id, digest).status), uint256(ValidityDispute.Status.Expired));
     }

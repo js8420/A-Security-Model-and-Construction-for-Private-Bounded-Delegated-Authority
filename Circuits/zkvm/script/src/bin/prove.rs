@@ -4,6 +4,8 @@
 //!   prove fetch                           download the Groth16 circuit files (needs internet)
 //!   prove <proof file> <out dir> [keccak] prove, verify, and write the results; keccak
 //!                                         selects the verifier built for Keccak commitments
+//!   prove <batch file> <out dir> batch <n> one proof that the first n proofs of the
+//!                                         batch file all verify
 //!
 //! The out directory receives proof_groth16.bin (the SDK's own format),
 //! and onchain.txt: the program's verifying key hash, the public values and
@@ -18,6 +20,7 @@ use sp1_sdk::{include_elf, Elf, HashableKey, ProvingKey, SP1Stdin};
 
 const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
 const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
+const ELF_BATCH: Elf = include_elf!("dispute-verifier-batch");
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -30,12 +33,31 @@ fn main() {
     let input = args.get(1).expect("proof file");
     let out = std::path::PathBuf::from(args.get(2).expect("out directory"));
     std::fs::create_dir_all(&out).expect("out directory");
-    let keccak = args.get(3).map(String::as_str) == Some("keccak");
-    let elf = if keccak { ELF_KECCAK } else { ELF_POSEIDON2 };
-    println!("verifier program                            {:>12}", if keccak { "keccak" } else { "poseidon2" });
-    let bytes = std::fs::read(input).expect("exported proof");
+    let mode = args.get(3).map(String::as_str).unwrap_or("poseidon2");
+    let raw = std::fs::read(input).expect("exported proof");
     let mut stdin = SP1Stdin::new();
-    stdin.write_vec(bytes.clone());
+    let (elf, n, stark_bytes) = match mode {
+        "keccak" => {
+            stdin.write_vec(raw.clone());
+            (ELF_KECCAK, 1, raw.len())
+        }
+        "batch" => {
+            let n: usize = args.get(4).expect("batch size").parse().expect("batch size");
+            let all: Vec<Vec<u8>> = bincode::deserialize(&raw).expect("batch file");
+            assert!(n >= 1 && n <= all.len(), "the batch file holds {} proofs", all.len());
+            stdin.write(&(n as u32));
+            for p in &all[..n] {
+                stdin.write_vec(p.clone());
+            }
+            (ELF_BATCH, n, all[..n].iter().map(Vec::len).sum())
+        }
+        _ => {
+            stdin.write_vec(raw.clone());
+            (ELF_POSEIDON2, 1, raw.len())
+        }
+    };
+    println!("verifier program                            {:>12}", mode);
+    println!("payment proofs                              {:>12}", n);
 
     let t = Instant::now();
     let prover = CpuProver::new();
@@ -59,8 +81,10 @@ fn main() {
     writeln!(f, "vkey {}", vk.bytes32()).ok();
     writeln!(f, "public_values 0x{}", hex(&pv)).ok();
     writeln!(f, "proof 0x{}", hex(&onchain)).ok();
-    writeln!(f, "stark_bytes {}", bytes.len()).ok();
-    writeln!(f, "hash {}", if keccak { "keccak" } else { "poseidon2" }).ok();
+    writeln!(f, "stark_bytes {stark_bytes}").ok();
+    writeln!(f, "hash {}", if mode == "poseidon2" { "poseidon2" } else { "keccak" }).ok();
+    writeln!(f, "program {mode}").ok();
+    writeln!(f, "payment_proofs {n}").ok();
     writeln!(f, "setup_seconds {setup_secs:.1}").ok();
     writeln!(f, "prove_seconds {prove_secs:.1}").ok();
     writeln!(f, "verifies {ok}").ok();

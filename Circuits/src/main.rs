@@ -463,6 +463,12 @@ fn main() {
         }
         return;
     }
+    if std::env::args().any(|a| a == "export-keccak-batch") {
+        let path = "target/proof_128_keccak_batch.bin";
+        let (bytes, ok) = keccak::export_batch(path, 8);
+        println!("  eight Keccak proofs written to {path}: {bytes} bytes, every one verifies natively {ok}");
+        return;
+    }
     if std::env::args().any(|a| a == "hash-cost") {
         keccak::hash_cost(5, 4);
         return;

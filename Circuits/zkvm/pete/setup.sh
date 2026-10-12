@@ -8,10 +8,12 @@ ELF="$ZKVM/program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/di
 ELFK="$ZKVM/program-keccak/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-keccak"
 PROOF="$ZKVM/../target/proof_128.bin"
 PROOFK="$ZKVM/../target/proof_128_keccak.bin"
+ELFB="$ZKVM/program-batch/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-batch"
+PROOFB="$ZKVM/../target/proof_128_keccak_batch.bin"
 source "$HERE/env.sh"
 
 echo "== inputs"
-sha256sum "$ELF" "$PROOF" "$ELFK" "$PROOFK"
+sha256sum "$ELF" "$PROOF" "$ELFK" "$PROOFK" "$ELFB" "$PROOFB"
 
 echo "== tools: gcc 13, Go 1.24, clang 18, protoc (conda-forge, glibc 2.17 sysroot)"
 if [ ! -x "$E/bin/go" ]; then
@@ -34,6 +36,7 @@ echo "== Rust packages"
 (cd "$ZKVM/script" && cargo fetch --locked -q)
 (cd "$ZKVM/program" && cargo fetch --locked -q)
 (cd "$ZKVM/program-keccak" && cargo fetch --locked -q)
+(cd "$ZKVM/program-batch" && cargo fetch --locked -q)
 # SP1's executor runner builds a helper program with its own lock files.
 rm -rf /scratch/jshital/paper04/crate-src && mkdir -p /scratch/jshital/paper04/crate-src
 for c in sp1-core-executor-runner-6.8.1 sp1-core-executor-runner-binary-6.8.1; do
