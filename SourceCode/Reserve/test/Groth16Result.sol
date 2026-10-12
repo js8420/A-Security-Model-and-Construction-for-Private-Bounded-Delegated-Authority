@@ -3,10 +3,10 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 
-/// The Groth16 proof Pete made of the dispute verifier, read from the file the
-/// prove binary wrote.
+/// The Groth16 proof Pete made of the dispute verifier for Keccak commitments,
+/// read from the file the prove binary wrote.
 abstract contract Groth16Result is Test {
-    string constant RESULT = "../../WorkingHistory/groth16_20261009/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_keccak_20261011/out_8272496/onchain.txt";
 
     bytes32 vkey;
     bytes publicValues;

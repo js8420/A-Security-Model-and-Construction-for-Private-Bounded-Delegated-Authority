@@ -11,7 +11,7 @@ import {MockToken} from "../test/MockToken.sol";
 /// figure is a receipt's gasUsed: intrinsic cost, calldata (with the EIP-7623
 /// floor) and execution with cold accounts and storage, as on chain.
 contract ValidityDisputeOnChain is Script {
-    string constant RESULT = "../../WorkingHistory/groth16_20261009/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_keccak_20261011/out_8272496/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
