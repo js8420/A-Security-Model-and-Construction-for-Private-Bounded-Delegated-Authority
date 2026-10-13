@@ -743,7 +743,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         ($label:expr, $mk:expr, $trace:expr, $cfg:expr, $pubs:expr) => {{
             let cfg = $cfg;
             let pubs = $pubs;
-            let air0 = $mk;
+            let air0 = crate::degree::Stated::new($mk);
             let width = BaseAir::<Val>::width(&air0);
             // Built once. Expanding the trace expression inside the closure put
             // trace generation inside the timed region, which charged each
@@ -756,7 +756,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
             cols.push(width);
             bytes.push(sz);
 
-            let air1 = $mk;
+            let air1 = crate::degree::Stated::new($mk);
             let tr1 = base_trace.clone();
             provers.push(Box::new(move || {
                 let ready = tr1.clone();
@@ -765,7 +765,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
                 t.elapsed().as_micros()
             }));
 
-            let air2 = $mk;
+            let air2 = crate::degree::Stated::new($mk);
             verifiers.push(Box::new(move || {
                 let t = Instant::now();
                 let ok = verify(cfg, &air2, &proof, pubs).is_ok();
@@ -807,8 +807,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
         let cfgp = &zk;
         let pw = &pv_w32;
         let ps = &pv;
-        let wair = WholeAir::<{ REGISTERS }, 16, 32>::new();
-        let sair = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
+        let wair = crate::degree::Stated::new(WholeAir::<{ REGISTERS }, 16, 32>::new());
+        let sair = crate::degree::Stated::new(crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new());
         let wtr = whole_trace::<{ REGISTERS }, 16, 32>(ROWS);
         let str_ = crate::spend_trace::spend_trace::<{ REGISTERS }, 16, 64>(ROWS);
         let wproof = prove(cfgp, &wair, wtr.clone(), pw);
@@ -820,8 +820,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
                 + bincode::serialize(&sproof).expect("proof serialises").len(),
         );
 
-        let w1 = WholeAir::<{ REGISTERS }, 16, 32>::new();
-        let s1 = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
+        let w1 = crate::degree::Stated::new(WholeAir::<{ REGISTERS }, 16, 32>::new());
+        let s1 = crate::degree::Stated::new(crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new());
         provers.push(Box::new(move || {
             let a = wtr.clone();
             let b = str_.clone();
@@ -831,8 +831,8 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
             t.elapsed().as_micros()
         }));
 
-        let w2 = WholeAir::<{ REGISTERS }, 16, 32>::new();
-        let s2 = crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new();
+        let w2 = crate::degree::Stated::new(WholeAir::<{ REGISTERS }, 16, 32>::new());
+        let s2 = crate::degree::Stated::new(crate::spend::SpendAir::<{ REGISTERS }, 16, 64>::new());
         verifiers.push(Box::new(move || {
             let t = Instant::now();
             let ok = verify(cfgp, &w2, &wproof, pw).is_ok()

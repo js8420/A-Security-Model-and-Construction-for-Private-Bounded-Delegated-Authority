@@ -55,6 +55,7 @@ mod forge;
 mod assertion;
 mod leaf;
 mod keccak;
+mod degree;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
