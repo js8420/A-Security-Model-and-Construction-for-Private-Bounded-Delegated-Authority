@@ -32,7 +32,7 @@ use crate::naysay::{
     Outputs, RProof, Recording,
 };
 use crate::prover::{
-    deployed_pcs, Challenge, Compress, Hash, Pcs, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, ROWS,
+    deployed_pcs, Challenge, Compress, Hash, P2Pcs as Pcs, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, ROWS,
 };
 use crate::trace::{composed_case, ComposedBreak};
 

@@ -20,7 +20,7 @@ use p3_field::{BasedVectorSpace, PrimeField64};
 use p3_uni_stark::prove;
 
 use crate::naysay::{config, record_ops, sides, Air, Op, RProof, Recording};
-use crate::prover::{deployed_pcs, Challenge, Pcs, Val, ROWS};
+use crate::prover::{deployed_pcs, Challenge, P2Pcs as Pcs, Val, ROWS};
 use crate::trace::composed_case;
 
 type Expr = SymbolicExpr<BaseLeaf<Val>>;

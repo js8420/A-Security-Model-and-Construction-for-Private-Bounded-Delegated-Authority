@@ -2,15 +2,16 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use p3_air::BaseAir;
-use p3_challenger::DuplexChallenger;
+use p3_challenger::{DuplexChallenger, HashChallenger, SerializingChallenger64};
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::Field;
 use p3_fri::{FriParameters, HidingFriPcs, TwoAdicFriPcs};
 use p3_goldilocks::{default_goldilocks_poseidon2_8, Goldilocks, Poseidon2Goldilocks};
+use p3_keccak::{Keccak256Hash, KeccakF, VECTOR_LEN};
 use p3_merkle_tree::{MerkleTreeHidingMmcs, MerkleTreeMmcs};
-use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+use p3_symmetric::{CompressionFunctionFromHasher, PaddingFreeSponge, SerializingHasher, TruncatedPermutation};
 use p3_uni_stark::{prove, verify, StarkConfig};
 use rand10::rngs::ChaCha12Rng;
 use rand_core::{Infallible, SeedableRng, TryCryptoRng, TryRng};
@@ -53,7 +54,41 @@ const CODEWORD_SEED: u64 = 0x5350_454e_4400_0002;
 // plain MerkleTreeMmcs and is not hiding. ChaCha12 is the cipher StdRng uses,
 // named directly because StdRng is neither Clone nor portable across releases.
 // SmallRng, which the upstream tests use for salts, is documented as insecure.
+//
+// The deployed commitments and transcript are Keccak: SP1 proves Keccak-f with
+// a precompile and has none for Poseidon2 over Goldilocks, so a dispute answer
+// costs 6.6 times less prover gas, and a payment proves faster as well. The
+// circuit is unchanged and still proves Poseidon2 inside.
+pub(crate) type KU64Hash = PaddingFreeSponge<KeccakF, 25, 17, 4>;
+pub(crate) type KFieldHash = SerializingHasher<KU64Hash>;
+pub(crate) type KCompress = CompressionFunctionFromHasher<KU64Hash, 2, 4>;
 pub(crate) type ValMmcs = MerkleTreeHidingMmcs<
+    [Val; VECTOR_LEN],
+    [u64; VECTOR_LEN],
+    KFieldHash,
+    KCompress,
+    SaltRng,
+    2,
+    4,
+    SALT_ELEMS,
+>;
+pub(crate) type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
+pub(crate) type Dft = Radix2DitParallel<Val>;
+pub(crate) type Pcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SaltRng>;
+
+pub(crate) fn keccak_mmcs(salts: SaltRng) -> ValMmcs {
+    let h = KU64Hash::new(KeccakF {});
+    ValMmcs::new(KFieldHash::new(h), KCompress::new(h), 0, salts)
+}
+
+pub(crate) fn challenger() -> Challenger {
+    Challenger::from_hasher(vec![], Keccak256Hash {})
+}
+
+// The Poseidon2 commitments and duplex transcript this crate was built with,
+// kept for the structural-dispute studies (naysay, forge, assertion, leaf),
+// which are about that transcript, and for the comparison with Keccak.
+pub(crate) type P2ValMmcs = MerkleTreeHidingMmcs<
     <Val as Field>::Packing,
     <Val as Field>::Packing,
     Hash,
@@ -63,9 +98,8 @@ pub(crate) type ValMmcs = MerkleTreeHidingMmcs<
     4,
     SALT_ELEMS,
 >;
-pub(crate) type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
-pub(crate) type Dft = Radix2DitParallel<Val>;
-pub(crate) type Pcs = HidingFriPcs<Val, Dft, ValMmcs, ChallengeMmcs, SaltRng>;
+pub(crate) type P2ChallengeMmcs = ExtensionMmcs<Val, Challenge, P2ValMmcs>;
+pub(crate) type P2Pcs = HidingFriPcs<Val, Dft, P2ValMmcs, P2ChallengeMmcs, SaltRng>;
 
 /// ChaCha12 with a Clone that reconstructs the stream rather than approximating
 /// it. chacha20 derives nothing on its RNGs, and the only Clone generator in the
@@ -117,23 +151,22 @@ impl TryRng for SaltRng {
 }
 
 impl TryCryptoRng for SaltRng {}
-pub(crate) type Challenger = DuplexChallenger<Val, Perm, 8, 4>;
+pub(crate) type Challenger = SerializingChallenger64<Val, HashChallenger<u8, Keccak256Hash, 32>>;
 pub(crate) type Config = StarkConfig<Pcs, Challenge, Challenger>;
+pub(crate) type P2Challenger = DuplexChallenger<Val, Perm, 8, 4>;
+pub(crate) type P2Config = StarkConfig<P2Pcs, Challenge, P2Challenger>;
 
 // The non-hiding pair, kept only so the cost of zero knowledge can be measured
 // end to end rather than inferred from column counts. Nothing in the paper's
 // claims may be measured on this configuration; it exists to be the comparison.
-type PlainValMmcs =
-    MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, Hash, Compress, 2, 4>;
+type PlainValMmcs = MerkleTreeMmcs<[Val; VECTOR_LEN], [u64; VECTOR_LEN], KFieldHash, KCompress, 2, 4>;
 type PlainChallengeMmcs = ExtensionMmcs<Val, Challenge, PlainValMmcs>;
 type PlainPcs = TwoAdicFriPcs<Val, Dft, PlainValMmcs, PlainChallengeMmcs>;
 type PlainConfig = StarkConfig<PlainPcs, Challenge, Challenger>;
 
 fn config_plain() -> PlainConfig {
-    let perm = default_goldilocks_poseidon2_8();
-    let hash = Hash::new(perm.clone());
-    let compress = Compress::new(perm.clone());
-    let val_mmcs = PlainValMmcs::new(hash, compress, 0);
+    let h = KU64Hash::new(KeccakF {});
+    let val_mmcs = PlainValMmcs::new(KFieldHash::new(h), KCompress::new(h), 0);
     let challenge_mmcs = PlainChallengeMmcs::new(val_mmcs.clone());
     let fri_params = FriParameters {
         log_blowup: LOG_BLOWUP,
@@ -147,7 +180,7 @@ fn config_plain() -> PlainConfig {
         mmcs: challenge_mmcs,
     };
     let pcs = PlainPcs::new(Dft::default(), val_mmcs, fri_params);
-    StarkConfig::new(pcs, Challenger::new(perm))
+    StarkConfig::new(pcs, challenger())
 }
 
 /// 40 queries at blowup 16 with 20 grinding bits: 126 bits under the FRI
@@ -204,25 +237,14 @@ pub(crate) fn config_fixed_seed() -> Config {
 }
 
 fn config_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Config {
-    StarkConfig::new(
-        pcs_seeded(num_queries, log_blowup, pow_bits, fixed),
-        Challenger::new(default_goldilocks_poseidon2_8()),
-    )
-}
-
-/// The deployed commitment scheme, fresh randomness, for code that pairs it
-/// with a challenger of its own.
-pub(crate) fn deployed_pcs() -> Pcs {
-    pcs_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
+    StarkConfig::new(pcs_seeded(num_queries, log_blowup, pow_bits, fixed), challenger())
 }
 
 fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> Pcs {
     let rng = |seed: u64| if fixed { SaltRng::seeded(seed) } else { SaltRng::fresh() };
-    let perm = default_goldilocks_poseidon2_8();
-    let val_mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, rng(INPUT_SALT_SEED));
     Pcs::new(
         Dft::default(),
-        val_mmcs,
+        keccak_mmcs(rng(INPUT_SALT_SEED)),
         fri_seeded(num_queries, log_blowup, pow_bits, fixed),
         NUM_RANDOM_CODEWORDS,
         rng(CODEWORD_SEED),
@@ -234,8 +256,6 @@ fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: boo
 /// identical stream, which is not independent blinding.
 fn fri_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: bool) -> FriParameters<ChallengeMmcs> {
     let salts = if fixed { SaltRng::seeded(FRI_SALT_SEED) } else { SaltRng::fresh() };
-    let perm = default_goldilocks_poseidon2_8();
-    let fri_mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, salts);
     FriParameters {
         log_blowup,
         log_final_poly_len: LOG_FINAL_POLY_LEN,
@@ -243,14 +263,38 @@ fn fri_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: boo
         num_queries,
         commit_proof_of_work_bits: 0,
         query_proof_of_work_bits: pow_bits,
-        mmcs: ChallengeMmcs::new(fri_mmcs),
+        mmcs: ChallengeMmcs::new(keccak_mmcs(salts)),
     }
 }
 
-/// The deployed FRI parameters, fresh salts, for code that runs the FRI
-/// prover itself.
-pub(crate) fn deployed_fri() -> FriParameters<ChallengeMmcs> {
-    fri_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
+/// The Poseidon2 commitment scheme at the deployed parameters, fresh salts,
+/// for the structural-dispute studies that pair it with a challenger of their
+/// own.
+pub(crate) fn deployed_pcs() -> P2Pcs {
+    let perm = default_goldilocks_poseidon2_8();
+    let val_mmcs = P2ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, SaltRng::fresh());
+    P2Pcs::new(Dft::default(), val_mmcs, deployed_fri(), NUM_RANDOM_CODEWORDS, SaltRng::fresh())
+}
+
+/// The Poseidon2 FRI parameters for the same studies.
+pub(crate) fn deployed_fri() -> FriParameters<P2ChallengeMmcs> {
+    let perm = default_goldilocks_poseidon2_8();
+    let fri_mmcs = P2ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, SaltRng::fresh());
+    FriParameters {
+        log_blowup: LOG_BLOWUP,
+        log_final_poly_len: LOG_FINAL_POLY_LEN,
+        max_log_arity: 2,
+        num_queries: NUM_QUERIES,
+        commit_proof_of_work_bits: 0,
+        query_proof_of_work_bits: POW_BITS,
+        mmcs: P2ChallengeMmcs::new(fri_mmcs),
+    }
+}
+
+/// The configuration this crate was measured with before Keccak, kept so the
+/// two can be compared on one machine.
+pub(crate) fn p2_config() -> P2Config {
+    StarkConfig::new(deployed_pcs(), P2Challenger::new(default_goldilocks_poseidon2_8()))
 }
 
 pub(crate) fn config() -> Config {
@@ -1103,10 +1147,9 @@ pub fn verifier_work<
 pub fn grinding_cost(samples: usize) -> Stats {
     use p3_challenger::{CanObserve, GrindingChallenger};
     use p3_field::PrimeCharacteristicRing;
-    let perm = default_goldilocks_poseidon2_8();
     let mut us: Vec<u128> = Vec::with_capacity(samples);
     for i in 0..samples {
-        let mut ch = Challenger::new(perm.clone());
+        let mut ch = challenger();
         ch.observe(Goldilocks::from_u64(0x9E37_79B9_7F4A_7C15 ^ i as u64));
         let t = Instant::now();
         let _ = ch.grind(POW_BITS);
@@ -1173,8 +1216,7 @@ pub fn zk_leak<
     let proof = prove(&config(), &air, t, &pv);
 
     // Only what any holder of the proof has.
-    let perm = default_goldilocks_poseidon2_8();
-    let mmcs = ValMmcs::new(Hash::new(perm.clone()), Compress::new(perm), 0, SaltRng::seeded(0));
+    let mmcs = keccak_mmcs(SaltRng::seeded(0));
     let n2 = 2 * rows;
     let log_lde = n2.trailing_zeros() as usize + LOG_BLOWUP;
     let height = 1usize << log_lde;

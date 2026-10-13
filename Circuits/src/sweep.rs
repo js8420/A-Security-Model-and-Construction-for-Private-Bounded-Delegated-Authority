@@ -148,7 +148,7 @@ pub fn step_count() {
     let blobs = words.div_ceil(ELEMENTS_PER_BLOB);
     let total = w.permutations as usize + w.constraint_ops + 2 * w.constraints + words + PUBLIC_VALUES;
     println!();
-    println!("ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED");
+    println!("ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED, POSEIDON2 COMMITMENTS (BISECTION STUDY)");
     println!("{}", "=".repeat(78));
     println!("  composed circuit, {} rows, verifies         {:>12}", crate::prover::ROWS, w.verifies);
     println!("  Poseidon2 permutations during verify         {:>12}", w.permutations);

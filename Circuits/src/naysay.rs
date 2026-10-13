@@ -23,8 +23,8 @@ use p3_uni_stark::{prove, verify, Proof, StarkConfig};
 
 use crate::composed::ComposedAir;
 use crate::prover::{
-    deployed_pcs, Challenge, Challenger, Compress, Hash, Pcs, SaltRng, Val, ValMmcs, LOG_BLOWUP,
-    LOG_FINAL_POLY_LEN, NUM_RANDOM_CODEWORDS, ROWS,
+    deployed_pcs, Challenge, Compress, Hash, P2Challenger as Challenger, P2Pcs as Pcs, P2ValMmcs as ValMmcs,
+    SaltRng, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, NUM_RANDOM_CODEWORDS, ROWS,
 };
 use crate::trace::{composed_case, ComposedBreak};
 
@@ -695,7 +695,7 @@ use p3_fri::{FriFoldingStrategy, TwoAdicFriFolding};
 use p3_symmetric::{CryptographicHasher, PseudoCompressionFunction};
 use p3_util::{log2_strict_usize, reverse_bits_len, reverse_slice_index_bits};
 
-use crate::prover::ChallengeMmcs;
+use crate::prover::P2ChallengeMmcs as ChallengeMmcs;
 
 /// Where a query's computed value meets a committed one.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

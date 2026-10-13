@@ -470,7 +470,7 @@ fn main() {
         return;
     }
     if std::env::args().any(|a| a == "hash-cost") {
-        keccak::hash_cost(5, 4);
+        keccak::hash_cost(10, 20);
         return;
     }
     if std::env::args().any(|a| a == "leaf") {
@@ -502,6 +502,7 @@ fn main() {
 
     println!("COMMITMENT SCHEME AND VERIFICATION UNDER IT");
     println!("{}", "=".repeat(78));
+    println!("  {:<44} {:>12}", "commitment and transcript hash", "Keccak");
     println!("  {:<44} {:>12}", "hiding PCS reported by the Pcs trait", prover::zk_enabled());
     println!("  {:<44} {:>12}", "salt elements per leaf", prover::SALT_ELEMS);
     println!("  {:<44} {:>12}", "random codewords per matrix", prover::NUM_RANDOM_CODEWORDS);

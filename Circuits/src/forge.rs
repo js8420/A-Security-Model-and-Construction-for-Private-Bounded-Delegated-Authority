@@ -37,8 +37,8 @@ use crate::naysay::{
     all_positions, first_word, identity, outputs, record, run_queries, sides, Air, Point, RConfig, RProof,
 };
 use crate::prover::{
-    deployed_fri, deployed_pcs, Challenge, Challenger, Compress, Hash, Pcs, SaltRng, Val, ValMmcs,
-    LOG_BLOWUP, LOG_FINAL_POLY_LEN, NUM_QUERIES, NUM_RANDOM_CODEWORDS, ROWS,
+    deployed_fri, deployed_pcs, Challenge, Compress, Hash, P2Challenger as Challenger, P2Pcs as Pcs,
+    P2ValMmcs as ValMmcs, SaltRng, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, NUM_QUERIES, NUM_RANDOM_CODEWORDS, ROWS,
 };
 
 /// Coefficients of the final polynomial. The FRI prover reads them off the

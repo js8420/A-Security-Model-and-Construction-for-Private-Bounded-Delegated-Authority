@@ -1,0 +1,10 @@
+﻿STATED CONSTRAINT DEGREE AGAINST SYMBOLIC EVALUATION, COMPOSED CIRCUIT
+==============================================================================
+  registers / MD RD DEPTH COVER  symbolic    stated   agree
+  0 / 16 32 16 64                      7   Some(7)    true
+  1 / 16 32 16 64                      3   Some(3)    true
+  0 / 16 32 16 14                      7   Some(7)    true
+  1 / 16 32 16 14                      3   Some(3)    true
+  0 / 8 8 16 14                        7   Some(7)    true
+  1 / 8 8 16 14                        3   Some(3)    true
+  stated degree equals the symbolic degree everywhere: true
