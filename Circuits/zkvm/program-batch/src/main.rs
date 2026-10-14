@@ -1,7 +1,7 @@
 //! Inside the zkVM: the Plonky3 verifier with Keccak commitments, run on any
-//! number of settlements' proofs, one after another. The committed values are
-//! every proof's public values in order, so one Groth16 proof answers every
-//! challenge it names. With one proof it commits what the single verifier
+//! number of settlements' proofs, one after another. It commits every proof's
+//! statement in order, each as the single verifier commits it, so one Groth16
+//! proof answers every challenge it names. With one proof it commits what the single verifier
 //! commits. Keccak reaches SP1's precompile through the patched tiny-keccak.
 //!
 //! The circuit's own source files are compiled in unchanged, so the AIR the
@@ -31,6 +31,9 @@ mod revocation;
 #[path = "../../../src/spend.rs"]
 #[allow(dead_code)]
 mod spend;
+#[path = "../../../src/statement.rs"]
+#[allow(dead_code)]
+mod statement;
 #[path = "../../../src/whole.rs"]
 #[allow(dead_code)]
 mod whole;
@@ -112,7 +115,8 @@ pub fn main() {
         let bytes = sp1_zkvm::io::read_vec();
         let (proof, pv): (Proof<Config>, Vec<Val>) = bincode::deserialize(&bytes).expect("proof and public values");
         verify(&cfg, &air, &proof, &pv).expect("the proof verifies");
-        out.extend(pv.iter().map(|v| v.as_canonical_u64()));
+        let values: Vec<u64> = pv.iter().map(|v| v.as_canonical_u64()).collect();
+        out.extend(statement::committed(&values));
     }
     sp1_zkvm::io::commit(&out);
 }

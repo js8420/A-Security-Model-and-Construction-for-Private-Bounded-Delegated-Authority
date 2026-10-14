@@ -506,7 +506,7 @@ pub fn composed_proof_bytes<
 ) -> usize {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config();
-    let pv = composed_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     bincode::serialize(&proof).expect("proof serialises").len()
 }
@@ -720,7 +720,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     let zk = config_with(NUM_QUERIES, LOG_BLOWUP, 0);
     let plain = config_plain();
     let pv: Vec<Goldilocks> = crate::spend_trace::spend_public_values();
-    let pv_c = composed_public_values::<{ REGISTERS }, 16, 32>();
+    let pv_c = composed_public_values::<{ REGISTERS }, 16, 32, 16, 64>();
     let pv_full = full_public_values::<{ REGISTERS }>();
 
     // Declared before the closure vectors below, so that the closures which
@@ -915,7 +915,7 @@ pub fn composed_proof_at<
 ) -> (usize, usize, usize, usize, u128, u128, bool) {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config_with(num_queries, log_blowup, pow_bits);
-    let pv = composed_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
     let trace = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
 
     let t0 = Instant::now();
@@ -951,7 +951,7 @@ pub fn composed_times<
     share_config: bool,
 ) -> Vec<u128> {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let pv = composed_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
     let base = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
     let shared = config();
     let mut out = Vec::with_capacity(iters);
@@ -1003,7 +1003,7 @@ pub fn composed_verifies_at<
 ) -> bool {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = config_with(num_queries, log_blowup, pow_bits);
-    let pv = composed_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     verify(&cfg, &air, &proof, &pv).is_ok()
 }
@@ -1125,7 +1125,7 @@ pub fn verifier_work<
 ) -> VerifierWork {
     let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let cfg = counting_config();
-    let pv = composed_public_values::<R, MD, RD>();
+    let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     PERMUTATIONS.store(0, std::sync::atomic::Ordering::Relaxed);
     let verifies = verify(&cfg, &air, &proof, &pv).is_ok();

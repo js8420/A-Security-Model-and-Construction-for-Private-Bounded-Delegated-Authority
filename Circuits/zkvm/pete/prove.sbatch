@@ -3,6 +3,8 @@
 #   sbatch prove.sbatch            the deployed Poseidon2 verifier
 #   sbatch prove.sbatch keccak     the verifier for Keccak commitments
 #   sbatch prove.sbatch batch 4    the batch verifier on the first 4 proofs
+# A third argument names the output folder, out_<name>, in place of the job id:
+#   sbatch prove.sbatch keccak 1 keccak_a
 #SBATCH --job-name=groth16
 #SBATCH --partition=bigmem
 #SBATCH --nodes=1
@@ -17,13 +19,14 @@ source "$HERE/env.sh"
 export RUST_LOG=info TMPDIR=/scratch/jshital/tmp
 HASH=${1:-poseidon2}
 N=${2:-}
+NAME=${3:-$SLURM_JOB_ID}
 case "$HASH" in
   keccak) PROOF="$HERE/../../target/proof_128_keccak.bin" ;;
   batch) PROOF="$HERE/../../target/proof_128_keccak_batch.bin" ;;
   *) PROOF="$HERE/../../target/proof_128.bin" ;;
 esac
-OUT="$HERE/out_$SLURM_JOB_ID"
-echo "node $(hostname), cpus $SLURM_CPUS_PER_TASK, hash $HASH $N, start $(date)"
+OUT="$HERE/out_$NAME"
+echo "job $SLURM_JOB_ID, node $(hostname), cpus $SLURM_CPUS_PER_TASK, hash $HASH $N, out $OUT, start $(date)"
 sha256sum "$PROOF"
 env | grep '^SP1_WORKER' || echo "SP1 worker settings: defaults"
 TIMER=""

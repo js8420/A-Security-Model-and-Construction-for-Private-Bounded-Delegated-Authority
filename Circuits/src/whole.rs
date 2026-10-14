@@ -41,6 +41,9 @@ pub const GLUE: usize = DIGEST + 3;
 /// delegation it belongs to.
 pub const PUBLIC_VALUES: usize = 1 + DIGEST + DIGEST;
 
+/// Limbs of a payee address: 56, 56 and 48 bits, low limb first.
+pub const PAYEE_LIMBS: usize = 3;
+
 pub struct WholeAir<const R: usize, const MD: usize, const RD: usize> {
     policy: PolicyAir,
     hash: HashAir<R>,
@@ -108,7 +111,18 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
     where
         AB: AirBuilder<F = F>,
     {
-        self.constrain_with(builder, base, true);
+        self.constrain_with(builder, base, true, None);
+    }
+
+    /// The same constraints with the merchant leaf read as the payee's address.
+    /// `payee_pv` is where the address's three limbs sit among the public
+    /// values, so the allowlist proves membership of the party the reserve
+    /// actually pays rather than of an identifier nothing on chain sees.
+    pub(crate) fn constrain_payee<AB>(&self, builder: &mut AB, base: usize, payee_pv: usize)
+    where
+        AB: AirBuilder<F = F>,
+    {
+        self.constrain_with(builder, base, true, Some(payee_pv));
     }
 
     /// The same constraints, with C9's binding of the absorbed lanes to the
@@ -116,7 +130,13 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
     /// configuration anyone should deploy; it exists so the evaluation can
     /// measure what a circuit missing that one binding proves, which is the
     /// claim about vacuous constraints rests on and which no cost table can show.
-    pub(crate) fn constrain_with<AB>(&self, builder: &mut AB, base: usize, bind_policy: bool)
+    pub(crate) fn constrain_with<AB>(
+        &self,
+        builder: &mut AB,
+        base: usize,
+        bind_policy: bool,
+        payee_pv: Option<usize>,
+    )
     where
         AB: AirBuilder<F = F>,
     {
@@ -250,8 +270,25 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
         builder.assert_eq(row[base + crate::air::COL_MID].clone(), row[h].clone());
         builder.assert_eq(row[base + crate::air::COL_CID].clone(), row[mc].clone());
         for j in 1..DIGEST {
-            builder.assert_zero(row[h + j].clone());
             builder.assert_zero(row[mc + j].clone());
+        }
+        // An address is 160 bits and a lane holds 64, so the payee's leaf
+        // carries it in three limbs, each tied to the public value the reserve
+        // rebuilds from the address it paid.
+        match payee_pv {
+            Some(k) => {
+                for j in 0..PAYEE_LIMBS {
+                    builder.assert_eq(row[h + j].clone().into(), pv[k + j].clone());
+                }
+                for j in PAYEE_LIMBS..DIGEST {
+                    builder.assert_zero(row[h + j].clone());
+                }
+            }
+            None => {
+                for j in 1..DIGEST {
+                    builder.assert_zero(row[h + j].clone());
+                }
+            }
         }
 
         // The run C8 is checked against is the run the glue carries.

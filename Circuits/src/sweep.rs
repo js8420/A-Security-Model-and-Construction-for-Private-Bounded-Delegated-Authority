@@ -137,16 +137,18 @@ fn config_reuse() {
 /// is one Algebraic step of StepVerifier.sol and each operation one arithmetic
 /// step. Every game starts from the empty memory, so the program first loads
 /// the proof, one Goldilocks element per step from the blobs it was published
-/// in, and the statement's ten public values from the reserve's record. FRI's
+/// in, and the statement's public values from the reserve's record. FRI's
 /// own folding and the batched reduction of the opened values are further work
 /// on top, so the total is a lower bound on the program's length.
 pub fn step_count() {
-    const PUBLIC_VALUES: usize = 10;
+    let public_values = p3_air::BaseAir::<p3_goldilocks::Goldilocks>::num_public_values(
+        &crate::composed::ComposedAir::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>::new(),
+    );
     const ELEMENTS_PER_BLOB: usize = 4096 * 3;
     let w = crate::prover::verifier_work::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS);
     let words = w.proof_bytes.div_ceil(8);
     let blobs = words.div_ceil(ELEMENTS_PER_BLOB);
-    let total = w.permutations as usize + w.constraint_ops + 2 * w.constraints + words + PUBLIC_VALUES;
+    let total = w.permutations as usize + w.constraint_ops + 2 * w.constraints + words + public_values;
     println!();
     println!("ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED, POSEIDON2 COMMITMENTS (BISECTION STUDY)");
     println!("{}", "=".repeat(78));
@@ -157,7 +159,7 @@ pub fn step_count() {
     println!("  folding them into one, two per constraint    {:>12}", 2 * w.constraints);
     println!("  proof bytes                                  {:>12}", w.proof_bytes);
     println!("  loading the proof, one element per step      {:>12}", words);
-    println!("  loading the public values                    {:>12}", PUBLIC_VALUES);
+    println!("  loading the public values                    {:>12}", public_values);
     println!("  blobs, three elements to a blob element      {:>12}", blobs);
     println!("  lower bound on steps                         {:>12}  (2^{:.2})",
              total, (total as f64).log2());

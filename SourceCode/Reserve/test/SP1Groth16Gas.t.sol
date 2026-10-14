@@ -18,7 +18,8 @@ contract SP1Groth16Gas is Groth16Result {
     /// Gas is taken from transaction receipts by script/ValidityDisputeOnChain.s.sol.
     function testVerifies() public view {
         assertEq(verifier.VERSION(), "v6.1.0");
-        assertEq(publicValues.length, 88);
+        assertEq(publicValues.length, 8 + 8 * VALUES);
+        _checkStatement();
         assertEq(proof.length, 356);
         verifier.verifyProof(vkey, publicValues, proof);
     }

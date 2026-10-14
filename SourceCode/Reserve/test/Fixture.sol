@@ -20,6 +20,10 @@ contract Fixture is Test {
     uint64 constant VELOCITY = 1_000;
     uint64 constant WINDOW = 86_400;
     uint256 constant AGENT_PK = 0xA6E47;
+    uint64 constant MAX_AGE = 1 hours;
+    uint64 constant CLOSE_DELAY = 2 days;
+    uint64 constant LIFE = 365 days;
+    uint64 constant RANGE = 1 << 16;
     /// D.com and the first revocation root, four Goldilocks lanes each.
     bytes32 constant COM = bytes32(uint256(11) | uint256(12) << 64 | uint256(13) << 128 | uint256(14) << 192);
     bytes32 constant ROOT0 = bytes32(uint256(21) | uint256(22) << 64 | uint256(23) << 128 | uint256(24) << 192);
@@ -44,7 +48,7 @@ contract Fixture is Test {
         agent = vm.addr(AGENT_PK);
         token = new MockToken();
         permit2 = _deployPermit2();
-        acc = new Reserve(DOMAIN, address(token), permit2);
+        acc = new Reserve(DOMAIN, address(token), permit2, MAX_AGE, CLOSE_DELAY);
         prev = new PreventiveReserve(address(token));
         vm.deal(principal, 100 ether);
         vm.deal(agent, 1 ether);
@@ -64,7 +68,7 @@ contract Fixture is Test {
         vm.prank(principal);
         id = acc.register{value: 1 ether}(
             agent, CAP, VELOCITY, WINDOW, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0
+            f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0, uint64(block.timestamp) + LIFE, 0, RANGE
         );
     }
 
@@ -75,25 +79,18 @@ contract Fixture is Test {
         }
     }
 
-    function _sign(uint256 id, uint64 amount, uint64 digest, uint64[] memory elems, bytes32 c)
+    function _sign(uint256 id, uint64 amount, uint64 digest, uint64 time, uint64[] memory elems)
         internal
         view
         returns (bytes memory)
     {
-        bytes32 h = acc.signedDigest(id, payee, amount, digest, keccak256(abi.encodePacked(elems)), c);
+        bytes32 h = acc.signedDigest(id, payee, amount, digest, time, keccak256(abi.encodePacked(elems)));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(AGENT_PK, h);
         return abi.encodePacked(r, s, v);
     }
 
-    /// Stands for the hash of a proof's blob list.
-    function _commit(uint256 id, uint64 digest) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("blobs", id, digest));
-    }
-
-    function _settleWith(uint256 id, uint64 digest, bytes32 c) internal {
-        uint64[] memory e = _elems(64, digest);
-        bytes memory sg = _sign(id, 1000, digest, e, c);
-        acc.settleLogged(id, payee, 1000, digest, e, c, sg);
+    function _now() internal view returns (uint64) {
+        return uint64(block.timestamp);
     }
 
     /// Gas of one settlement call and nothing else: the signature is made
@@ -102,11 +99,16 @@ contract Fixture is Test {
         internal
         returns (uint256 used)
     {
-        bytes32 c = _commit(id, digest);
-        bytes memory sg = _sign(id, 1000, digest, e, c);
+        uint64 t = _now();
+        bytes memory sg = _sign(id, 1000, digest, t, e);
         uint256 g = gasleft();
-        if (logged) acc.settleLogged(id, payee, 1000, digest, e, c, sg);
-        else acc.settle(id, payee, 1000, digest, e, c, sg);
+        if (logged) acc.settleLogged(id, payee, 1000, digest, t, e, sg);
+        else acc.settle(id, payee, 1000, digest, t, e, sg);
         used = g - gasleft();
+    }
+
+    function _one(uint64 a) internal pure returns (uint64[] memory x) {
+        x = new uint64[](1);
+        x[0] = a;
     }
 }

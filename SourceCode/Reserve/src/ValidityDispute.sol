@@ -2,10 +2,12 @@
 pragma solidity ^0.8.28;
 
 import {ISP1Verifier} from "./sp1/ISP1Verifier.sol";
+import {Settlement, SettlementHash} from "./Settlement.sol";
 
 interface IReserveV {
     function settled(uint256 id, uint64 digest) external view returns (bytes32);
     function agentOf(uint256 id) external view returns (address);
+    function principalOf(uint256 id) external view returns (address);
     function forfeit(uint256 id) external;
     function domain() external view returns (uint64);
     function commitmentOf(uint256 id) external view returns (bytes32);
@@ -14,21 +16,26 @@ interface IReserveV {
 
 /// Challenge answered by a validity proof, never by the proof itself.
 ///
-/// The settlement's STARK stays off chain. A challenger stakes a bond against
-/// one settled digest. Before the deadline, anyone holding the STARK answers
-/// with one SP1 Groth16 proof that the Plonky3 verifier, run inside SP1,
-/// accepts a proof against this settlement's public values. The public values
-/// are not taken from the answer: the contract rebuilds them from the
-/// reserve's own record (the digest, the revocation root at the settlement's
-/// epoch, the delegation commitment, the domain), so a proof of any other
-/// statement fails the pairing check.
+/// The settlement's STARK stays off chain. Within the acceptance window after
+/// a settlement, a challenger stakes a bond against it. Before the deadline,
+/// anyone holding the STARK answers with one SP1 Groth16 proof that the
+/// Plonky3 verifier, run inside SP1, accepts a proof of this settlement's
+/// statement. The statement is not taken from the answer: the contract
+/// rebuilds it from the reserve's record of the settlement (the digest, the
+/// revocation root at the settlement's epoch, the delegation commitment, the
+/// domain, the amount paid, the payee, the signed time, and the hash of the
+/// shares and nullifiers published), so a proof of any other statement fails
+/// the pairing check. A settlement whose shares its proof did not compute
+/// therefore cannot be answered.
 ///
-/// Many challenges. Three rules keep an honest agent answerable however many
-/// challenges arrive. A settlement is challenged at most once, so it is proved
-/// at most once. Each challenge against an agent is due at least `slot` after
-/// that agent's previous one, so an agent that proves one answer per slot never
-/// misses a deadline. One batch answer proves any number of open challenges,
-/// of any agents, with one Groth16 proof and one pairing check.
+/// Many challenges. A settlement is challenged at most once. Each agent has
+/// two deadline queues, one for its principal's challenges and one for
+/// everyone else's. Deadlines in one queue are two slots apart and the two
+/// queues sit on alternate slot boundaries, so no two of an agent's deadlines
+/// fall in one slot: an agent that proves one answer per slot never misses
+/// one, and challenges anyone else opens, the agent's own included, cannot
+/// push back the principal's. One batch answer proves any number of open
+/// challenges with one Groth16 proof.
 ///
 /// Bonds. An answer credits each challenger's bond to the agent challenged,
 /// which pays for the proving. No answer by the deadline credits the bond back
@@ -36,23 +43,28 @@ interface IReserveV {
 /// principal. Credits are withdrawn, never pushed, so no recipient can block
 /// an answer or an expiry.
 ///
-/// On Base the verifier is SP1's Groth16 gateway, which routes by the first
-/// four bytes of the proof to the verifier of that circuit version.
+/// The verifier is Succinct's Groth16 verifier for one circuit version,
+/// called directly. Its routing gateway is not used: the gateway's owner can
+/// add a route, and the prover picks the route with the first bytes of its
+/// proof.
 contract ValidityDispute {
+    using SettlementHash for Settlement;
+
     enum Status { None, Open, Answered, Expired }
 
     struct Challenge {
         address challenger;
         uint64 deadline;
-        uint64 epoch;
         Status status;
     }
 
-    /// The circuit's public values, in its order: the payload digest, the
-    /// revocation root's four lanes, the delegation commitment's four lanes,
-    /// the settlement domain.
-    uint256 public constant PUBLIC_VALUES = 10;
+    /// Values committed per settlement: the payload digest, the revocation
+    /// root's four lanes, the delegation commitment's four lanes, the domain,
+    /// the amount, the payee's three limbs, the time, and the shares' hash in
+    /// four words.
+    uint256 public constant PUBLIC_VALUES = 19;
     uint256 private constant LANE = 0xFFFFFFFFFFFFFFFF;
+    uint256 private constant LIMB = 0xFFFFFFFFFFFFFF;
 
     IReserveV public immutable reserve;
     ISP1Verifier public immutable verifier;
@@ -62,19 +74,23 @@ contract ValidityDispute {
     /// The guest program for any number of settlements, the same verifier run
     /// once per proof.
     bytes32 public immutable batchVKey;
+    /// How long after a settlement's signed time a challenge may be opened.
+    uint64 public immutable acceptWindow;
     uint64 public immutable answerWindow;
-    /// The least time between two deadlines of one agent: what proving one
-    /// answer takes, with margin.
+    /// What proving one answer takes, with margin.
     uint64 public immutable slot;
     uint256 public immutable challengerBond;
 
     mapping(bytes32 => Challenge) private challenges;
-    mapping(address => uint64) public lastDeadline;
+    mapping(address => uint64) public lastPrincipalDeadline;
+    mapping(address => uint64) public lastPublicDeadline;
+    mapping(uint256 => uint256) public openCount;
     mapping(address => uint256) public credit;
 
     error BondTooSmall();
     error AlreadyChallenged();
-    error WrongCommitment();
+    error WrongRecord();
+    error WindowClosed();
     error NotOpen();
     error TooLate();
     error TooEarly();
@@ -91,7 +107,8 @@ contract ValidityDispute {
         address verifier_,
         bytes32 programVKey_,
         bytes32 batchVKey_,
-        uint64 window,
+        uint64 acceptWindow_,
+        uint64 answerWindow_,
         uint64 slot_,
         uint256 bond
     ) {
@@ -99,7 +116,8 @@ contract ValidityDispute {
         verifier = ISP1Verifier(verifier_);
         programVKey = programVKey_;
         batchVKey = batchVKey_;
-        answerWindow = window;
+        acceptWindow = acceptWindow_;
+        answerWindow = answerWindow_;
         slot = slot_;
         challengerBond = bond;
     }
@@ -112,38 +130,41 @@ contract ValidityDispute {
         return challenges[key(id, digest)];
     }
 
-    /// `commitment` and `epoch` open the reserve's record of the settlement:
-    /// what the agent signed and the revocation epoch then in force.
-    function open(uint256 id, uint64 digest, bytes32 commitment, uint64 epoch) external payable {
+    /// `s` opens the reserve's record of the settlement.
+    function open(uint256 id, uint64 digest, Settlement calldata s) external payable {
         if (msg.value != challengerBond) revert BondTooSmall();
         bytes32 k = key(id, digest);
         if (challenges[k].status != Status.None) revert AlreadyChallenged();
-        if (keccak256(abi.encode(commitment, epoch)) != reserve.settled(id, digest)) {
-            revert WrongCommitment();
-        }
-        address agent = reserve.agentOf(id);
-        uint64 deadline = uint64(block.timestamp) + answerWindow;
-        uint64 queued = lastDeadline[agent] + slot;
-        if (queued > deadline) deadline = queued;
-        lastDeadline[agent] = deadline;
-        challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, epoch: epoch, status: Status.Open});
+        _record(id, digest, s);
+        if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
+        uint64 deadline = _queue(reserve.agentOf(id), msg.sender == reserve.principalOf(id));
+        challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open});
+        openCount[id] += 1;
         emit Challenged(id, digest, msg.sender, deadline);
     }
 
-    function answer(uint256 id, uint64 digest, bytes calldata proof) external {
+    function answer(uint256 id, uint64 digest, Settlement calldata s, bytes calldata proof) external {
         Challenge storage c = _due(id, digest);
-        verifier.verifyProof(programVKey, publicValues(id, digest, c.epoch), proof);
+        _record(id, digest, s);
+        verifier.verifyProof(programVKey, publicValues(id, digest, s), proof);
         _settle(c, id, digest);
     }
 
     /// One proof of the batch program over these settlements, in this order.
-    function answerBatch(uint256[] calldata ids, uint64[] calldata digests, bytes calldata proof) external {
+    function answerBatch(
+        uint256[] calldata ids,
+        uint64[] calldata digests,
+        Settlement[] calldata ss,
+        bytes calldata proof
+    ) external {
         uint256 n = ids.length;
         if (n == 0) revert EmptyBatch();
-        if (digests.length != n) revert LengthMismatch();
-        uint64[] memory epochs = new uint64[](n);
-        for (uint256 i = 0; i < n; ++i) epochs[i] = _due(ids[i], digests[i]).epoch;
-        verifier.verifyProof(batchVKey, batchPublicValues(ids, digests, epochs), proof);
+        if (digests.length != n || ss.length != n) revert LengthMismatch();
+        for (uint256 i = 0; i < n; ++i) {
+            _due(ids[i], digests[i]);
+            _record(ids[i], digests[i], ss[i]);
+        }
+        verifier.verifyProof(batchVKey, batchPublicValues(ids, digests, ss), proof);
         for (uint256 i = 0; i < n; ++i) {
             Challenge storage c = challenges[key(ids[i], digests[i])];
             // A settlement named twice is answered once; the second finds it closed.
@@ -157,6 +178,7 @@ contract ValidityDispute {
         if (c.status != Status.Open) revert NotOpen();
         if (block.timestamp <= c.deadline) revert TooEarly();
         c.status = Status.Expired;
+        openCount[id] -= 1;
         credit[c.challenger] += challengerBond;
         emit Expired(id, digest);
         // A bond already taken by a claim or another challenge is simply gone.
@@ -171,6 +193,26 @@ contract ValidityDispute {
         require(ok, "withdraw");
     }
 
+    /// The next deadline in one of the agent's two queues: at least the answer
+    /// window away, at least two slots after that queue's previous deadline,
+    /// and on that queue's own slot boundaries, even ones for the principal
+    /// and odd ones for everyone else.
+    function _queue(address agent, bool principal) private returns (uint64 d) {
+        uint64 period = 2 * slot;
+        uint64 phase = principal ? 0 : slot;
+        uint64 x = uint64(block.timestamp) + answerWindow;
+        uint64 last = principal ? lastPrincipalDeadline[agent] : lastPublicDeadline[agent];
+        if (last != 0 && last + period > x) x = last + period;
+        uint64 m = x % period;
+        d = m <= phase ? x + (phase - m) : x + (period - m) + phase;
+        if (principal) lastPrincipalDeadline[agent] = d;
+        else lastPublicDeadline[agent] = d;
+    }
+
+    function _record(uint256 id, uint64 digest, Settlement calldata s) private view {
+        if (s.hash() != reserve.settled(id, digest)) revert WrongRecord();
+    }
+
     function _due(uint256 id, uint64 digest) private view returns (Challenge storage c) {
         c = challenges[key(id, digest)];
         if (c.status != Status.Open) revert NotOpen();
@@ -179,21 +221,22 @@ contract ValidityDispute {
 
     function _settle(Challenge storage c, uint256 id, uint64 digest) private {
         c.status = Status.Answered;
+        openCount[id] -= 1;
         credit[reserve.agentOf(id)] += challengerBond;
         emit Answered(id, digest);
     }
 
     /// The bytes the single program commits: a bincode Vec<u64>, the length
     /// and then each value, little-endian.
-    function publicValues(uint256 id, uint64 digest, uint64 epoch) public view returns (bytes memory pv) {
+    function publicValues(uint256 id, uint64 digest, Settlement calldata s) public view returns (bytes memory pv) {
         pv = new bytes(8 * (PUBLIC_VALUES + 1));
         _le(pv, 0, PUBLIC_VALUES);
-        _write(pv, 8, id, digest, epoch);
+        _write(pv, 8, id, digest, s);
     }
 
     /// The bytes the batch program commits: one bincode Vec<u64> holding every
     /// settlement's values in turn.
-    function batchPublicValues(uint256[] calldata ids, uint64[] calldata digests, uint64[] memory epochs)
+    function batchPublicValues(uint256[] calldata ids, uint64[] calldata digests, Settlement[] calldata ss)
         public
         view
         returns (bytes memory pv)
@@ -201,11 +244,11 @@ contract ValidityDispute {
         uint256 n = ids.length;
         pv = new bytes(8 * (PUBLIC_VALUES * n + 1));
         _le(pv, 0, PUBLIC_VALUES * n);
-        for (uint256 i = 0; i < n; ++i) _write(pv, 8 + 8 * PUBLIC_VALUES * i, ids[i], digests[i], epochs[i]);
+        for (uint256 i = 0; i < n; ++i) _write(pv, 8 + 8 * PUBLIC_VALUES * i, ids[i], digests[i], ss[i]);
     }
 
-    function _write(bytes memory pv, uint256 at, uint256 id, uint64 digest, uint64 epoch) private view {
-        uint256 root = uint256(reserve.rootAt(id, epoch));
+    function _write(bytes memory pv, uint256 at, uint256 id, uint64 digest, Settlement calldata s) private view {
+        uint256 root = uint256(reserve.rootAt(id, s.epoch));
         uint256 com = uint256(reserve.commitmentOf(id));
         _le(pv, at, digest);
         for (uint256 j = 0; j < 4; ++j) {
@@ -213,6 +256,14 @@ contract ValidityDispute {
             _le(pv, at + 8 * (5 + j), (com >> (64 * j)) & LANE);
         }
         _le(pv, at + 72, reserve.domain());
+        _le(pv, at + 80, s.amount);
+        uint256 a = uint160(s.payee);
+        _le(pv, at + 88, a & LIMB);
+        _le(pv, at + 96, (a >> 56) & LIMB);
+        _le(pv, at + 104, a >> 112);
+        _le(pv, at + 112, s.time);
+        uint256 h = uint256(s.elems);
+        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 120 + 8 * j, (h >> (192 - 64 * j)) & LANE);
     }
 
     /// Writes the low eight bytes of x at `at`, least significant first.

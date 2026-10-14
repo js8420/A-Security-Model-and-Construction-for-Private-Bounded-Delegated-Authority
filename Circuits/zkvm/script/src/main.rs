@@ -19,6 +19,11 @@ const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
 const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
 const ELF_BATCH: Elf = include_elf!("dispute-verifier-batch");
 
+/// Values each keccak or batch answer commits per settlement: fifteen statement
+/// values and the four words of the shares' hash. The Poseidon2 verifier still
+/// commits the public values whole.
+const COMMITTED: usize = 19;
+
 /// `<proof file>` for the Poseidon2 verifier, `<proof file> keccak`, or
 /// `<batch file> batch <n>` for the batch verifier on the first n proofs.
 fn main() {
@@ -101,7 +106,7 @@ fn main() {
     println!("{}", "=".repeat(78));
     println!("  proofs verified                              {:>14}", n);
     println!("  proof bytes read                             {:>14}", proofs.iter().map(Vec::len).sum::<usize>());
-    println!("  every proof verifies inside the zkVM         {:>14}", ex.exit_code() == 0 && pv.len() == 10 * n);
+    println!("  every proof verifies inside the zkVM         {:>14}", ex.exit_code() == 0 && (mode == "poseidon2" || pv.len() == COMMITTED * n));
     println!("  public values committed                      {:>14}", pv.len());
     println!("  instructions executed                        {:>14}", ex.global_clk());
     println!("  light execution, seconds                     {:>14.1}", light_secs);

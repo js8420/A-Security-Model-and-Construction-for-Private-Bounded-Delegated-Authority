@@ -54,13 +54,16 @@ contract TranscriptGas is Fixture {
         _settle(id, 1, _elems(64, 1), true);
         console.log("Settle logged, cover 64", _settle(id, 2, _elems(64, 2), true));
 
+        uint64[] memory s1 = _one(0);
+        uint64[] memory s2 = _one(128);
+        uint64[] memory l64 = _one(64);
         vm.prank(principal);
         uint256 g2 = gasleft();
-        acc.revoke(id, 0, 64, keccak256("root1"));
+        acc.revoke(id, s1, l64, keccak256("root1"));
         console.log("Revoke, first range", g2 - gasleft());
         vm.prank(principal);
         uint256 g3 = gasleft();
-        acc.revoke(id, 128, 64, keccak256("root2"));
+        acc.revoke(id, s2, l64, keccak256("root2"));
         console.log("Revoke, later range", g3 - gasleft());
 
         uint64[2] memory secret = [uint64(7), uint64(11)];
@@ -100,8 +103,37 @@ contract TranscriptGas is Fixture {
 
     function testRevokeIsThePrincipals() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory st = _one(0);
+        uint64[] memory ln = _one(64);
         vm.expectRevert(Reserve.NotPrincipal.selector);
-        acc.revoke(id, 0, 64, keccak256("root1"));
+        acc.revoke(id, st, ln, keccak256("root1"));
+    }
+
+    /// (I6): a revoked range lies inside the delegation's range and overlaps
+    /// no range already revoked, including one named earlier in the same call.
+    function testRevokeRangeRules() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        vm.startPrank(principal);
+        vm.expectRevert(Reserve.RangeOutside.selector);
+        acc.revoke(id, _one(RANGE - 10), _one(64), keccak256("r"));
+        vm.expectRevert(Reserve.RangeOutside.selector);
+        acc.revoke(id, _one(5), _one(0), keccak256("r"));
+        acc.revoke(id, _one(100), _one(50), keccak256("r1"));
+        vm.expectRevert(Reserve.RangeOverlaps.selector);
+        acc.revoke(id, _one(149), _one(10), keccak256("r2"));
+        vm.expectRevert(Reserve.RangeOverlaps.selector);
+        acc.revoke(id, _one(60), _one(41), keccak256("r2"));
+        uint64[] memory st = new uint64[](2);
+        uint64[] memory ln = new uint64[](2);
+        st[0] = 300; ln[0] = 20;
+        st[1] = 310; ln[1] = 20;
+        vm.expectRevert(Reserve.RangeOverlaps.selector);
+        acc.revoke(id, st, ln, keccak256("r2"));
+        st[1] = 320;
+        acc.revoke(id, st, ln, keccak256("r2"));
+        vm.stopPrank();
+        assertEq(acc.revokedCount(id), 3);
+        assertEq(acc.epochOf(id), 2);
     }
 
     /// The signature covers the payee, so a settlement redirected to anyone
@@ -109,19 +141,73 @@ contract TranscriptGas is Fixture {
     function testPayeeIsBound() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         uint64[] memory e = _elems(14, 1);
-        bytes32 c = _commit(id, 1);
-        bytes memory sg = _sign(id, 1000, 1, e, c);
+        bytes memory sg = _sign(id, 1000, 1, _now(), e);
         vm.expectRevert(Reserve.BadSignature.selector);
-        acc.settleLogged(id, address(0xBAD), 1000, 1, e, c, sg);
+        acc.settleLogged(id, address(0xBAD), 1000, 1, _now(), e, sg);
     }
 
     function testDigestSettlesOnce() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         _settle(id, 1, _elems(14, 1), true);
         uint64[] memory e = _elems(14, 2);
-        bytes32 c = _commit(id, 1);
-        bytes memory sg = _sign(id, 1000, 1, e, c);
+        bytes memory sg = _sign(id, 1000, 1, _now(), e);
         vm.expectRevert(Reserve.IndexAlreadySettled.selector);
-        acc.settleLogged(id, payee, 1000, 1, e, c, sg);
+        acc.settleLogged(id, payee, 1000, 1, _now(), e, sg);
+    }
+
+    /// The signed time must be within maxAge of the reserve's clock either way.
+    function testStaleOrFutureTimeRefused() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        vm.warp(10 days);
+        uint64[] memory e = _elems(14, 1);
+        uint64 old = _now() - MAX_AGE - 1;
+        bytes memory sg = _sign(id, 1000, 1, old, e);
+        vm.expectRevert(Reserve.StaleTime.selector);
+        acc.settleLogged(id, payee, 1000, 1, old, e, sg);
+        uint64 ahead = _now() + MAX_AGE + 1;
+        sg = _sign(id, 1000, 1, ahead, e);
+        vm.expectRevert(Reserve.StaleTime.selector);
+        acc.settleLogged(id, payee, 1000, 1, ahead, e, sg);
+        uint64 edge = _now() - MAX_AGE;
+        sg = _sign(id, 1000, 1, edge, e);
+        acc.settleLogged(id, payee, 1000, 1, edge, e, sg);
+    }
+
+    function testNoSettlementAfterExpiry() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        vm.warp(block.timestamp + LIFE + 1);
+        uint64[] memory e = _elems(14, 1);
+        bytes memory sg = _sign(id, 1000, 1, _now(), e);
+        vm.expectRevert(Reserve.Expired.selector);
+        acc.settleLogged(id, payee, 1000, 1, _now(), e, sg);
+    }
+
+    /// With no dispute contract, close waits only for expiry and the delay,
+    /// then returns the deposit left to the principal and the bond to the agent.
+    function testCloseReturnsDepositAndBond() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        _settle(id, 1, _elems(14, 1), true);
+        vm.warp(block.timestamp + LIFE + CLOSE_DELAY);
+        vm.expectRevert(Reserve.NotClosable.selector);
+        acc.close(id);
+        vm.warp(block.timestamp + 1);
+        uint256 tokens = token.balanceOf(principal);
+        uint256 bond = agent.balance;
+        acc.close(id);
+        assertEq(token.balanceOf(principal), tokens + BUDGET - 1000);
+        assertEq(agent.balance, bond + 1 ether);
+        vm.expectRevert(Reserve.NotClosable.selector);
+        acc.close(id);
+        vm.expectRevert(Reserve.BondAlreadyPaid.selector);
+        acc.claim(id, [uint64(7), uint64(11)]);
+    }
+
+    function testClaimedBondIsNotReturnedAtClose() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        acc.claim(id, [uint64(7), uint64(11)]);
+        vm.warp(block.timestamp + LIFE + CLOSE_DELAY + 1);
+        uint256 bond = agent.balance;
+        acc.close(id);
+        assertEq(agent.balance, bond);
     }
 }

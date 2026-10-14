@@ -56,6 +56,7 @@ mod assertion;
 mod leaf;
 mod keccak;
 mod degree;
+mod statement;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -404,9 +405,34 @@ fn controls() {
         ("  ... cap larger than the budget", trace::ComposedBreak::CapAboveBudget),
         ("  ... settlement domain not the one the digest covers", trace::ComposedBreak::DomainAltered),
         ("  ... shares formed under a domain the payload does not name", trace::ComposedBreak::ShareDomain),
+        ("  ... honest proof, one published share substituted", trace::ComposedBreak::StatementShare),
+        ("  ... honest proof, settled amount differs", trace::ComposedBreak::StatementAmount),
+        ("  ... honest proof, settled payee differs", trace::ComposedBreak::StatementPayee),
+        ("  ... honest proof, settlement time differs", trace::ComposedBreak::StatementTime),
     ] {
         let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, Some(b));
         check(label, got, false);
+    }
+    {
+        use p3_field::PrimeField64;
+        let words = |b: Option<trace::ComposedBreak>| -> Vec<u64> {
+            let (_, pv) = trace::composed_case::<{ prover::REGISTERS }, 16, 32, 16, 64>(1, b);
+            statement::committed(&pv.iter().map(|x| x.as_canonical_u64()).collect::<Vec<u64>>())
+        };
+        let l = trace::payee_limbs(&trace::PAYEE);
+        let mut back = [0u8; 20];
+        for b in 0..160 {
+            let bit = ((l[b / 56] >> (b % 56)) & 1) as u8;
+            back[19 - b / 8] |= bit << (b % 8);
+        }
+        check("payee limbs recompose to the address", back == trace::PAYEE && l.iter().all(|&x| x < 1 << 56), true);
+        let honest = words(None);
+        let swapped = words(Some(trace::ComposedBreak::StatementShare));
+        check("an answer commits the statement in the reserve's layout",
+              honest.len() == statement::COMMITTED, true);
+        check("  ... one substituted share changes the committed hash",
+              honest[..composed::PV_ELEMS] == swapped[..composed::PV_ELEMS]
+                  && honest[composed::PV_ELEMS..] != swapped[composed::PV_ELEMS..], true);
     }
     let (ok32, ms32) = prover::roundtrip_whole::<{ prover::REGISTERS }>(prover::ROWS, None);
     check("WHOLE CIRCUIT at full parameters", ok32, true);

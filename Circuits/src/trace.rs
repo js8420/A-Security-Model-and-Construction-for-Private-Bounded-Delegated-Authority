@@ -58,12 +58,43 @@ const GOOD: Row = Row {
     amount: 10,
     cap: 200,
     budget: 6144,
-    t: 5000,
+    t: PAY_TIME,
     t_start: 1000,
     t_exp: 9000,
     velocity_n: 5,
     domain: 8453,
 };
+
+/// The address the harness's payment pays, as twenty bytes, most significant
+/// first, the way an EVM address is written.
+pub const PAYEE: [u8; 20] = [
+    0x7a, 0x3f, 0x9c, 0x2e, 0x5b, 0x1d, 0x84, 0xf6, 0xa0, 0xc9,
+    0xe2, 0xb7, 0xd5, 0xf3, 0xa1, 0xc8, 0xe6, 0xb4, 0xd2, 0xf0,
+];
+
+/// An address split into the three limbs the circuit reads: bits 0 to 55, 56
+/// to 111 and 112 to 159. Each is below 2^56, so each is its own field element
+/// and the split is one to one.
+pub fn payee_limbs(addr: &[u8; 20]) -> [u64; 3] {
+    let mut a: u128 = 0;
+    let mut top: u64 = 0;
+    for (i, b) in addr.iter().enumerate() {
+        if i < 4 {
+            top = (top << 8) | *b as u64;
+        } else {
+            a = (a << 8) | *b as u128;
+        }
+    }
+    let mask = (1u128 << 56) - 1;
+    let l0 = (a & mask) as u64;
+    let l1 = ((a >> 56) & mask) as u64;
+    let l2 = ((a >> 112) as u64) | (top << 16);
+    [l0, l1, l2]
+}
+
+/// The time the payment was signed, which the reserve checks against its own
+/// clock and the dispute rebuilds.
+pub const PAY_TIME: u64 = 5000;
 
 fn bits_of(v: u64) -> Vec<F> {
     (0..RANGE_BITS)
@@ -421,10 +452,36 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
     cap_in_columns: u64,
     cap_committed: u64,
 ) -> RowMajorMatrix<F> {
+    whole_trace_payee::<R, MD, RD>(rows, amount, cap_in_columns, cap_committed, None)
+}
+
+/// The merchant path, over the payee's address when one is given and over the
+/// harness's single-lane identifier otherwise. The category path is always the
+/// identifier's.
+fn merchant_path<const R: usize, const MD: usize>(payee: Option<[u64; 3]>) -> RowMajorMatrix<F> {
+    match payee {
+        Some(l) => merkle_trace_leaf::<R, MD>(
+            1,
+            [F::from_u64(l[0]), F::from_u64(l[1]), F::from_u64(l[2]), F::ZERO],
+        ),
+        None => merkle_trace::<R, MD>(1),
+    }
+}
+
+/// The whole-circuit trace with the merchant leaf optionally the payee's
+/// address. Without a payee it is the trace the standalone studies use.
+pub fn whole_trace_payee<const R: usize, const MD: usize, const RD: usize>(
+    rows: usize,
+    amount: u64,
+    cap_in_columns: u64,
+    cap_committed: u64,
+    payee: Option<[u64; 3]>,
+) -> RowMajorMatrix<F> {
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let pw = VALUE_COLS + GAP_BLOCKS * RANGE_BITS;
 
     let mk = merkle_trace::<R, MD>(1);
+    let mm = merchant_path::<R, MD>(payee);
     let mw = mk.width;
     let rv = nonmembership_trace::<R, RD>(1);
     let rw = rv.width;
@@ -432,7 +489,8 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
     let digest = WIDTH / 2;
     let mk_root_off = MD * (digest + digest + 1 + bw);
     let rv_root_off = RD * (digest + digest + 1 + bw);
-    let mroot: Vec<F> = mk.values[mk_root_off..mk_root_off + digest].to_vec();
+    let mroot: Vec<F> = mm.values[mk_root_off..mk_root_off + digest].to_vec();
+    let croot: Vec<F> = mk.values[mk_root_off..mk_root_off + digest].to_vec();
     let rroot: Vec<F> = rv.values[rv_root_off..rv_root_off + digest].to_vec();
 
     let policy = policy_trace_full(1, amount, cap_in_columns);
@@ -449,18 +507,20 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
         committed.values[COL_N], committed.values[COL_W],
     ];
     absorbed_v.extend_from_slice(&mroot);
-    absorbed_v.extend_from_slice(&mroot);
+    absorbed_v.extend_from_slice(&croot);
     absorbed_v.push(policy.values[COL_R]);
     let perms = sponge::<R>(&absorbed_v, 4, DOMAIN_OPENING);
 
-    // C7 absorbs the payment. The leaf identifier the paths carry is what the
+    // C7 absorbs the payment. The leaf identifiers the paths carry are what the
     // merchant, category and payee columns hold, so the digest is over the
     // values the clauses read rather than over a number chosen beside them.
-    let leaf = mk.values[0];
+    let mleaf = mm.values[0];
+    let cleaf = mk.values[0];
     let payload_v: Vec<F> = PAYLOAD_SRC
         .iter()
         .map(|&c| match c {
-            COL_MID | COL_CID | COL_PAYEE => leaf,
+            COL_MID | COL_PAYEE => mleaf,
+            COL_CID => cleaf,
             _ => policy.values[c],
         })
         .collect();
@@ -484,10 +544,10 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
         let mut row = vec![F::ZERO; width];
         row[..pw].copy_from_slice(&policy.values[..pw]);
         row[COL_MROOT..COL_MROOT + digest].copy_from_slice(&mroot);
-        row[COL_CROOT..COL_CROOT + digest].copy_from_slice(&mroot);
-        row[COL_MID] = mk.values[0];
-        row[COL_PAYEE] = mk.values[0];
-        row[COL_CID] = mk.values[0];
+        row[COL_CROOT..COL_CROOT + digest].copy_from_slice(&croot);
+        row[COL_MID] = mleaf;
+        row[COL_PAYEE] = mleaf;
+        row[COL_CID] = cleaf;
 
         for (i, p) in perms.iter().enumerate() {
             row[base_h + i * bw..base_h + (i + 1) * bw].copy_from_slice(p);
@@ -495,7 +555,7 @@ pub fn whole_trace_full<const R: usize, const MD: usize, const RD: usize>(
         for (i, p) in pl_perms.iter().enumerate() {
             row[base_pl + i * bw..base_pl + (i + 1) * bw].copy_from_slice(p);
         }
-        row[base_mk..base_mk + mw].copy_from_slice(&mk.values[..mw]);
+        row[base_mk..base_mk + mw].copy_from_slice(&mm.values[..mw]);
         row[base_ct..base_ct + mw].copy_from_slice(&mk.values[..mw]);
         row[base_rv..base_rv + rw].copy_from_slice(&rv.values[..rw]);
 
@@ -533,11 +593,22 @@ pub fn whole_public_values_cap<const R: usize, const MD: usize, const RD: usize>
     amount: u64,
     cap: u64,
 ) -> Vec<F> {
+    whole_public_values_payee::<R, MD, RD>(amount, cap, None)
+}
+
+/// The nine values of the trace whole_trace_payee builds with the same payee.
+pub fn whole_public_values_payee<const R: usize, const MD: usize, const RD: usize>(
+    amount: u64,
+    cap: u64,
+    payee: Option<[u64; 3]>,
+) -> Vec<F> {
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let level = DIGEST + DIGEST + 1 + bw;
 
     let mk = merkle_trace::<R, MD>(1);
-    let mroot: Vec<F> = mk.values[MD * level..MD * level + DIGEST].to_vec();
+    let mm = merchant_path::<R, MD>(payee);
+    let mroot: Vec<F> = mm.values[MD * level..MD * level + DIGEST].to_vec();
+    let croot: Vec<F> = mk.values[MD * level..MD * level + DIGEST].to_vec();
     let rv = nonmembership_trace::<R, RD>(1);
     let rroot: Vec<F> = rv.values[RD * level..RD * level + DIGEST].to_vec();
 
@@ -549,17 +620,19 @@ pub fn whole_public_values_cap<const R: usize, const MD: usize, const RD: usize>
         policy.values[COL_N], policy.values[COL_W],
     ];
     absorbed_v.extend_from_slice(&mroot);
-    absorbed_v.extend_from_slice(&mroot);
+    absorbed_v.extend_from_slice(&croot);
     absorbed_v.push(policy.values[COL_R]);
 
     let perms = sponge::<R>(&absorbed_v, 4, DOMAIN_OPENING);
     let com = perm_output::<R>(perms.last().expect("sponge produced no permutation"));
 
-    let leaf = mk.values[0];
+    let mleaf = mm.values[0];
+    let cleaf = mk.values[0];
     let payload_v: Vec<F> = PAYLOAD_SRC
         .iter()
         .map(|&c| match c {
-            COL_MID | COL_CID | COL_PAYEE => leaf,
+            COL_MID | COL_PAYEE => mleaf,
+            COL_CID => cleaf,
             _ => policy.values[c],
         })
         .collect();
@@ -604,6 +677,15 @@ pub enum ComposedBreak {
     /// own values; only the binding of the index's domain to the payload's
     /// fails.
     ShareDomain,
+    /// An honest proof offered for a settlement that published one share it
+    /// did not compute: the public share lane differs from the trace's.
+    StatementShare,
+    /// The same proof offered for a settlement of a different amount.
+    StatementAmount,
+    /// The same proof offered for a settlement that paid a different address.
+    StatementPayee,
+    /// The same proof offered for a settlement stamped with a different time.
+    StatementTime,
 }
 
 /// A trace for the composed circuit: the compliance row, the spend row for the
@@ -637,11 +719,16 @@ pub fn composed_air_trace<
 }
 
 /// The public values for the composed circuit: the compliance half's nine,
-/// then the settlement domain.
-pub fn composed_public_values<const R: usize, const MD: usize, const RD: usize>() -> Vec<F> {
-    let mut pv = whole_public_values::<R, MD, RD>();
-    pv.push(F::from_u64(GOOD.domain));
-    pv
+/// the settlement domain, the amount, the payee's limbs, the time, and every
+/// published share and nullifier.
+pub fn composed_public_values<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>() -> Vec<F> {
+    build_composed::<R, MD, RD, DEPTH, COVER>(1, None).1
 }
 
 /// A composed trace together with the public values that match it. A control
@@ -707,9 +794,10 @@ fn build_composed<
         Some(ComposedBreak::CapAboveBudget) => GOOD.budget + 1,
         _ => GOOD.cap,
     };
-    let whole = whole_trace_full::<R, MD, RD>(1, amount, cap, cap);
+    let limbs = payee_limbs(&PAYEE);
+    let whole = whole_trace_payee::<R, MD, RD>(1, amount, cap, cap, Some(limbs));
     let w = whole.width;
-    let pv = whole_public_values_cap::<R, MD, RD>(amount, cap);
+    let pv = whole_public_values_payee::<R, MD, RD>(amount, cap, Some(limbs));
 
     // The run the spend half reserves. Moving it by one unit leaves that half
     // internally correct and disagreeing with the run C8 was checked against,
@@ -764,5 +852,23 @@ fn build_composed<
     }
     let mut pv = pv;
     pv.push(F::from_u64(share_dom));
+    pv.push(F::from_u64(amount));
+    pv.extend(limbs.iter().map(|&l| F::from_u64(l)));
+    pv.push(F::from_u64(GOOD.t));
+    let nb = crate::spend::SpendAir::<R, DEPTH, COVER>::new().node_base_pub();
+    for c in 0..COVER {
+        let n = nb + c * crate::spend::PER_NODE;
+        pv.push(spend[n + crate::spend::NODE_SHARE]);
+        pv.push(spend[n + crate::spend::NODE_SHARE + 1]);
+        pv.push(spend[n + crate::spend::NODE_NULL]);
+    }
+    use crate::composed::{PV_AMOUNT, PV_ELEMS, PV_PAYEE, PV_TIME};
+    match how {
+        Some(ComposedBreak::StatementShare) => pv[PV_ELEMS] += F::ONE,
+        Some(ComposedBreak::StatementAmount) => pv[PV_AMOUNT] += F::ONE,
+        Some(ComposedBreak::StatementPayee) => pv[PV_PAYEE + 1] += F::ONE,
+        Some(ComposedBreak::StatementTime) => pv[PV_TIME] += F::ONE,
+        _ => {}
+    }
     (RowMajorMatrix::new(values, width), pv)
 }

@@ -45,7 +45,7 @@ where
     AB: AirBuilder<F = F>,
 {
     fn eval(&self, builder: &mut AB) {
-        self.inner.constrain_with(builder, 0, false);
+        self.inner.constrain_with(builder, 0, false, None);
     }
 }
 

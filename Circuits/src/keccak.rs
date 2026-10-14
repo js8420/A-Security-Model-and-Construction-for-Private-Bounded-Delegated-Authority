@@ -5,6 +5,7 @@
 
 use std::time::Instant;
 
+use p3_field::PrimeField64;
 use p3_uni_stark::{prove, verify, Proof};
 
 use crate::naysay::Air;
@@ -25,7 +26,46 @@ pub fn export(path: &str) -> (usize, bool, f64) {
     let ok = verify(&config(), &air, &proof, &pv).is_ok();
     let bytes = bincode::serialize(&(&proof, &pv)).expect("serialise");
     std::fs::write(path, &bytes).expect("write proof");
+    write_statement(&pv);
     (bytes.len(), ok, secs)
+}
+
+/// Where the reserve's tests read the exported payment's statement: what a
+/// settlement of it pays, to whom, when, and the shares it publishes.
+pub const STATEMENT_SOL: &str = "../SourceCode/Reserve/test/Statement.sol";
+
+/// The exported payment's statement as Solidity constants, so a test can
+/// settle exactly what the proof proves and nothing else.
+fn write_statement(pv: &[p3_goldilocks::Goldilocks]) {
+    use crate::composed::{PV_AMOUNT, PV_ELEMS, PV_TIME};
+    use crate::trace::PAYEE;
+    let v: Vec<u64> = pv.iter().map(|x| x.as_canonical_u64()).collect();
+    let addr: String = PAYEE.iter().map(|b| format!("{b:02x}")).collect();
+    let hash: String = crate::statement::elems_hash(&v[PV_ELEMS..]).iter().map(|b| format!("{b:02x}")).collect();
+    let mut s = String::new();
+    s.push_str("// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\n");
+    s.push_str("/// The statement of the payment proof `delegation-circuit export-keccak` wrote.\n");
+    s.push_str("/// Generated with the proof; do not edit.\nlibrary Statement {\n");
+    s.push_str(&format!("    uint64 internal constant DIGEST = {};\n", v[0]));
+    s.push_str(&format!("    uint64 internal constant AMOUNT = {};\n", v[PV_AMOUNT]));
+    s.push_str(&format!("    address internal constant PAYEE = address(uint160(0x00{addr}));\n"));
+    s.push_str(&format!("    uint64 internal constant TIME = {};\n", v[PV_TIME]));
+    s.push_str(&format!("    bytes32 internal constant ELEMS_HASH = 0x{hash};\n\n"));
+    let c = crate::statement::committed(&v);
+    s.push_str("    /// What the dispute program commits for this payment, as the guest computes it.\n");
+    s.push_str("    function committed() internal pure returns (uint64[] memory c) {\n");
+    s.push_str(&format!("        c = new uint64[]({});\n", c.len()));
+    for (i, x) in c.iter().enumerate() {
+        s.push_str(&format!("        c[{i}] = {x};\n"));
+    }
+    s.push_str("    }\n\n");
+    s.push_str("    function elems() internal pure returns (uint64[] memory e) {\n");
+    s.push_str(&format!("        e = new uint64[]({});\n", v.len() - PV_ELEMS));
+    for (i, x) in v[PV_ELEMS..].iter().enumerate() {
+        s.push_str(&format!("        e[{i}] = {x};\n"));
+    }
+    s.push_str("    }\n}\n");
+    std::fs::write(STATEMENT_SOL, s).expect("write Statement.sol");
 }
 
 /// Proving and verifying one payment under each hash, timed in batches whose
@@ -115,5 +155,6 @@ pub fn export_batch(path: &str, n: usize) -> (usize, bool) {
     }
     let bytes = bincode::serialize(&all).expect("serialise");
     std::fs::write(path, &bytes).expect("write batch");
+    write_statement(&pv);
     (bytes.len(), ok)
 }

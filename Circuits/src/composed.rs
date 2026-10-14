@@ -3,10 +3,10 @@ use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
 
-use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, RANGE_BITS};
+use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, COL_T, RANGE_BITS};
 use crate::air::COL_DOMAIN;
-use crate::spend::{SpendAir, COL_DOM, COL_M, COL_UNITS};
-use crate::whole::{WholeAir, PUBLIC_VALUES};
+use crate::spend::{SpendAir, COL_DOM, COL_M, COL_UNITS, NODE_NULL, NODE_SHARE, PER_NODE};
+use crate::whole::{WholeAir, PAYEE_LIMBS, PUBLIC_VALUES};
 
 type F = Goldilocks;
 
@@ -58,6 +58,21 @@ pub const RANGE_BLOCKS: usize = 3;
 /// The unit size, witnessed and tied to the committed budget.
 pub const EXTRA_COLS: usize = 1;
 
+/// The statement a settlement is checked against, in public-value order: the
+/// compliance half's nine values, the domain, then everything the reserve pays
+/// or publishes. The reserve rebuilds each of these from its own record, so
+/// a proof of one payment cannot answer for a settlement that paid a different
+/// amount, to a different address, at a different time, or published shares
+/// the proof did not compute.
+pub const PV_DOMAIN: usize = PUBLIC_VALUES;
+pub const PV_AMOUNT: usize = PV_DOMAIN + 1;
+pub const PV_PAYEE: usize = PV_AMOUNT + 1;
+pub const PV_TIME: usize = PV_PAYEE + PAYEE_LIMBS;
+/// Every slot's two share lanes and its nullifier, slot by slot, in the order
+/// Settle publishes them.
+pub const PV_ELEMS: usize = PV_TIME + 1;
+pub const ELEMS_PER_SLOT: usize = 3;
+
 impl<
         const R: usize,
         const MD: usize,
@@ -99,11 +114,11 @@ impl<
         self.unit_col() + EXTRA_COLS + RANGE_BLOCKS * RANGE_BITS
     }
 
-    /// The compliance circuit's values, then the settlement domain. The spend
-    /// component reads the digest from the first and the domain from the last,
-    /// so the two halves are proved against one public statement.
+    /// The compliance circuit's values, the settlement domain, and what the
+    /// reserve pays and publishes. The spend component reads the digest and the
+    /// domain, so the two halves are proved against one public statement.
     fn num_public_values(&self) -> usize {
-        PUBLIC_VALUES + 1
+        PV_ELEMS + ELEMS_PER_SLOT * COVER
     }
 
     /// The S-box registers alone set the degree: 7 with none, 3 with one.
@@ -127,10 +142,22 @@ where
     fn eval(&self, builder: &mut AB) {
         let w = self.whole_width();
 
-        self.whole.constrain(builder, 0);
-        self.spend.constrain(builder, w, PUBLIC_VALUES);
+        self.whole.constrain_payee(builder, 0, PV_PAYEE);
+        self.spend.constrain(builder, w, PV_DOMAIN);
 
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
+
+        builder.assert_eq(row[COL_AMOUNT].clone().into(), pv[PV_AMOUNT].clone());
+        builder.assert_eq(row[COL_T].clone().into(), pv[PV_TIME].clone());
+        let nb = w + self.spend.node_base_pub();
+        for c in 0..COVER {
+            let n = nb + c * PER_NODE;
+            let at = PV_ELEMS + ELEMS_PER_SLOT * c;
+            builder.assert_eq(row[n + NODE_SHARE].clone().into(), pv[at].clone());
+            builder.assert_eq(row[n + NODE_SHARE + 1].clone().into(), pv[at + 1].clone());
+            builder.assert_eq(row[n + NODE_NULL].clone().into(), pv[at + 2].clone());
+        }
 
         let u_col = self.unit_col();
         let rb = u_col + EXTRA_COLS;
