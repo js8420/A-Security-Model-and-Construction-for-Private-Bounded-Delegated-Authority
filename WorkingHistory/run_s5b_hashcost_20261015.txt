@@ -1,0 +1,8 @@
+﻿ONE PAYMENT PROOF UNDER EACH HASH, COMPOSED CIRCUIT, 128 ROWS
+==============================================================================
+  10 batches of 20, order rotating, after one warm-up each; milliseconds
+  hash           bytes     p min      p q1  p median      p q3   v median
+  Poseidon2    5170269   11765.7   12007.7   12268.6   12899.2     130.44
+  Keccak       5170269    2481.1    2742.5    3109.8    3737.4      37.52
+  Poseidon2 per-batch prove medians: 12204 12195 12113 12676 12447 12122 12521 12329 12507 12476
+  Keccak per-batch prove medians: 3100 3575 2718 3088 3180 3155 3400 3627 2840 3300
