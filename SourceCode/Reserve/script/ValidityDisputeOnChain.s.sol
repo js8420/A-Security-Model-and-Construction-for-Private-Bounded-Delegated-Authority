@@ -56,8 +56,11 @@ contract ValidityDisputeOnChain is Script {
         _settle();
         vd.open{value: 0.01 ether}(id, digest, rec);
         for (uint256 i = 0; i < 3; ++i) token.mint(vm.addr(pk), 1);
-        // Gas is given because estimating at an earlier block would see the
-        // deadline not yet passed.
+        // The script runs every call locally first, in one block; the warp
+        // moves only that local clock past the deadline. On the node the three
+        // mints above take three blocks. Gas is given because estimating at an
+        // earlier block would see the deadline not yet passed.
+        vm.warp(block.timestamp + 3);
         vd.expire{gas: 200_000}(id, digest);
         vd.withdraw{gas: 100_000}();
         vm.stopBroadcast();

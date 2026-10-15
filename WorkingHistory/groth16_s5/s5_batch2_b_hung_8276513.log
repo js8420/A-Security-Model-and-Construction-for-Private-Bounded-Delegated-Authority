@@ -1,0 +1,7 @@
+job 8276513, node himem05.cluster, cpus 32, hash batch 2, out /scratch/jshital/paper04/Circuits/zkvm/pete/out_batch2_b, start Wed Oct 14 12:41:53 CDT 2026
+cd03009498a92cd6d4cda72b0be4f130c775bfc8701c52ba2a0582448ecb3cc4  /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak_batch.bin
+SP1 worker settings: defaults
+verifier program                                   batch
+payment proofs                                         2
+setup, seconds                                      22.2
+slurmstepd: error: *** JOB 8276513 ON himem05 CANCELLED AT 2026-10-15T06:47:23 ***

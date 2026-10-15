@@ -1,0 +1,32 @@
+﻿SP1Verifier                        1508005 0x1
+MockToken                           375695 0x1
+Reserve                            1996661 0x1
+ValidityDispute                    1850929 0x1
+Reserve          setDispute          47496 0x1
+MockToken        mint                68279 0x1
+MockToken        mint                51119 0x1
+MockToken        approve             46463 0x1
+Reserve          register           283798 0x1
+Reserve          settleLogged       268627 0x1
+ValidityDispute  open               106924 0x1
+ValidityDispute  answerBatch        321536 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268639 0x1
+ValidityDispute  open                89973 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268639 0x1
+ValidityDispute  open                89973 0x1
+ValidityDispute  answerBatch        349297 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268627 0x1
+ValidityDispute  open                89973 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268639 0x1
+ValidityDispute  open                89973 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268639 0x1
+ValidityDispute  open                89973 0x1
+Reserve          register           249598 0x1
+Reserve          settleLogged       268627 0x1
+ValidityDispute  open                89973 0x1
+ValidityDispute  answerBatch        438932 0x1
