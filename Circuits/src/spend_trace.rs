@@ -6,7 +6,7 @@ use p3_poseidon2_air::num_cols;
 
 use crate::air::RANGE_BITS;
 use crate::gen::{perm_output, perm_row};
-use crate::hash::{DOMAIN_KEY, DOMAIN_NULL, DOMAIN_PAD, HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE, WIDTH};
+use crate::hash::{DOMAIN_KEY, DOMAIN_NULL, DOMAIN_PAD, DOMAIN_SECRET, HALF_FULL_ROUNDS, PARTIAL_ROUNDS, SBOX_DEGREE, WIDTH};
 // The layout is declared once, by the AIR, and imported here. It was restated in
 // this file until the two copies drifted apart three times.
 use crate::spend::{
@@ -38,8 +38,30 @@ fn share(secret: [F; 2], key: [F; 2], digest: F, dom: F) -> [F; 2] {
     [c[0], c[1]]
 }
 
-const SECRET: [u64; SECRET_ELEMS] = [987654321, 1234567891];
-const ROOT_KEY: [u64; SECRET_ELEMS] = [424242, 858585];
+pub const SECRET: [u64; SECRET_ELEMS] = [987654321, 1234567891];
+
+/// The permutation of the secret whose output gives the root key and H(s).
+pub fn secret_perm<const R: usize>() -> Vec<F> {
+    let mut state = [F::ZERO; WIDTH];
+    for j in 0..SECRET_ELEMS {
+        state[j] = F::from_u64(SECRET[j]);
+    }
+    state[SECRET_ELEMS] = F::from_u64(DOMAIN_SECRET);
+    perm_row::<R>(state)
+}
+
+/// The root key every unit key derives from: the secret permutation's first
+/// lanes, so it is the same in every payment of one delegation.
+pub fn root_key() -> [F; SECRET_ELEMS] {
+    let out = perm_output::<0>(&secret_perm::<0>());
+    [out[0], out[1]]
+}
+
+/// H(s): the next four lanes of the same output, which the record carries.
+pub fn secret_hash() -> [F; 4] {
+    let out = perm_output::<0>(&secret_perm::<0>());
+    [out[2], out[3], out[4], out[5]]
+}
 
 struct Layout {
     pos: usize,
@@ -104,7 +126,23 @@ pub fn spend_row<const R: usize, const DEPTH: usize, const COVER: usize>(
     part: usize,
     how: Option<SpendBreak>,
 ) -> Vec<F> {
-    row_of::<R, DEPTH, COVER>(payload, dom, units_want, off_delta, pindex, part, how)
+    row_keyed::<R, DEPTH, COVER>(payload, dom, units_want, off_delta, pindex, part, how, root_key())
+}
+
+/// The same row with every unit key derived from a chosen root key, so a
+/// control can build a payment that is internally consistent under a root key
+/// its secret does not give.
+#[allow(clippy::too_many_arguments)]
+pub fn spend_row_keyed<const R: usize, const DEPTH: usize, const COVER: usize>(
+    payload: F,
+    dom: F,
+    units_want: Option<usize>,
+    off_delta: usize,
+    pindex: usize,
+    part: usize,
+    root: [F; SECRET_ELEMS],
+) -> Vec<F> {
+    row_keyed::<R, DEPTH, COVER>(payload, dom, units_want, off_delta, pindex, part, None, root)
 }
 
 /// What a control corrupts. Each must make verification fail.
@@ -200,6 +238,20 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
     part_units: usize,
     how: Option<SpendBreak>,
 ) -> Vec<F> {
+    row_keyed::<R, DEPTH, COVER>(payload, dom, units_want, off_delta, pindex, part_units, how, root_key())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn row_keyed<const R: usize, const DEPTH: usize, const COVER: usize>(
+    payload: F,
+    dom: F,
+    units_want: Option<usize>,
+    off_delta: usize,
+    pindex: usize,
+    part_units: usize,
+    how: Option<SpendBreak>,
+    root: [F; SECRET_ELEMS],
+) -> Vec<F> {
     // pindex is the delegation's base index and part_units its spendable count.
     assert!(payload != F::ZERO, "the share index is forced non-zero by a witnessed inverse");
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
@@ -218,7 +270,7 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
 
     for j in 0..SECRET_ELEMS {
         row[COL_SECRET + j] = F::from_u64(SECRET[j]);
-        row[COL_ROOT_KEY + j] = F::from_u64(ROOT_KEY[j]);
+        row[COL_ROOT_KEY + j] = root[j];
     }
     row[COL_INDEX] = payload;
     row[COL_INDEX_INV] = payload.inverse();
@@ -251,9 +303,7 @@ fn row_of<const R: usize, const DEPTH: usize, const COVER: usize>(
         let active = c < units;
 
         let mut state = [F::ZERO; WIDTH];
-        for j in 0..SECRET_ELEMS {
-            state[j] = F::from_u64(ROOT_KEY[j]);
-        }
+        state[..SECRET_ELEMS].copy_from_slice(&root);
         if active {
             state[SECRET_ELEMS] = F::from_u64((base + pos) as u64);
             state[SECRET_ELEMS + 1] = F::from_u64(DOMAIN_KEY);

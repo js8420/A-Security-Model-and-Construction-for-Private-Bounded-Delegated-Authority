@@ -409,6 +409,11 @@ fn controls() {
         ("  ... honest proof, settled amount differs", trace::ComposedBreak::StatementAmount),
         ("  ... honest proof, settled payee differs", trace::ComposedBreak::StatementPayee),
         ("  ... honest proof, settlement time differs", trace::ComposedBreak::StatementTime),
+        ("  ... honest proof, record's unit size differs", trace::ComposedBreak::StatementUnit),
+        ("  ... honest proof, record's range base differs", trace::ComposedBreak::StatementBase),
+        ("  ... declared range shorter than the budget's units", trace::ComposedBreak::StatementRange),
+        ("  ... honest proof, record's H(s) differs", trace::ComposedBreak::StatementSecretHash),
+        ("  ... unit keys from a root key the secret does not give", trace::ComposedBreak::RootKeyFree),
     ] {
         let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, Some(b));
         check(label, got, false);

@@ -12,6 +12,7 @@ interface IReserveV {
     function domain() external view returns (uint64);
     function commitmentOf(uint256 id) external view returns (bytes32);
     function rootAt(uint256 id, uint64 epoch) external view returns (bytes32);
+    function termsOf(uint256 id) external view returns (uint64, uint64, uint64, bytes32);
 }
 
 /// Challenge answered by a validity proof, never by the proof itself.
@@ -21,11 +22,11 @@ interface IReserveV {
 /// anyone holding the STARK answers with one SP1 Groth16 proof that the
 /// Plonky3 verifier, run inside SP1, accepts a proof of this settlement's
 /// statement. The statement is not taken from the answer: the contract
-/// rebuilds it from the reserve's record of the settlement (the digest, the
-/// revocation root at the settlement's epoch, the delegation commitment, the
-/// domain, the amount paid, the payee, the signed time, and the hash of the
-/// shares and nullifiers published), so a proof of any other statement fails
-/// the pairing check. A settlement whose shares its proof did not compute
+/// rebuilds it from the reserve's records of the delegation and the settlement
+/// (the digest, the revocation root at the settlement's epoch, the delegation
+/// commitment, the domain, the amount paid, the payee, the signed time, the
+/// unit size, the unit range, H(s), and the hash of the shares and nullifiers
+/// published), so a proof of any other statement fails the pairing check. A settlement whose shares its proof did not compute
 /// therefore cannot be answered.
 ///
 /// Many challenges. A settlement is challenged at most once. Each agent has
@@ -60,9 +61,10 @@ contract ValidityDispute {
 
     /// Values committed per settlement: the payload digest, the revocation
     /// root's four lanes, the delegation commitment's four lanes, the domain,
-    /// the amount, the payee's three limbs, the time, and the shares' hash in
+    /// the amount, the payee's three limbs, the time, the unit size, the
+    /// range's base and length, H(s) in four lanes, and the shares' hash in
     /// four words.
-    uint256 public constant PUBLIC_VALUES = 19;
+    uint256 public constant PUBLIC_VALUES = 26;
     uint256 private constant LANE = 0xFFFFFFFFFFFFFFFF;
     uint256 private constant LIMB = 0xFFFFFFFFFFFFFF;
 
@@ -262,8 +264,17 @@ contract ValidityDispute {
         _le(pv, at + 96, (a >> 56) & LIMB);
         _le(pv, at + 104, a >> 112);
         _le(pv, at + 112, s.time);
+        _terms(pv, at + 120, id);
         uint256 h = uint256(s.elems);
-        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 120 + 8 * j, (h >> (192 - 64 * j)) & LANE);
+        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 176 + 8 * j, (h >> (192 - 64 * j)) & LANE);
+    }
+
+    function _terms(bytes memory pv, uint256 at, uint256 id) private view {
+        (uint64 unit, uint64 base, uint64 len, bytes32 hs) = reserve.termsOf(id);
+        _le(pv, at, unit);
+        _le(pv, at + 8, base);
+        _le(pv, at + 16, len);
+        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 24 + 8 * j, (uint256(hs) >> (64 * j)) & LANE);
     }
 
     /// Writes the low eight bytes of x at `at`, least significant first.

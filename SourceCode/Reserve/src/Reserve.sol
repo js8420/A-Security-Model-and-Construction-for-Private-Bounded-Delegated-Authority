@@ -13,6 +13,11 @@ interface IDisputeCount {
     function acceptWindow() external view returns (uint64);
 }
 
+/// The circuit's own permutation, which a claim needs to open H(s).
+interface IPoseidon2 {
+    function permute(uint256[8] memory s) external pure returns (uint256[8] memory);
+}
+
 /// Uniswap Permit2, allowance mode. Only the call the reserve makes.
 interface IAllowanceTransfer {
     function transferFrom(address from, address to, uint160 amount, address token) external;
@@ -58,6 +63,10 @@ contract Reserve {
         uint64 rangeLen;
         uint256 deposit;
         uint256 bond;
+        /// The canonical unit size the budget is counted in.
+        uint64 unitSize;
+        /// H(s): lanes two to five of the circuit's permutation of the secret,
+        /// packed low lane first. The proof's public values carry it.
         bytes32 secretHash;
         /// The delegation commitment D.com, four Goldilocks lanes packed low
         /// lane first. A proof's public values must carry it.
@@ -80,6 +89,30 @@ contract Reserve {
     /// How long after expiry the bond stays: at least maxAge and the challenge
     /// window, and long enough for the principal to scan the transcript and claim.
     uint64 public immutable closeDelay;
+    IPoseidon2 public immutable poseidon;
+
+    /// The separator the circuit hashes the secret under.
+    uint256 private constant DOMAIN_SECRET = 6;
+    uint256 private constant LANE = 0xFFFFFFFFFFFFFFFF;
+
+    /// What the principal records at registration. Everything here is public
+    /// except what the commitment hides; the unit size, the range and H(s) are
+    /// the delegation's terms a proof is checked against.
+    struct Terms {
+        address agent;
+        uint64 cap;
+        uint64 velocityN;
+        uint64 windowW;
+        bytes32 secretHash;
+        Funding funding;
+        uint256 deposit;
+        bytes32 commitment;
+        bytes32 revocationRoot;
+        uint64 expiry;
+        uint64 unitSize;
+        uint64 rangeBase;
+        uint64 rangeLen;
+    }
 
     /// The contract allowed to forfeit a bond on an unanswered challenge. Set
     /// once, after both are deployed.
@@ -123,8 +156,16 @@ contract Reserve {
     event Revoked(uint256 indexed id, uint64 start, uint64 length);
     event Closed(uint256 indexed id, uint256 deposit, uint256 bond);
 
-    constructor(uint64 domainId, address token_, address permit2_, uint64 maxAge_, uint64 closeDelay_) {
+    constructor(
+        uint64 domainId,
+        address token_,
+        address permit2_,
+        address poseidon_,
+        uint64 maxAge_,
+        uint64 closeDelay_
+    ) {
         require(domainId != 0, "domain");
+        poseidon = IPoseidon2(poseidon_);
         domain = domainId;
         token = IERC20(token_);
         permit2 = IAllowanceTransfer(permit2_);
@@ -142,42 +183,31 @@ contract Reserve {
         dispute = dispute_;
     }
 
-    function register(
-        address agent,
-        uint64 cap,
-        uint64 velocityN,
-        uint64 windowW,
-        bytes32 secretHash,
-        Funding funding,
-        uint256 deposit,
-        bytes32 commitment,
-        bytes32 revocationRoot,
-        uint64 expiry,
-        uint64 rangeBase,
-        uint64 rangeLen
-    ) external payable returns (uint256 id) {
+    function register(Terms calldata t) external payable returns (uint256 id) {
+        if (t.unitSize == 0 || t.rangeLen == 0) revert RangeOutside();
         id = nextId++;
         delegations[id] = Delegation({
             principal: msg.sender,
-            agent: agent,
-            cap: cap,
-            velocityN: velocityN,
-            windowW: windowW,
-            funding: funding,
+            agent: t.agent,
+            cap: t.cap,
+            velocityN: t.velocityN,
+            windowW: t.windowW,
+            funding: t.funding,
             bondPaid: false,
             closed: false,
             epoch: 0,
-            expiry: expiry,
-            rangeBase: rangeBase,
-            rangeLen: rangeLen,
-            deposit: funding == Funding.Deposit ? deposit : 0,
+            expiry: t.expiry,
+            rangeBase: t.rangeBase,
+            rangeLen: t.rangeLen,
+            deposit: t.funding == Funding.Deposit ? t.deposit : 0,
             bond: msg.value,
-            secretHash: secretHash,
-            commitment: commitment
+            unitSize: t.unitSize,
+            secretHash: t.secretHash,
+            commitment: t.commitment
         });
-        rootAt[id][0] = revocationRoot;
-        if (funding == Funding.Deposit && deposit != 0) {
-            require(token.transferFrom(msg.sender, address(this), deposit), "deposit");
+        rootAt[id][0] = t.revocationRoot;
+        if (t.funding == Funding.Deposit && t.deposit != 0) {
+            require(token.transferFrom(msg.sender, address(this), t.deposit), "deposit");
         }
     }
 
@@ -311,15 +341,19 @@ contract Reserve {
         transcriptLen[id] = base + words;
     }
 
-    /// Evidence of overdraft is a secret opening the committed hash. The bond
-    /// goes to the principal, never to whoever presents the secret, or an agent
-    /// could reclaim its own bond by overdrawing on purpose. keccak256 here; a
-    /// deployment committing with Poseidon2 pays one on-chain permutation
-    /// instead, measured in Poseidon2Gas.
+    /// Evidence of overdraft is a secret opening the committed H(s), computed
+    /// with the circuit's own permutation so that the secret the shares
+    /// reconstruct is the one the record names. The bond goes to the
+    /// principal, never to whoever presents the secret, or an agent could
+    /// reclaim its own bond by overdrawing on purpose.
     function claim(uint256 id, uint64[2] calldata secret) external {
-        if (keccak256(abi.encodePacked(secret[0], secret[1])) != delegations[id].secretHash) {
-            revert SecretDoesNotOpen();
-        }
+        uint256[8] memory st;
+        st[0] = secret[0];
+        st[1] = secret[1];
+        st[2] = DOMAIN_SECRET;
+        uint256[8] memory out = poseidon.permute(st);
+        uint256 h = out[2] | (out[3] << 64) | (out[4] << 128) | (out[5] << 192);
+        if (bytes32(h) != delegations[id].secretHash) revert SecretDoesNotOpen();
         _forfeit(id);
     }
 
@@ -390,6 +424,13 @@ contract Reserve {
         uint64 e = d.epoch + 1;
         d.epoch = e;
         rootAt[id][e] = newRoot;
+    }
+
+    /// The terms a proof's statement carries: the unit size, the range's base
+    /// and declared length, and H(s).
+    function termsOf(uint256 id) external view returns (uint64, uint64, uint64, bytes32) {
+        Delegation storage d = delegations[id];
+        return (d.unitSize, d.rangeBase, d.rangeLen, d.secretHash);
     }
 
     function epochOf(uint256 id) external view returns (uint64) {

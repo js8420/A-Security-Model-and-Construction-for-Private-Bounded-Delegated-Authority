@@ -52,7 +52,12 @@ struct Row {
 /// circuit constrains B = u * SPENDABLE, and the padding is what keeps
 /// revocation from publishing the budget rather than its bracket.
 const SPENDABLE: u64 = 1536;
-const BASE_INDEX: u64 = 0;
+/// Non-zero, so the binding of the run C8 checks to absolute unit indices is
+/// exercised rather than satisfied at zero.
+pub const BASE_INDEX: u64 = 4096;
+/// The declared range: a power of two holding the spendable units, which is
+/// what the record carries in the clear.
+pub const RANGE_LEN: u64 = 2048;
 
 const GOOD: Row = Row {
     amount: 10,
@@ -338,7 +343,7 @@ pub fn corrupt(mut m: RowMajorMatrix<F>, col: usize) -> RowMajorMatrix<F> {
 const REVOKED_START: u64 = 100;
 const REVOKED_END: u64 = 200;
 const NEXT_REVOKED_START: u64 = 20000;
-const RUN_START: u64 = 385;
+const RUN_START: u64 = BASE_INDEX + 385;
 const RUN_UNITS: u64 = 3;
 
 /// What a control corrupts. The last three could not exist before the
@@ -686,6 +691,18 @@ pub enum ComposedBreak {
     StatementPayee,
     /// The same proof offered for a settlement stamped with a different time.
     StatementTime,
+    /// The same proof offered against a record with another unit size.
+    StatementUnit,
+    /// The same proof offered against a record whose range starts elsewhere.
+    StatementBase,
+    /// A declared range shorter than the units the budget buys.
+    StatementRange,
+    /// The same proof offered against a record committing another H(s).
+    StatementSecretHash,
+    /// Every unit key derived, consistently, from a root key the secret does
+    /// not give. The payment is internally sound and its shares are not on
+    /// the delegation's line.
+    RootKeyFree,
 }
 
 /// A trace for the composed circuit: the compliance row, the spend row for the
@@ -812,17 +829,36 @@ fn build_composed<
         Some(ComposedBreak::ShareDomain) => GOOD.domain + 1,
         _ => GOOD.domain,
     };
-    let spend = crate::spend_trace::spend_row::<R, DEPTH, COVER>(
-        pv[0],
-        F::from_u64(share_dom),
-        Some(units as usize),
-        off_delta,
-        BASE_INDEX as usize,
-        SPENDABLE as usize,
-        None,
-    );
+    let mut spend = match how {
+        Some(ComposedBreak::RootKeyFree) => crate::spend_trace::spend_row_keyed::<R, DEPTH, COVER>(
+            pv[0],
+            F::from_u64(share_dom),
+            Some(units as usize),
+            off_delta,
+            BASE_INDEX as usize,
+            SPENDABLE as usize,
+            [F::from_u64(424242), F::from_u64(858585)],
+        ),
+        _ => crate::spend_trace::spend_row::<R, DEPTH, COVER>(
+            pv[0],
+            F::from_u64(share_dom),
+            Some(units as usize),
+            off_delta,
+            BASE_INDEX as usize,
+            SPENDABLE as usize,
+            None,
+        ),
+    };
+    // The composed circuit checks the units against the declared range, not
+    // the deployment's index space, so that gap is the range length less the
+    // spendable units.
+    let last_gap = crate::spend::FIXED_COLS + COVER + 1 + 2 * RANGE_BITS;
+    for (i, b) in bits_of(RANGE_LEN - SPENDABLE).into_iter().enumerate() {
+        spend[last_gap + i] = b;
+    }
+    let secret = crate::spend_trace::secret_perm::<R>();
 
-    let width = w + spend.len() + 1 + 3 * RANGE_BITS;
+    let width = w + spend.len() + 1 + 3 * RANGE_BITS + secret.len();
     let mask = (1u64 << RANGE_BITS) - 1;
     let gaps: [i128; 3] = [
         units as i128 * u_written as i128 - amount as i128,
@@ -848,6 +884,8 @@ fn build_composed<
                 row[start + i] = bit;
             }
         }
+        let sb = rb + 3 * RANGE_BITS;
+        row[sb..sb + secret.len()].copy_from_slice(&secret);
         values.extend(row);
     }
     let mut pv = pv;
@@ -855,6 +893,10 @@ fn build_composed<
     pv.push(F::from_u64(amount));
     pv.extend(limbs.iter().map(|&l| F::from_u64(l)));
     pv.push(F::from_u64(GOOD.t));
+    pv.push(F::from_u64(u));
+    pv.push(F::from_u64(BASE_INDEX));
+    pv.push(F::from_u64(RANGE_LEN));
+    pv.extend(crate::spend_trace::secret_hash());
     let nb = crate::spend::SpendAir::<R, DEPTH, COVER>::new().node_base_pub();
     for c in 0..COVER {
         let n = nb + c * crate::spend::PER_NODE;
@@ -862,8 +904,12 @@ fn build_composed<
         pv.push(spend[n + crate::spend::NODE_SHARE + 1]);
         pv.push(spend[n + crate::spend::NODE_NULL]);
     }
-    use crate::composed::{PV_AMOUNT, PV_ELEMS, PV_PAYEE, PV_TIME};
+    use crate::composed::{PV_AMOUNT, PV_BASE, PV_ELEMS, PV_PAYEE, PV_RANGE, PV_SECRET_HASH, PV_TIME, PV_UNIT};
     match how {
+        Some(ComposedBreak::StatementUnit) => pv[PV_UNIT] += F::ONE,
+        Some(ComposedBreak::StatementBase) => pv[PV_BASE] += F::ONE,
+        Some(ComposedBreak::StatementRange) => pv[PV_RANGE] = F::from_u64(SPENDABLE - 1),
+        Some(ComposedBreak::StatementSecretHash) => pv[PV_SECRET_HASH] += F::ONE,
         Some(ComposedBreak::StatementShare) => pv[PV_ELEMS] += F::ONE,
         Some(ComposedBreak::StatementAmount) => pv[PV_AMOUNT] += F::ONE,
         Some(ComposedBreak::StatementPayee) => pv[PV_PAYEE + 1] += F::ONE,

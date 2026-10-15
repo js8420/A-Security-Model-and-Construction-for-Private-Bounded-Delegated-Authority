@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {Reserve} from "../src/Reserve.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
+import {TermsOf} from "./TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
@@ -46,7 +48,7 @@ contract ValidityDisputeBatchTest is Groth16Result {
         vm.warp(Statement.TIME);
         agent = vm.addr(AGENT_PK);
         token = new MockToken();
-        acc = new Reserve(DOMAIN, address(token), address(0), 1 hours, 2 days);
+        acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         vd = new ValidityDispute(address(acc), address(new SP1Verifier()), single, batch, ACCEPT, WINDOW, SLOT, BOND);
         acc.setDispute(address(vd));
         vm.deal(principal, 100 ether);
@@ -59,10 +61,7 @@ contract ValidityDisputeBatchTest is Groth16Result {
 
     function _challenged(bytes32 com) internal returns (uint256 r, Settlement memory s) {
         vm.prank(principal);
-        r = acc.register{value: AGENT_BOND}(
-            agent, 1_000_000, 1_000, 86_400, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            Reserve.Funding.Deposit, 100_000_000, com, _lanes(1), uint64(block.timestamp) + 30 days, 0, 1 << 16
-        );
+        r = acc.register{value: AGENT_BOND}(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, com, _lanes(1), uint64(block.timestamp) + 30 days));
         uint64[] memory e = Statement.elems();
         bytes32 eh = keccak256(abi.encodePacked(e));
         bytes32 h = acc.signedDigest(r, Statement.PAYEE, Statement.AMOUNT, digest, Statement.TIME, eh);

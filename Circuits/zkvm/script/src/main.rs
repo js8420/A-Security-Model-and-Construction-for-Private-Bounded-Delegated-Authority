@@ -19,10 +19,10 @@ const ELF_POSEIDON2: Elf = include_elf!("dispute-verifier");
 const ELF_KECCAK: Elf = include_elf!("dispute-verifier-keccak");
 const ELF_BATCH: Elf = include_elf!("dispute-verifier-batch");
 
-/// Values each keccak or batch answer commits per settlement: fifteen statement
-/// values and the four words of the shares' hash. The Poseidon2 verifier still
-/// commits the public values whole.
-const COMMITTED: usize = 19;
+/// Values each keccak or batch answer commits per settlement: twenty-two
+/// statement values and the four words of the shares' hash. The Poseidon2
+/// verifier still commits the public values whole.
+const COMMITTED: usize = 26;
 
 /// `<proof file>` for the Poseidon2 verifier, `<proof file> keccak`, or
 /// `<batch file> batch <n>` for the batch verifier on the first n proofs.

@@ -45,6 +45,13 @@ pub const DOMAIN_PAYLOAD: u64 = 4;
 /// needed and an ordinary PRF assumption suffices.
 pub const DOMAIN_NULL: u64 = 5;
 
+/// The agent's secret hashed once: the output's first two lanes are the root
+/// key every unit key derives from, the next four are H(s), the value the
+/// delegation records and a claim must open. Deriving the root key from the
+/// secret is what makes every payment of one delegation use the same keys, so
+/// a unit consumed twice yields two shares on one line.
+pub const DOMAIN_SECRET: u64 = 6;
+
 type F = Goldilocks;
 
 pub type HashAir<const R: usize> = Poseidon2Air<

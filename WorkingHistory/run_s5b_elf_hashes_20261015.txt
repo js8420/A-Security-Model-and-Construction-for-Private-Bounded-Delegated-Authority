@@ -1,0 +1,3 @@
+35862d20b52b0c859b6cc841bd31b7b109f648c70edaeb6db7e5765bf561b452  program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier
+9e6ad93872beaaafbc6acc999c3e4e0dc1acfb399fc9e990d92476a0d5e79aea  program-keccak/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-keccak
+017eaad95403b35f297253cc5440dcd9498680284dee3e155e09ece8934d8428  program-batch/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-batch

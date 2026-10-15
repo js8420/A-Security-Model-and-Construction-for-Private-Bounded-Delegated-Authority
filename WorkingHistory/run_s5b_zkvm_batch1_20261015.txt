@@ -1,0 +1,15 @@
+DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, BATCH OF 1, KECCAK COMMITMENTS
+==============================================================================
+  proofs verified                                           1
+  proof bytes read                                    5171989
+  every proof verifies inside the zkVM                   true
+  public values committed                                  26
+  instructions executed                             323173529
+  light execution, seconds                                8.0
+  counting execution, seconds                             0.3
+  instructions, gas metering                        323173529
+  trace chunks metered                                      1
+  prover gas                                        370308415
+  syscalls                                              39928
+  gas metering, seconds                                   7.2
+  a tampered proof is refused inside the zkVM            true

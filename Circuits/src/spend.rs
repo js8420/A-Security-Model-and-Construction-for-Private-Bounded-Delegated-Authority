@@ -130,7 +130,18 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
     where
         AB: AirBuilder<F = F>,
     {
-        self.constrain_with(builder, base, false, dom_pv);
+        self.constrain_with(builder, base, false, dom_pv, None);
+    }
+
+    /// The same constraints with the last range check against the delegation's
+    /// declared range length, a public value, in place of the deployment's
+    /// index space: the units a payment may reach are those the record
+    /// declares, so a revocation of the declared range reaches all of them.
+    pub(crate) fn constrain_declared<AB>(&self, builder: &mut AB, base: usize, dom_pv: usize, range_pv: usize)
+    where
+        AB: AirBuilder<F = F>,
+    {
+        self.constrain_with(builder, base, false, dom_pv, Some(range_pv));
     }
 
     /// The same constraints, with the nullifier optionally left to the caller.
@@ -144,6 +155,7 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         base: usize,
         external_nullifier: bool,
         dom_pv: usize,
+        range_pv: Option<usize>,
     ) where
         AB: AirBuilder<F = F>,
     {
@@ -174,19 +186,23 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         builder.assert_one(index.clone().into() * row[base + COL_INDEX_INV].clone().into());
         let w: AB::Expr = AB::Expr::from(<F as BinomiallyExtendable<2>>::W);
 
-        let mut two_pow: Vec<AB::Expr> = Vec::with_capacity(DEPTH + 1);
-        let mut p: AB::Expr = AB::Expr::ONE;
-        for _ in 0..=DEPTH {
-            two_pow.push(p.clone());
-            p = p.clone() + p.clone();
-        }
+        let last_gap: AB::Expr = match range_pv {
+            Some(k) => pv[k].clone() - m.clone().into(),
+            None => {
+                let mut p: AB::Expr = AB::Expr::ONE;
+                for _ in 0..DEPTH {
+                    p = p.clone() + p.clone();
+                }
+                p - pbase.clone().into() - m.clone().into()
+            }
+        };
 
         let posb = base + self.pos_base();
         let rb = base + self.range_base();
         let gaps = [
             r.clone().into(),
             m.clone().into() - r.clone().into() - units.clone().into(),
-            two_pow[DEPTH].clone() - pbase.clone().into() - m.clone().into(),
+            last_gap,
         ];
         for (g, gap) in gaps.into_iter().enumerate() {
             let start = rb + g * RANGE_BITS;

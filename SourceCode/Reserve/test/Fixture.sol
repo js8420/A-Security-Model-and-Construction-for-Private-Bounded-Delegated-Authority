@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
+import {TermsOf} from "./TermsOf.sol";
 import {PreventiveReserve} from "../src/PreventiveReserve.sol";
 import {MockToken} from "./MockToken.sol";
 
@@ -23,7 +25,6 @@ contract Fixture is Test {
     uint64 constant MAX_AGE = 1 hours;
     uint64 constant CLOSE_DELAY = 2 days;
     uint64 constant LIFE = 365 days;
-    uint64 constant RANGE = 1 << 16;
     /// D.com and the first revocation root, four Goldilocks lanes each.
     bytes32 constant COM = bytes32(uint256(11) | uint256(12) << 64 | uint256(13) << 128 | uint256(14) << 192);
     bytes32 constant ROOT0 = bytes32(uint256(21) | uint256(22) << 64 | uint256(23) << 128 | uint256(24) << 192);
@@ -48,7 +49,7 @@ contract Fixture is Test {
         agent = vm.addr(AGENT_PK);
         token = new MockToken();
         permit2 = _deployPermit2();
-        acc = new Reserve(DOMAIN, address(token), permit2, MAX_AGE, CLOSE_DELAY);
+        acc = new Reserve(DOMAIN, address(token), permit2, address(new Poseidon2Goldilocks()), MAX_AGE, CLOSE_DELAY);
         prev = new PreventiveReserve(address(token));
         vm.deal(principal, 100 ether);
         vm.deal(agent, 1 ether);
@@ -66,10 +67,7 @@ contract Fixture is Test {
 
     function _reg(Reserve.Funding f) internal returns (uint256 id) {
         vm.prank(principal);
-        id = acc.register{value: 1 ether}(
-            agent, CAP, VELOCITY, WINDOW, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0, uint64(block.timestamp) + LIFE, 0, RANGE
-        );
+        id = acc.register{value: 1 ether}(TermsOf.make(agent, CAP, VELOCITY, WINDOW, f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0, uint64(block.timestamp) + LIFE));
     }
 
     function _elems(uint256 cover, uint256 salt) internal pure returns (uint64[] memory e) {

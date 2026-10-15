@@ -37,7 +37,7 @@ pub const STATEMENT_SOL: &str = "../SourceCode/Reserve/test/Statement.sol";
 /// The exported payment's statement as Solidity constants, so a test can
 /// settle exactly what the proof proves and nothing else.
 fn write_statement(pv: &[p3_goldilocks::Goldilocks]) {
-    use crate::composed::{PV_AMOUNT, PV_ELEMS, PV_TIME};
+    use crate::composed::{PV_AMOUNT, PV_BASE, PV_ELEMS, PV_RANGE, PV_SECRET_HASH, PV_TIME, PV_UNIT};
     use crate::trace::PAYEE;
     let v: Vec<u64> = pv.iter().map(|x| x.as_canonical_u64()).collect();
     let addr: String = PAYEE.iter().map(|b| format!("{b:02x}")).collect();
@@ -50,6 +50,15 @@ fn write_statement(pv: &[p3_goldilocks::Goldilocks]) {
     s.push_str(&format!("    uint64 internal constant AMOUNT = {};\n", v[PV_AMOUNT]));
     s.push_str(&format!("    address internal constant PAYEE = address(uint160(0x00{addr}));\n"));
     s.push_str(&format!("    uint64 internal constant TIME = {};\n", v[PV_TIME]));
+    s.push_str(&format!("    uint64 internal constant UNIT = {};\n", v[PV_UNIT]));
+    s.push_str(&format!("    uint64 internal constant RANGE_BASE = {};\n", v[PV_BASE]));
+    s.push_str(&format!("    uint64 internal constant RANGE_LEN = {};\n", v[PV_RANGE]));
+    let lanes: String = (0..4).rev().map(|j| format!("{:016x}", v[PV_SECRET_HASH + j])).collect();
+    s.push_str("    /// H(s), four lanes packed low lane first, as the reserve stores it.\n");
+    s.push_str(&format!("    bytes32 internal constant SECRET_HASH = 0x{lanes};\n"));
+    let sec = crate::spend_trace::SECRET;
+    s.push_str(&format!("    uint64 internal constant SECRET0 = {};\n", sec[0]));
+    s.push_str(&format!("    uint64 internal constant SECRET1 = {};\n", sec[1]));
     s.push_str(&format!("    bytes32 internal constant ELEMS_HASH = 0x{hash};\n\n"));
     let c = crate::statement::committed(&v);
     s.push_str("    /// What the dispute program commits for this payment, as the guest computes it.\n");

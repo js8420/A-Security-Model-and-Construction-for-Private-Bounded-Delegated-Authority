@@ -3,12 +3,15 @@ pragma solidity ^0.8.28;
 
 import {console} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
+import {Statement} from "./Statement.sol";
 import {Fixture} from "./Fixture.sol";
 
 /// What a settlement costs, now that it moves the payment as well as
 /// publishing its evidence. Every figure is the settle call alone, warmed by
 /// one earlier settlement on the same delegation.
 contract TranscriptGas is Fixture {
+    uint64 constant B0 = Statement.RANGE_BASE;
+
     function setUp() public {
         _base();
     }
@@ -54,8 +57,8 @@ contract TranscriptGas is Fixture {
         _settle(id, 1, _elems(64, 1), true);
         console.log("Settle logged, cover 64", _settle(id, 2, _elems(64, 2), true));
 
-        uint64[] memory s1 = _one(0);
-        uint64[] memory s2 = _one(128);
+        uint64[] memory s1 = _one(B0);
+        uint64[] memory s2 = _one(B0 + 128);
         uint64[] memory l64 = _one(64);
         vm.prank(principal);
         uint256 g2 = gasleft();
@@ -66,7 +69,7 @@ contract TranscriptGas is Fixture {
         acc.revoke(id, s2, l64, keccak256("root2"));
         console.log("Revoke, later range", g3 - gasleft());
 
-        uint64[2] memory secret = [uint64(7), uint64(11)];
+        uint64[2] memory secret = [Statement.SECRET0, Statement.SECRET1];
         uint256 g4 = gasleft();
         acc.claim(id, secret);
         console.log("Claim", g4 - gasleft());
@@ -103,7 +106,7 @@ contract TranscriptGas is Fixture {
 
     function testRevokeIsThePrincipals() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
-        uint64[] memory st = _one(0);
+        uint64[] memory st = _one(B0);
         uint64[] memory ln = _one(64);
         vm.expectRevert(Reserve.NotPrincipal.selector);
         acc.revoke(id, st, ln, keccak256("root1"));
@@ -115,21 +118,23 @@ contract TranscriptGas is Fixture {
         uint256 id = _reg(Reserve.Funding.Deposit);
         vm.startPrank(principal);
         vm.expectRevert(Reserve.RangeOutside.selector);
-        acc.revoke(id, _one(RANGE - 10), _one(64), keccak256("r"));
+        acc.revoke(id, _one(B0 + Statement.RANGE_LEN - 10), _one(64), keccak256("r"));
         vm.expectRevert(Reserve.RangeOutside.selector);
-        acc.revoke(id, _one(5), _one(0), keccak256("r"));
-        acc.revoke(id, _one(100), _one(50), keccak256("r1"));
+        acc.revoke(id, _one(B0 - 1), _one(2), keccak256("r"));
+        vm.expectRevert(Reserve.RangeOutside.selector);
+        acc.revoke(id, _one(B0 + 5), _one(0), keccak256("r"));
+        acc.revoke(id, _one(B0 + 100), _one(50), keccak256("r1"));
         vm.expectRevert(Reserve.RangeOverlaps.selector);
-        acc.revoke(id, _one(149), _one(10), keccak256("r2"));
+        acc.revoke(id, _one(B0 + 149), _one(10), keccak256("r2"));
         vm.expectRevert(Reserve.RangeOverlaps.selector);
-        acc.revoke(id, _one(60), _one(41), keccak256("r2"));
+        acc.revoke(id, _one(B0 + 60), _one(41), keccak256("r2"));
         uint64[] memory st = new uint64[](2);
         uint64[] memory ln = new uint64[](2);
-        st[0] = 300; ln[0] = 20;
-        st[1] = 310; ln[1] = 20;
+        st[0] = B0 + 300; ln[0] = 20;
+        st[1] = B0 + 310; ln[1] = 20;
         vm.expectRevert(Reserve.RangeOverlaps.selector);
         acc.revoke(id, st, ln, keccak256("r2"));
-        st[1] = 320;
+        st[1] = B0 + 320;
         acc.revoke(id, st, ln, keccak256("r2"));
         vm.stopPrank();
         assertEq(acc.revokedCount(id), 3);
@@ -199,12 +204,20 @@ contract TranscriptGas is Fixture {
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(id);
         vm.expectRevert(Reserve.BondAlreadyPaid.selector);
-        acc.claim(id, [uint64(7), uint64(11)]);
+        acc.claim(id, [Statement.SECRET0, Statement.SECRET1]);
+    }
+
+    /// A claim opens H(s) with the circuit's permutation: any other secret,
+    /// including the right one with a lane changed, is refused.
+    function testWrongSecretCannotClaim() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        vm.expectRevert(Reserve.SecretDoesNotOpen.selector);
+        acc.claim(id, [Statement.SECRET0, Statement.SECRET1 + 1]);
     }
 
     function testClaimedBondIsNotReturnedAtClose() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
-        acc.claim(id, [uint64(7), uint64(11)]);
+        acc.claim(id, [Statement.SECRET0, Statement.SECRET1]);
         vm.warp(block.timestamp + LIFE + CLOSE_DELAY + 1);
         uint256 bond = agent.balance;
         acc.close(id);

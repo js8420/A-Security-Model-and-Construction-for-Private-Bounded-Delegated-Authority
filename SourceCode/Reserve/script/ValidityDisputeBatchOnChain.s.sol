@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {Reserve} from "../src/Reserve.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
+import {TermsOf} from "../test/TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
@@ -14,7 +16,7 @@ import {Statement} from "../test/Statement.sol";
 /// batch program, so every gas figure is a receipt's gasUsed. The node is
 /// started at the exported payment's time: anvil --timestamp 5000.
 contract ValidityDisputeBatchOnChain is Script {
-    string constant DIR = "../../WorkingHistory/groth16_s5/";
+    string constant DIR = "../../WorkingHistory/groth16_s5b/";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -36,7 +38,7 @@ contract ValidityDisputeBatchOnChain is Script {
         vm.startBroadcast(pk);
         sp1 = new SP1Verifier();
         token = new MockToken();
-        acc = new Reserve(DOMAIN, address(token), address(0), 1 hours, 2 days);
+        acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         vd = new ValidityDispute(address(acc), address(sp1), bytes32(0), batchKey, 1 days, 1 days, 2 hours, 0.01 ether);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
@@ -56,10 +58,7 @@ contract ValidityDisputeBatchOnChain is Script {
     }
 
     function _challenged() internal returns (uint256 id, Settlement memory s) {
-        id = acc.register{value: 0.1 ether}(
-            vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            Reserve.Funding.Deposit, 100_000_000, _lanes(5), _lanes(1), type(uint64).max >> 1, 0, 1 << 16
-        );
+        id = acc.register{value: 0.1 ether}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(5), _lanes(1), type(uint64).max >> 1));
         uint64[] memory e = Statement.elems();
         bytes32 eh = keccak256(abi.encodePacked(e));
         bytes32 h = acc.signedDigest(id, Statement.PAYEE, Statement.AMOUNT, digest, Statement.TIME, eh);
@@ -70,9 +69,9 @@ contract ValidityDisputeBatchOnChain is Script {
     }
 
     function _file(uint256 k) internal pure returns (string memory) {
-        if (k == 1) return string.concat(DIR, "out_batch1_a/onchain.txt");
-        if (k == 2) return string.concat(DIR, "out_batch2_a/onchain.txt");
-        return string.concat(DIR, "out_batch4_a/onchain.txt");
+        if (k == 1) return string.concat(DIR, "out_s5b_batch1_a/onchain.txt");
+        if (k == 2) return string.concat(DIR, "out_s5b_batch2_a/onchain.txt");
+        return string.concat(DIR, "out_s5b_batch4_a/onchain.txt");
     }
 
     function _field(string memory file, string memory key) internal view returns (string memory) {

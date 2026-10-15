@@ -1,11 +1,15 @@
 use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
 use p3_field::PrimeCharacteristicRing;
 use p3_goldilocks::Goldilocks;
-use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
+use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout, SubAirBuilder};
 
 use crate::air::{recompose, COL_AMOUNT, COL_B, COL_C, COL_T, RANGE_BITS};
 use crate::air::COL_DOMAIN;
-use crate::spend::{SpendAir, COL_DOM, COL_M, COL_UNITS, NODE_NULL, NODE_SHARE, PER_NODE};
+use crate::hash::{new_hash_air, output_offset, HashAir, DOMAIN_SECRET, WIDTH};
+use crate::spend::{
+    SpendAir, COL_BASE, COL_DOM, COL_M, COL_ROOT_KEY, COL_SECRET, COL_UNITS, NODE_NULL, NODE_SHARE,
+    PER_NODE, SECRET_ELEMS,
+};
 use crate::whole::{WholeAir, PAYEE_LIMBS, PUBLIC_VALUES};
 
 type F = Goldilocks;
@@ -44,6 +48,7 @@ pub struct ComposedAir<
 > {
     whole: WholeAir<R, MD, RD>,
     spend: SpendAir<R, DEPTH, COVER>,
+    hash: HashAir<R>,
 }
 
 /// units * u - amount; amount - (units - 1) * u - 1; and the cap fitting inside
@@ -55,7 +60,8 @@ pub struct ComposedAir<
 /// the failure this construction's evaluation is about, so it is enforced.
 pub const RANGE_BLOCKS: usize = 3;
 
-/// The unit size, witnessed and tied to the committed budget.
+/// The unit size, witnessed, tied to the committed budget and to the public
+/// unit size.
 pub const EXTRA_COLS: usize = 1;
 
 /// The statement a settlement is checked against, in public-value order: the
@@ -68,9 +74,20 @@ pub const PV_DOMAIN: usize = PUBLIC_VALUES;
 pub const PV_AMOUNT: usize = PV_DOMAIN + 1;
 pub const PV_PAYEE: usize = PV_AMOUNT + 1;
 pub const PV_TIME: usize = PV_PAYEE + PAYEE_LIMBS;
+/// The delegation's terms the reserve records in the clear: the unit size,
+/// the first index of its unit range and the range's declared length, and
+/// H(s). Each was a free witness before, and each freedom was an overdraft:
+/// a unit size or a base chosen per payment moves payments into disjoint
+/// index spaces, and a secret chosen per payment puts their shares on
+/// different lines, so no unit is ever consumed twice under one key.
+pub const PV_UNIT: usize = PV_TIME + 1;
+pub const PV_BASE: usize = PV_UNIT + 1;
+pub const PV_RANGE: usize = PV_BASE + 1;
+pub const PV_SECRET_HASH: usize = PV_RANGE + 1;
+pub const SECRET_HASH_LANES: usize = 4;
 /// Every slot's two share lanes and its nullifier, slot by slot, in the order
 /// Settle publishes them.
-pub const PV_ELEMS: usize = PV_TIME + 1;
+pub const PV_ELEMS: usize = PV_SECRET_HASH + SECRET_HASH_LANES;
 pub const ELEMS_PER_SLOT: usize = 3;
 
 impl<
@@ -85,6 +102,7 @@ impl<
         Self {
             whole: WholeAir::<R, MD, RD>::new(),
             spend: SpendAir::<R, DEPTH, COVER>::new(),
+            hash: new_hash_air::<R>(),
         }
     }
 
@@ -96,9 +114,18 @@ impl<
         BaseAir::<F>::width(&self.spend)
     }
 
-    /// The witnessed unit size, then the two comparison blocks.
+    /// The witnessed unit size, then the comparison blocks.
     pub fn unit_col(&self) -> usize {
         self.whole_width() + self.spend_width()
+    }
+
+    /// The permutation that hashes the secret, after the comparison blocks.
+    pub fn secret_block(&self) -> usize {
+        self.unit_col() + EXTRA_COLS + RANGE_BLOCKS * RANGE_BITS
+    }
+
+    fn block_width(&self) -> usize {
+        BaseAir::<F>::width(&self.hash)
     }
 }
 
@@ -111,7 +138,7 @@ impl<
     > BaseAir<F> for ComposedAir<R, MD, RD, DEPTH, COVER>
 {
     fn width(&self) -> usize {
-        self.unit_col() + EXTRA_COLS + RANGE_BLOCKS * RANGE_BITS
+        self.secret_block() + self.block_width()
     }
 
     /// The compliance circuit's values, the settlement domain, and what the
@@ -143,13 +170,40 @@ where
         let w = self.whole_width();
 
         self.whole.constrain_payee(builder, 0, PV_PAYEE);
-        self.spend.constrain(builder, w, PV_DOMAIN);
+        self.spend.constrain_declared(builder, w, PV_DOMAIN, PV_RANGE);
+        let sb = self.secret_block();
+        {
+            let bw = self.block_width();
+            let mut sub = SubAirBuilder::<AB, HashAir<R>, F>::new(builder, sb..sb + bw);
+            self.hash.eval(&mut sub);
+        }
 
         let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
 
         builder.assert_eq(row[COL_AMOUNT].clone().into(), pv[PV_AMOUNT].clone());
         builder.assert_eq(row[COL_T].clone().into(), pv[PV_TIME].clone());
+        builder.assert_eq(row[self.unit_col()].clone().into(), pv[PV_UNIT].clone());
+        builder.assert_eq(row[w + COL_BASE].clone().into(), pv[PV_BASE].clone());
+
+        // H(s) and the root key are one permutation of the secret: the secret
+        // in the first lanes, the separator after it, zeros elsewhere. Its
+        // output's first lanes are the root key the slots derive from and the
+        // next four the public H(s).
+        for j in 0..SECRET_ELEMS {
+            builder.assert_eq(row[sb + j].clone(), row[w + COL_SECRET + j].clone());
+        }
+        builder.assert_eq(row[sb + SECRET_ELEMS].clone().into(), AB::Expr::from_u64(DOMAIN_SECRET));
+        for lane in (SECRET_ELEMS + 1)..WIDTH {
+            builder.assert_zero(row[sb + lane].clone());
+        }
+        let out = sb + output_offset::<R>();
+        for j in 0..SECRET_ELEMS {
+            builder.assert_eq(row[out + j].clone(), row[w + COL_ROOT_KEY + j].clone());
+        }
+        for j in 0..SECRET_HASH_LANES {
+            builder.assert_eq(row[out + SECRET_ELEMS + j].clone().into(), pv[PV_SECRET_HASH + j].clone());
+        }
         let nb = w + self.spend.node_base_pub();
         for c in 0..COVER {
             let n = nb + c * PER_NODE;
@@ -179,14 +233,17 @@ where
         // one domain and settle a payload naming another.
         builder.assert_eq(row[COL_DOMAIN].clone(), row[w + COL_DOM].clone());
 
-        // The run C8 is checked against is the run the payment consumes. Runs
-        // are contiguous again, so the first and last positions bound it.
+        // The run C8 is checked against is the run the payment consumes, in
+        // the absolute indices revocations name: the delegation's base plus
+        // the run's offsets. Runs are contiguous, so the first and last
+        // positions bound it.
         let lo = self.whole.glue_run_offset();
         let pos = w + self.spend.pos_base();
-        builder.assert_eq(row[lo].clone().into(), row[pos].clone().into());
+        let pbase: AB::Expr = row[w + COL_BASE].clone().into();
+        builder.assert_eq(row[lo].clone().into(), pbase.clone() + row[pos].clone().into());
         builder.assert_eq(
             row[lo + 1].clone().into() + AB::Expr::ONE,
-            row[pos + COVER].clone().into(),
+            pbase + row[pos + COVER].clone().into(),
         );
 
         let one = AB::Expr::ONE;

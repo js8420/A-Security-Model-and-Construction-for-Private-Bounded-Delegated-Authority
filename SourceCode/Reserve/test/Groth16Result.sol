@@ -7,8 +7,8 @@ import {Statement} from "./Statement.sol";
 /// The Groth16 proofs Pete made of the dispute verifiers, read from the files
 /// the prove binary wrote, and the statement of the payment proof they verify.
 abstract contract Groth16Result is Test {
-    string constant DIR = "../../WorkingHistory/groth16_s5/";
-    string constant SINGLE = "../../WorkingHistory/groth16_s5/out_keccak_a/onchain.txt";
+    string constant DIR = "../../WorkingHistory/groth16_s5b/";
+    string constant SINGLE = "../../WorkingHistory/groth16_s5b/out_s5b_keccak_a/onchain.txt";
     uint256 constant VALUES = 19;
 
     bytes32 vkey;
@@ -22,9 +22,9 @@ abstract contract Groth16Result is Test {
     }
 
     function _batchFile(uint256 k) internal pure returns (string memory) {
-        if (k == 1) return string.concat(DIR, "out_batch1_a/onchain.txt");
-        if (k == 2) return string.concat(DIR, "out_batch2_a/onchain.txt");
-        return string.concat(DIR, "out_batch4_a/onchain.txt");
+        if (k == 1) return string.concat(DIR, "out_s5b_batch1_a/onchain.txt");
+        if (k == 2) return string.concat(DIR, "out_s5b_batch2_a/onchain.txt");
+        return string.concat(DIR, "out_s5b_batch4_a/onchain.txt");
     }
 
     /// Reads the whole file at once: a line cursor is shared by every test

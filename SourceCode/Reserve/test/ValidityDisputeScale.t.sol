@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
+import {TermsOf} from "./TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
 import {ISP1Verifier} from "../src/sp1/ISP1Verifier.sol";
 import {MockToken} from "./MockToken.sol";
@@ -58,7 +60,7 @@ contract ValidityDisputeScaleTest is Test {
     function setUp() public {
         vm.warp(100 days);
         token = new MockToken();
-        acc = new Reserve(DOMAIN, address(token), address(0), 1 hours, ACCEPT + 1 hours);
+        acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT + 1 hours);
         vd = new ValidityDispute(
             address(acc), address(new EchoVerifier(SINGLE, BATCH)), SINGLE, BATCH, ACCEPT, WINDOW, SLOT, BOND
         );
@@ -73,11 +75,7 @@ contract ValidityDisputeScaleTest is Test {
 
     function _register(uint256 pk, uint256 tag) internal returns (uint256 r) {
         vm.prank(principal);
-        r = acc.register{value: AGENT_BOND}(
-            vm.addr(pk), 1_000_000, 1_000, 86_400, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            Reserve.Funding.Deposit, 100_000_000, bytes32(tag), bytes32(tag + 1),
-            uint64(block.timestamp) + LIFE, 0, 1 << 16
-        );
+        r = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(pk), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(tag), bytes32(tag + 1), uint64(block.timestamp) + LIFE));
     }
 
     function _rec(uint256 r, uint64 d) internal view returns (Settlement memory) {
@@ -235,14 +233,18 @@ contract ValidityDisputeScaleTest is Test {
         s.payee = address(uint160(0x007a3f9c2e5b1d84f6a0c9e2b7d5f3a1c8e6b4d2f0));
         s.elems = 0x0102030405060708111213141516171821222324252627283132333435363738;
         bytes memory pv = vd.publicValues(r, 5, s);
-        assertEq(pv.length, 8 + 8 * 19);
+        assertEq(pv.length, 8 + 8 * 26);
         assertEq(_word(pv, 10), 1);
         assertEq(_word(pv, 11), 68576303576830704);
         assertEq(_word(pv, 12), 37425867368085461);
         assertEq(_word(pv, 13), 134413621811997);
         assertEq(_word(pv, 14), s.time);
-        assertEq(_word(pv, 15), 0x0102030405060708);
-        assertEq(_word(pv, 18), 0x3132333435363738);
+        assertEq(_word(pv, 15), Statement.UNIT);
+        assertEq(_word(pv, 16), Statement.RANGE_BASE);
+        assertEq(_word(pv, 17), Statement.RANGE_LEN);
+        for (uint256 j = 0; j < 4; ++j) assertEq(_word(pv, 18 + j), (uint256(Statement.SECRET_HASH) >> (64 * j)) & 0xFFFFFFFFFFFFFFFF);
+        assertEq(_word(pv, 22), 0x0102030405060708);
+        assertEq(_word(pv, 25), 0x3132333435363738);
     }
 
     /// The circuit crate hashed the exported shares as the guest does; the
@@ -257,7 +259,7 @@ contract ValidityDisputeScaleTest is Test {
     /// circuit crate computes the guest will commit, before any proof exists.
     function testRebuiltStatementIsWhatTheGuestCommits() public {
         uint64[] memory c = Statement.committed();
-        assertEq(c.length, 19);
+        assertEq(c.length, 26);
         uint256 root;
         uint256 com;
         for (uint256 j = 0; j < 4; ++j) {
@@ -265,10 +267,7 @@ contract ValidityDisputeScaleTest is Test {
             com |= uint256(c[5 + j]) << (64 * j);
         }
         vm.prank(principal);
-        uint256 r = acc.register{value: AGENT_BOND}(
-            vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            Reserve.Funding.Deposit, 100_000_000, bytes32(com), bytes32(root), uint64(block.timestamp) + LIFE, 0, 1 << 16
-        );
+        uint256 r = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(com), bytes32(root), uint64(block.timestamp) + LIFE));
         Settlement memory s = Settlement({
             elems: Statement.ELEMS_HASH, amount: Statement.AMOUNT, payee: Statement.PAYEE, time: Statement.TIME,
             epoch: 0
@@ -297,11 +296,11 @@ contract ValidityDisputeScaleTest is Test {
         bytes memory pv = vd.batchPublicValues(ids, ds, _recs(ids, ds));
         bytes memory one = vd.publicValues(a, 5, _rec(a, 5));
         bytes memory two = vd.publicValues(b, 6, _rec(b, 6));
-        assertEq(pv.length, 8 + 2 * 152);
-        assertEq(uint8(pv[0]), 38);
-        for (uint256 i = 0; i < 152; ++i) {
+        assertEq(pv.length, 8 + 2 * 208);
+        assertEq(uint8(pv[0]), 52);
+        for (uint256 i = 0; i < 208; ++i) {
             assertEq(pv[8 + i], one[8 + i]);
-            assertEq(pv[160 + i], two[8 + i]);
+            assertEq(pv[216 + i], two[8 + i]);
         }
     }
 
@@ -448,7 +447,7 @@ contract ValidityDisputeScaleTest is Test {
     }
 
     function testDisputeWindowMustFitTheCloseDelay() public {
-        Reserve short = new Reserve(DOMAIN, address(token), address(0), 1 hours, ACCEPT);
+        Reserve short = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT);
         vm.expectRevert(bytes("close delay"));
         short.setDispute(address(vd));
     }

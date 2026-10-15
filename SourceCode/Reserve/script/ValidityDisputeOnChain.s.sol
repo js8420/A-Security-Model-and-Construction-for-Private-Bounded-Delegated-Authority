@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Reserve} from "../src/Reserve.sol";
+import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
+import {TermsOf} from "../test/TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
@@ -17,7 +19,7 @@ import {Statement} from "../test/Statement.sol";
 /// The exported payment was signed at time 5000, so the node is started with
 /// its clock there: anvil --timestamp 5000.
 contract ValidityDisputeOnChain is Script {
-    string constant RESULT = "../../WorkingHistory/groth16_s5/out_keccak_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s5b/out_s5b_keccak_a/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -69,17 +71,14 @@ contract ValidityDisputeOnChain is Script {
 
     function _deploy(address me, uint64 window, uint64 slot) internal {
         token = new MockToken();
-        acc = new Reserve(DOMAIN, address(token), address(0), 1 hours, 2 days);
+        acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
         vd = new ValidityDispute(address(acc), address(sp1), vkey, bytes32(0), 1 days, window, slot, 0.01 ether);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.PAYEE, 1);
         token.approve(address(acc), type(uint256).max);
-        id = acc.register{value: 1 ether}(
-            vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, keccak256(abi.encodePacked(uint64(7), uint64(11))),
-            Reserve.Funding.Deposit, 100_000_000, _lanes(5), _lanes(1), type(uint64).max >> 1, 0, 1 << 16
-        );
+        id = acc.register{value: 1 ether}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(5), _lanes(1), type(uint64).max >> 1));
     }
 
     function _settle() internal {

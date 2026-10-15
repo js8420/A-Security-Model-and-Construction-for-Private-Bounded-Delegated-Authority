@@ -1,0 +1,1 @@
+﻿  Keccak proof and public values written to target/proof_128_keccak.bin: 5171989 bytes, verifies natively true, proved in 3.73 s

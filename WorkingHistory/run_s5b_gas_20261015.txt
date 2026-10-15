@@ -1,0 +1,61 @@
+﻿No files changed, compilation skipped
+
+Ran 14 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1515573)
+Logs:
+  Open, deposit 303383
+  Open, permit2 215397
+  Settle logged, cover 64 178814
+  Revoke, first range 74040
+  Revoke, later range 52708
+  Claim 289842
+
+[PASS] testChallengeCallDataBudget() (gas: 4932)
+Logs:
+  challenge call data alone, gas 82194896
+  proof bytes 5137181
+  over the 2^24 per-transaction cap x100 489
+
+[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 544052)
+[PASS] testCloseReturnsDepositAndBond() (gas: 677570)
+[PASS] testDepositAgainstPermit2() (gas: 1713805)
+Logs:
+  settle logged, cover 64, deposit 178802
+  settle logged, cover 64, permit2 180676
+    permit2 minus deposit 1874
+
+[PASS] testDigestSettlesOnce() (gas: 472847)
+[PASS] testLoggedAgainstPreventive() (gas: 1133137)
+Logs:
+  accountable, logged, cover 64 178792
+  preventive 32434
+  ratio x100 551
+
+[PASS] testNoSettlementAfterExpiry() (gas: 350412)
+[PASS] testPayeeIsBound() (gas: 349466)
+[PASS] testRevokeIsThePrincipals() (gas: 306562)
+[PASS] testRevokeRangeRules() (gas: 518963)
+[PASS] testStaleOrFutureTimeRefused() (gas: 482875)
+[PASS] testStoredAgainstLogged() (gas: 14638655)
+Logs:
+  cover 14
+    stored 320097
+    logged 70752
+    ratio x100 452
+  cover 30
+    stored 628397
+    logged 105497
+    ratio x100 595
+  cover 64
+    stored 1272946
+    logged 180412
+    ratio x100 705
+  cover 128
+    stored 2510597
+    logged 325682
+    ratio x100 770
+
+[PASS] testWrongSecretCannotClaim() (gas: 584432)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 18.49ms (62.29ms CPU time)
+
+Ran 1 test suite in 20.19ms (18.49ms CPU time): 14 tests passed, 0 failed, 0 skipped (14 total tests)
