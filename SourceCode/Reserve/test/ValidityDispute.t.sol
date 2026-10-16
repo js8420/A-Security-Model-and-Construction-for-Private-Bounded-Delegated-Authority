@@ -149,7 +149,7 @@ contract ValidityDisputeTest is Groth16Result {
     function testProofAfterRevocationStillAnswersItsEpoch() public {
         uint64[] memory st = new uint64[](1);
         uint64[] memory ln = new uint64[](1);
-        st[0] = 0;
+        st[0] = Statement.RANGE_BASE;
         ln[0] = 1;
         vm.prank(principal);
         acc.revoke(id, st, ln, bytes32(uint256(0xDEAD)));

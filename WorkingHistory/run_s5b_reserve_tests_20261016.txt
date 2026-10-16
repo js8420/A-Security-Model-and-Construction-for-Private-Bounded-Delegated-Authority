@@ -1,5 +1,5 @@
-﻿Compiling 4 files with Solc 0.8.28
-Solc 0.8.28 finished in 3.95s
+﻿Compiling 1 files with Solc 0.8.28
+Solc 0.8.28 finished in 2.53s
 Compiler run successful!
 
 Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
@@ -8,7 +8,7 @@ Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
 [PASS] testVerifies() (gas: 468953)
 [PASS] testWrongProgramRevert() (gas: 275836)
 [PASS] testWrongVerifierSelectorRevert() (gas: 59007)
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 15.56ms (15.32ms CPU time)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 24.98ms (16.30ms CPU time)
 
 Ran 14 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
 [PASS] testAnswerPaysTheAgent() (gas: 438049)
@@ -16,7 +16,7 @@ Ran 14 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
 [PASS] testLateAnswerRefused() (gas: 146870)
 [PASS] testNoAnswerForfeitsTheAgentBond() (gas: 139561)
 [PASS] testNoExpireAfterAnswer() (gas: 419466)
-[FAIL: RangeOutside()] testProofAfterRevocationStillAnswersItsEpoch() (gas: 19212)
+[PASS] testProofAfterRevocationStillAnswersItsEpoch() (gas: 500688)
 [PASS] testProofOfAnotherRecordFails() (gas: 977627)
 [PASS] testPublicValuesAreTheReserveRecord() (gas: 81520)
 [PASS] testRaisedAmountCannotBeAnswered() (gas: 977785)
@@ -25,7 +25,7 @@ Ran 14 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
 [PASS] testUnsettledDigestCannotOpen() (gas: 37775)
 [PASS] testWrongBondCannotOpen() (gas: 28697)
 [PASS] testWrongEpochCannotOpen() (gas: 37937)
-Suite result: FAILED. 13 passed; 1 failed; 0 skipped; finished in 21.94ms (29.40ms CPU time)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 24.23ms (35.40ms CPU time)
 
 Ran 8 tests for test/ValidityDisputeBatch.t.sol:ValidityDisputeBatchTest
 [PASS] testBatchOfOneAnswersOneChallenge() (gas: 1015914)
@@ -36,15 +36,7 @@ Ran 8 tests for test/ValidityDisputeBatch.t.sol:ValidityDisputeBatchTest
 [PASS] testProofCannotAnswerASettlementOfAnotherStatement() (gas: 3596531)
 [PASS] testProofOfFourCannotAnswerThree() (gas: 2320411)
 [PASS] testSingleProofIsNotABatchProof() (gas: 1008152)
-Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 26.07ms (65.36ms CPU time)
-
-Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
-[PASS] testMedian() (gas: 56985)
-[PASS] testNonCanonicalValueReverts() (gas: 5824)
-[PASS] testOperationReadingAheadReverts() (gas: 6633)
-[PASS] testWorstByOperations() (gas: 379007)
-[PASS] testWorstByReads() (gas: 56036)
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 27.05ms (7.24ms CPU time)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 26.77ms (71.29ms CPU time)
 
 Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
 [PASS] testAgainstTheCrateCounting() (gas: 282579)
@@ -52,7 +44,24 @@ Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
 [PASS] testAgainstTheCrateZeros() (gas: 282572)
 [PASS] testMerkleLevelGas() (gas: 286007)
 [PASS] testPermutationGas() (gas: 284058)
-Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 26.63ms (9.74ms CPU time)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 32.74ms (12.54ms CPU time)
+
+Ran 14 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1515573)
+[PASS] testChallengeCallDataBudget() (gas: 4932)
+[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 544052)
+[PASS] testCloseReturnsDepositAndBond() (gas: 677570)
+[PASS] testDepositAgainstPermit2() (gas: 1713805)
+[PASS] testDigestSettlesOnce() (gas: 472847)
+[PASS] testLoggedAgainstPreventive() (gas: 1133137)
+[PASS] testNoSettlementAfterExpiry() (gas: 350412)
+[PASS] testPayeeIsBound() (gas: 349466)
+[PASS] testRevokeIsThePrincipals() (gas: 306562)
+[PASS] testRevokeRangeRules() (gas: 518963)
+[PASS] testStaleOrFutureTimeRefused() (gas: 482875)
+[PASS] testStoredAgainstLogged() (gas: 14638655)
+[PASS] testWrongSecretCannotClaim() (gas: 584432)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 31.04ms (47.71ms CPU time)
 
 Ran 24 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
 [PASS] testAnsweredSettlementCannotBeChallengedAgain() (gas: 629103)
@@ -79,24 +88,15 @@ Ran 24 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
 [PASS] testStatementLayout() (gas: 532878)
 [PASS] testWithdrawWithNoCreditFails() (gas: 10550)
 [PASS] testWrongRecordRefused() (gas: 628770)
-Suite result: ok. 24 passed; 0 failed; 0 skipped; finished in 29.48ms (68.06ms CPU time)
+Suite result: ok. 24 passed; 0 failed; 0 skipped; finished in 31.11ms (59.14ms CPU time)
 
-Ran 14 tests for test/TranscriptGas.t.sol:TranscriptGas
-[PASS] testAllOperationsOneWarming() (gas: 1515573)
-[PASS] testChallengeCallDataBudget() (gas: 4932)
-[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 544052)
-[PASS] testCloseReturnsDepositAndBond() (gas: 677570)
-[PASS] testDepositAgainstPermit2() (gas: 1713805)
-[PASS] testDigestSettlesOnce() (gas: 472847)
-[PASS] testLoggedAgainstPreventive() (gas: 1133137)
-[PASS] testNoSettlementAfterExpiry() (gas: 350412)
-[PASS] testPayeeIsBound() (gas: 349466)
-[PASS] testRevokeIsThePrincipals() (gas: 306562)
-[PASS] testRevokeRangeRules() (gas: 518963)
-[PASS] testStaleOrFutureTimeRefused() (gas: 482875)
-[PASS] testStoredAgainstLogged() (gas: 14638655)
-[PASS] testWrongSecretCannotClaim() (gas: 584432)
-Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 29.85ms (43.92ms CPU time)
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+[PASS] testWorstByReads() (gas: 56036)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.42s (6.33ms CPU time)
 
 Ran 11 tests for test/StepGas.t.sol:StepGas
 [PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
@@ -110,14 +110,6 @@ Ran 11 tests for test/StepGas.t.sol:StepGas
 [PASS] testLoadPublic() (gas: 316239)
 [PASS] testPackRoundTrip() (gas: 11074)
 [PASS] testStepCosts() (gas: 5589125)
-Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.49s (4.97s CPU time)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.42s (4.81s CPU time)
 
-Ran 8 test suites in 2.49s (2.66s CPU time): 85 tests passed, 1 failed, 0 skipped (86 total tests)
-
-Failing tests:
-Encountered 1 failing test in test/ValidityDispute.t.sol:ValidityDisputeTest
-[FAIL: RangeOutside()] testProofAfterRevocationStillAnswersItsEpoch() (gas: 19212)
-
-Encountered a total of 1 failing tests, 85 tests succeeded
-
-Tip: Run `forge test --rerun` to retry only the 1 failed test
+Ran 8 test suites in 2.42s (5.01s CPU time): 86 tests passed, 0 failed, 0 skipped (86 total tests)
