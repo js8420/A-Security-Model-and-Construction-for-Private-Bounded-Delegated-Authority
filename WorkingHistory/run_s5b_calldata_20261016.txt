@@ -1,0 +1,14 @@
+﻿Compiling 1 files with Solc 0.8.28
+Solc 0.8.28 finished in 2.12s
+Compiler run successful!
+
+Ran 1 test for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testChallengeCallDataBudget() (gas: 4932)
+Logs:
+  challenge call data alone, gas 82724304
+  proof bytes 5170269
+  over the 2^24 per-transaction cap x100 493
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 11.89ms (58.80┬╡s CPU time)
+
+Ran 1 test suite in 15.84ms (11.89ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)
