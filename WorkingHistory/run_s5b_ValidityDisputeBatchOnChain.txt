@@ -1,0 +1,33 @@
+﻿SP1Verifier                        1508005 0x1
+MockToken                           375695 0x1
+Poseidon2Goldilocks                    871186 0x1
+Reserve                            2169057 0x1
+ValidityDispute                    1936949 0x1
+Reserve          setDispute          47607 0x1
+MockToken        mint                68279 0x1
+MockToken        mint                51119 0x1
+MockToken        approve             46463 0x1
+Reserve          register           307356 0x1
+Reserve          settleLogged       268624 0x1
+ValidityDispute  open               106892 0x1
+ValidityDispute  answerBatch        335755 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268636 0x1
+ValidityDispute  open                89941 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268636 0x1
+ValidityDispute  open                89941 0x1
+ValidityDispute  answerBatch        377690 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268636 0x1
+ValidityDispute  open                89941 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268636 0x1
+ValidityDispute  open                89941 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268636 0x1
+ValidityDispute  open                89941 0x1
+Reserve          register           273156 0x1
+Reserve          settleLogged       268612 0x1
+ValidityDispute  open                89941 0x1
+ValidityDispute  answerBatch        495735 0x1

@@ -1,0 +1,123 @@
+﻿Compiling 4 files with Solc 0.8.28
+Solc 0.8.28 finished in 3.95s
+Compiler run successful!
+
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175861)
+[PASS] testTamperedPublicValuesRevert() (gas: 276229)
+[PASS] testVerifies() (gas: 468953)
+[PASS] testWrongProgramRevert() (gas: 275836)
+[PASS] testWrongVerifierSelectorRevert() (gas: 59007)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 15.56ms (15.32ms CPU time)
+
+Ran 14 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
+[PASS] testAnswerPaysTheAgent() (gas: 438049)
+[PASS] testEarlyExpireRefused() (gas: 114346)
+[PASS] testLateAnswerRefused() (gas: 146870)
+[PASS] testNoAnswerForfeitsTheAgentBond() (gas: 139561)
+[PASS] testNoExpireAfterAnswer() (gas: 419466)
+[FAIL: RangeOutside()] testProofAfterRevocationStillAnswersItsEpoch() (gas: 19212)
+[PASS] testProofOfAnotherRecordFails() (gas: 977627)
+[PASS] testPublicValuesAreTheReserveRecord() (gas: 81520)
+[PASS] testRaisedAmountCannotBeAnswered() (gas: 977785)
+[PASS] testSecondChallengeRefused() (gas: 121950)
+[PASS] testSubstitutedShareCannotBeAnswered() (gas: 979860)
+[PASS] testUnsettledDigestCannotOpen() (gas: 37775)
+[PASS] testWrongBondCannotOpen() (gas: 28697)
+[PASS] testWrongEpochCannotOpen() (gas: 37937)
+Suite result: FAILED. 13 passed; 1 failed; 0 skipped; finished in 21.94ms (29.40ms CPU time)
+
+Ran 8 tests for test/ValidityDisputeBatch.t.sol:ValidityDisputeBatchTest
+[PASS] testBatchOfOneAnswersOneChallenge() (gas: 1015914)
+[PASS] testBatchOfOneCommitsWhatTheSingleProgramCommits() (gas: 41503)
+[PASS] testBatchProofsCarryEveryPaymentsValues() (gas: 1890764)
+[PASS] testOneProofAnswersFourChallenges() (gas: 2946919)
+[PASS] testOneProofAnswersTwoChallenges() (gas: 1655356)
+[PASS] testProofCannotAnswerASettlementOfAnotherStatement() (gas: 3596531)
+[PASS] testProofOfFourCannotAnswerThree() (gas: 2320411)
+[PASS] testSingleProofIsNotABatchProof() (gas: 1008152)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 26.07ms (65.36ms CPU time)
+
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+[PASS] testWorstByReads() (gas: 56036)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 27.05ms (7.24ms CPU time)
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+[PASS] testPermutationGas() (gas: 284058)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 26.63ms (9.74ms CPU time)
+
+Ran 24 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
+[PASS] testAnsweredSettlementCannotBeChallengedAgain() (gas: 629103)
+[PASS] testBatchAfterAnyDeadlineFails() (gas: 771042)
+[PASS] testBatchAnswersEveryChallengeAndCreditsEachAgent() (gas: 1855855)
+[PASS] testBatchNamingASettlementTwiceFails() (gas: 694969)
+[PASS] testBatchValuesAreTheSingleValuesInOrder() (gas: 1102138)
+[PASS] testBatchWithAnUnchallengedSettlementFails() (gas: 666188)
+[PASS] testBatchWithWrongValuesFails() (gas: 841348)
+[PASS] testChallengeAfterTheAcceptanceWindowRefused() (gas: 464713)
+[PASS] testChallengerThatRefusesEtherCannotBlockForfeit() (gas: 673380)
+[PASS] testCloseAfterAnAnsweredChallengeReturnsTheBond() (gas: 598979)
+[PASS] testCloseWaitsForOpenChallenges() (gas: 508020)
+[PASS] testDisputeWindowMustFitTheCloseDelay() (gas: 2797635)
+[PASS] testEmptyAndUnevenBatchesFail() (gas: 549444)
+[PASS] testGuestAndReserveHashTheSharesAlike() (gas: 43625)
+[PASS] testNoTwoDeadlinesInOneSlot() (gas: 1997441)
+[PASS] testOtherAgentsAreNotQueued() (gas: 1310741)
+[PASS] testQueueDrainsOverTime() (gas: 1004527)
+[PASS] testQueuesAreSpacedAndOnAlternateSlots() (gas: 1520387)
+[PASS] testRebuiltStatementIsWhatTheGuestCommits() (gas: 461567)
+[PASS] testSelfChallengesDoNotDelayThePrincipal() (gas: 3643341)
+[PASS] testSingleAnswerUsesTheSingleKey() (gas: 622089)
+[PASS] testStatementLayout() (gas: 532878)
+[PASS] testWithdrawWithNoCreditFails() (gas: 10550)
+[PASS] testWrongRecordRefused() (gas: 628770)
+Suite result: ok. 24 passed; 0 failed; 0 skipped; finished in 29.48ms (68.06ms CPU time)
+
+Ran 14 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1515573)
+[PASS] testChallengeCallDataBudget() (gas: 4932)
+[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 544052)
+[PASS] testCloseReturnsDepositAndBond() (gas: 677570)
+[PASS] testDepositAgainstPermit2() (gas: 1713805)
+[PASS] testDigestSettlesOnce() (gas: 472847)
+[PASS] testLoggedAgainstPreventive() (gas: 1133137)
+[PASS] testNoSettlementAfterExpiry() (gas: 350412)
+[PASS] testPayeeIsBound() (gas: 349466)
+[PASS] testRevokeIsThePrincipals() (gas: 306562)
+[PASS] testRevokeRangeRules() (gas: 518963)
+[PASS] testStaleOrFutureTimeRefused() (gas: 482875)
+[PASS] testStoredAgainstLogged() (gas: 14638655)
+[PASS] testWrongSecretCannotClaim() (gas: 584432)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 29.85ms (43.92ms CPU time)
+
+Ran 11 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
+[PASS] testEvaluationPointsMatchTheBlobLayout() (gas: 10160)
+[PASS] testFalseInputsRevert() (gas: 3098376)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11514)
+[PASS] testFoldLinearInBeta() (gas: 13510)
+[PASS] testInverseIsAnInverse() (gas: 15138)
+[PASS] testLoadBlobReadsTheProof() (gas: 1291079)
+[PASS] testLoadBlobRejectsAFalseOpening() (gas: 1072699741)
+[PASS] testLoadPublic() (gas: 316239)
+[PASS] testPackRoundTrip() (gas: 11074)
+[PASS] testStepCosts() (gas: 5589125)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.49s (4.97s CPU time)
+
+Ran 8 test suites in 2.49s (2.66s CPU time): 85 tests passed, 1 failed, 0 skipped (86 total tests)
+
+Failing tests:
+Encountered 1 failing test in test/ValidityDispute.t.sol:ValidityDisputeTest
+[FAIL: RangeOutside()] testProofAfterRevocationStillAnswersItsEpoch() (gas: 19212)
+
+Encountered a total of 1 failing tests, 85 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 1 failed test

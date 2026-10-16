@@ -1,0 +1,56 @@
+job 8278477, node himem07.cluster, cpus 32, hash batch 1, out /scratch/jshital/paper04/Circuits/zkvm/pete/out_s5b_batch1_b, start Fri Oct 16 11:46:59 CDT 2026
+7e316fe2746ae55d8bbbff78e6bceb6b34f228e39f723aba02350bab2d8c1808  /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak_batch.bin
+SP1 worker settings: defaults
+verifier program                                   batch
+payment proofs                                         1
+setup, seconds                                      24.4
+Setting environment variables took 24.123µs
+Reading R1CS took 20.69244654s
+Reading proving key took 3.244062803s
+Reading witness file took 3.329299ms
+Deserializing JSON data took 38.311231ms
+Generating witness took 925.704868ms
+[90m12:36:50[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m7987.362889
+[90m12:37:02[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m12115.678106
+Generating proof took 20.103983729s
+[90m12:37:03[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m12:37:03[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m12:37:03[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m12:37:03[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m1.754087
+groth16 proof, seconds                            2975.0
+the groth16 proof verifies                          true
+program verifying key                       0x00db0c6b8eeea3958e250ad451bc156609f11f851c5788931f701922b3993b15
+public value bytes                                   216
+on-chain proof bytes                                 356
+	Command being timed: "/scratch/jshital/paper04/Circuits/zkvm/pete/../script/target/release/prove /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_128_keccak_batch.bin /scratch/jshital/paper04/Circuits/zkvm/pete/out_s5b_batch1_b batch 1"
+	User time (seconds): 84351.19
+	System time (seconds): 2894.11
+	Percent of CPU this job got: 2904%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 50:04.05
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 110144520
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 65365472
+	Voluntary context switches: 16309557
+	Involuntary context switches: 44926836
+	Swaps: 0
+	File system inputs: 96256
+	File system outputs: 5512
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+end Fri Oct 16 12:37:04 CDT 2026
+vkey 0x00db0c6b8eeea3958e250ad451bc156609f11f851c5788931f701922b3993b15
+stark_bytes 5171989
+hash keccak
+program batch
+payment_proofs 1
+setup_seconds 24.4
+prove_seconds 2975.0
+verifies true
