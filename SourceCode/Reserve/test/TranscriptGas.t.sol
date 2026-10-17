@@ -239,6 +239,10 @@ contract TranscriptGas is Fixture {
     function testClaimedBondIsNotReturnedAtClose() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         acc.claim(id, [Statement.SECRET0, Statement.SECRET1]);
+        uint64[] memory e = _elems(1, 1);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
+        vm.expectRevert(Reserve.Frozen.selector);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
         vm.warp(block.timestamp + LIFE + CLOSE_DELAY + 1);
         uint256 bond = agent.balance;
         acc.close(id);

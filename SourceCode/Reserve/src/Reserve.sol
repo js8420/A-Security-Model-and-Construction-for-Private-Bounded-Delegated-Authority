@@ -49,6 +49,10 @@ contract Reserve {
     struct Delegation {
         address principal;
         address agent;
+        /// The principal's challenges still open. While any is, nothing settles.
+        uint32 holds;
+        /// No settlement ever again: set by a forfeit, a claim or the principal.
+        bool frozen;
         uint64 cap;
         uint64 velocityN;
         uint64 windowW;
@@ -58,6 +62,8 @@ contract Reserve {
         uint64 epoch;
         /// No settlement after this; the bond is released a delay later.
         uint64 expiry;
+        /// When the delegation was frozen, if it was.
+        uint64 frozenAt;
         /// The delegation's unit range, which revocations must lie inside.
         uint64 rangeBase;
         uint64 rangeLen;
@@ -150,12 +156,17 @@ contract Reserve {
     error RangeOverlaps();
     error LengthMismatch();
     error WrongSlotCount();
+    error Frozen();
+    error Held();
+    error NotFrozen();
 
     event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee);
     event Transcript(uint256 indexed id, uint64 digest, uint64[] elems);
     event BondForfeited(uint256 indexed id, address to, uint256 amount);
     event Revoked(uint256 indexed id, uint64 start, uint64 length);
     event Closed(uint256 indexed id, uint256 deposit, uint256 bond);
+    event FrozenBy(uint256 indexed id, address by);
+    event Reclaimed(uint256 indexed id, uint256 deposit);
 
     constructor(
         uint64 domainId,
@@ -190,6 +201,8 @@ contract Reserve {
         delegations[id] = Delegation({
             principal: msg.sender,
             agent: t.agent,
+            holds: 0,
+            frozen: false,
             cap: t.cap,
             velocityN: t.velocityN,
             windowW: t.windowW,
@@ -198,6 +211,7 @@ contract Reserve {
             closed: false,
             epoch: 0,
             expiry: t.expiry,
+            frozenAt: 0,
             rangeBase: t.rangeBase,
             rangeLen: t.rangeLen,
             deposit: t.funding == Funding.Deposit ? t.deposit : 0,
@@ -304,6 +318,8 @@ contract Reserve {
         uint256 published
     ) private {
         Delegation storage d = delegations[id];
+        if (d.frozen) revert Frozen();
+        if (d.holds != 0) revert Held();
         uint256 u = d.unitSize;
         if (published != 3 * ((uint256(amount) + u - 1) / u)) revert WrongSlotCount();
         uint64 nowTs = uint64(block.timestamp);
@@ -366,21 +382,61 @@ contract Reserve {
         uint256[8] memory out = poseidon.permute(st);
         uint256 h = out[2] | (out[3] << 64) | (out[4] << 128) | (out[5] << 192);
         if (bytes32(h) != delegations[id].secretHash) revert SecretDoesNotOpen();
+        _freeze(id);
         _forfeit(id);
     }
 
-    /// A challenge nobody answered.
+    /// A challenge nobody answered. The delegation freezes whether or not the
+    /// bond is still there to pay.
     function forfeit(uint256 id) external {
         if (msg.sender != dispute) revert NotArbiter();
-        _forfeit(id);
+        _freeze(id);
+        if (!delegations[id].bondPaid) _forfeit(id);
     }
 
-    /// After expiry and the delay, with no challenge open, the deposit left
-    /// goes back to the principal and the bond to the agent. Anyone may call
-    /// it; the destinations are fixed.
+    /// The principal's challenge holds settlement until it is answered.
+    function hold(uint256 id) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        delegations[id].holds += 1;
+    }
+
+    function release(uint256 id) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        delegations[id].holds -= 1;
+    }
+
+    /// The principal stops the delegation at once, on every unit.
+    function freeze(uint256 id) external {
+        if (msg.sender != delegations[id].principal) revert NotPrincipal();
+        _freeze(id);
+    }
+
+    /// Once nothing can settle, the deposit left is the principal's at once.
+    function reclaim(uint256 id) external {
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.principal) revert NotPrincipal();
+        if (!d.frozen) revert NotFrozen();
+        uint256 dep = d.deposit;
+        d.deposit = 0;
+        emit Reclaimed(id, dep);
+        if (dep != 0) require(token.transfer(d.principal, dep), "deposit");
+    }
+
+    function _freeze(uint256 id) private {
+        Delegation storage d = delegations[id];
+        if (d.frozen) return;
+        d.frozen = true;
+        d.frozenAt = uint64(block.timestamp);
+        emit FrozenBy(id, msg.sender);
+    }
+
+    /// After expiry, or after a freeze, and the delay, with no challenge open,
+    /// the deposit left goes back to the principal and the bond to the agent.
+    /// Anyone may call it; the destinations are fixed.
     function close(uint256 id) external {
         Delegation storage d = delegations[id];
-        if (d.closed || block.timestamp <= uint256(d.expiry) + closeDelay) revert NotClosable();
+        uint256 end = d.frozen && d.frozenAt < d.expiry ? d.frozenAt : d.expiry;
+        if (d.closed || block.timestamp <= end + closeDelay) revert NotClosable();
         if (dispute != address(0) && IDisputeCount(dispute).openCount(id) != 0) revert NotClosable();
         d.closed = true;
         uint256 dep = d.deposit;
@@ -447,6 +503,10 @@ contract Reserve {
 
     function epochOf(uint256 id) external view returns (uint64) {
         return delegations[id].epoch;
+    }
+
+    function frozenOf(uint256 id) external view returns (bool frozen, uint32 holds) {
+        return (delegations[id].frozen, delegations[id].holds);
     }
 
     function principalOf(uint256 id) external view returns (address) {

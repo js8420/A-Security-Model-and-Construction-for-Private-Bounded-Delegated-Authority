@@ -424,6 +424,7 @@ fn controls() {
         ("COMPOSED BATCH, 8 payments in 128 rows", 8, None, true),
         ("COMPOSED BATCH, 128 payments in 128 rows", 128, None, true),
         ("  ... two payments' statements exchanged", 8, Some(trace::ComposedBreak::StatementRow), false),
+        ("  ... every row shifted one payment off its statement", 8, Some(trace::ComposedBreak::StatementShift), false),
         ("  ... one payment's amount altered", 8, Some(trace::ComposedBreak::StatementAmount), false),
         ("  ... one payment's share altered", 8, Some(trace::ComposedBreak::StatementShare), false),
         ("  ... one payment's run moved off its C8 run", 8, Some(trace::ComposedBreak::RunStartMismatch), false),

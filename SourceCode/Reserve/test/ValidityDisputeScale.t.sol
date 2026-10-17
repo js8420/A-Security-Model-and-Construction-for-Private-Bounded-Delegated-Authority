@@ -105,12 +105,14 @@ contract ValidityDisputeScaleTest is Test {
     {
         ids = new uint256[](k);
         ds = new uint64[](k);
+        // All settle before any is challenged: a principal's challenge holds
+        // the delegation's settlement until it is answered.
         for (uint64 i = 0; i < k; ++i) {
             ids[i] = r;
             ds[i] = nextDigest++;
             _settle(pk, r, ds[i]);
-            _openBy(who, r, ds[i]);
         }
+        for (uint256 i = 0; i < k; ++i) _openBy(who, r, ds[i]);
     }
 
     function _recs(uint256[] memory ids, uint64[] memory ds) internal view returns (Settlement[] memory ss) {
@@ -463,6 +465,78 @@ contract ValidityDisputeScaleTest is Test {
         uint256 before = agent.balance;
         acc.close(r);
         assertEq(agent.balance, before + AGENT_BOND);
+    }
+
+    /// M1: an unanswered challenge forfeits the bond and freezes the
+    /// delegation, and the principal takes the rest of the deposit at once.
+    function testForfeitFreezesSettlementAndReleasesTheDeposit() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        vm.warp(_deadline(r, 5) + 1);
+        vd.expire(r, 5);
+        (bool frozen,) = acc.frozenOf(r);
+        assertTrue(frozen);
+        vm.expectRevert(Reserve.Frozen.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        uint256 before = token.balanceOf(principal);
+        vm.prank(principal);
+        acc.reclaim(r);
+        assertEq(token.balanceOf(principal), before + 100_000_000 - 1);
+    }
+
+    /// M4: the principal's challenge stops settlement when it is opened, not
+    /// when it expires, and an answer lets settlement resume.
+    function testPrincipalChallengeHoldsSettlementUntilAnswered() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(principal, r, 5);
+        vm.expectRevert(Reserve.Held.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        _answerAlone(r, 5);
+        _settle(AGENT_PK, r, 6);
+    }
+
+    /// A stranger's challenge costs it a bond and stops nothing.
+    function testOtherChallengesDoNotHold() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        _settle(AGENT_PK, r, 6);
+        (, uint32 holds) = acc.frozenOf(r);
+        assertEq(holds, 0);
+    }
+
+    /// M2: whole revocation stops settlement at once, whatever the proofs.
+    function testFreezeByThePrincipalStopsSettlement() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        vm.expectRevert(Reserve.NotPrincipal.selector);
+        acc.freeze(r);
+        vm.prank(principal);
+        acc.freeze(r);
+        vm.expectRevert(Reserve.Frozen.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        vm.expectRevert(Reserve.NotPrincipal.selector);
+        acc.reclaim(r);
+        vm.prank(principal);
+        acc.reclaim(r);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
+        address agent = vm.addr(AGENT_PK);
+        uint256 bond = agent.balance;
+        acc.close(r);
+        assertEq(agent.balance, bond + AGENT_BOND);
+    }
+
+    function testReclaimNeedsAFreeze() public {
+        uint256 r = _register(AGENT_PK, 10);
+        vm.prank(principal);
+        vm.expectRevert(Reserve.NotFrozen.selector);
+        acc.reclaim(r);
+    }
+
+    function settleAgain(uint256 pk, uint256 r, uint64 d) external {
+        _settle(pk, r, d);
     }
 
     function testDisputeWindowMustFitTheCloseDelay() public {

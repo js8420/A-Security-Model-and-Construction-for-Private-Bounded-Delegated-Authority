@@ -757,6 +757,10 @@ pub enum ComposedBreak {
     /// is an honest payment and each block an honest statement, and the
     /// blocks name the wrong rows.
     StatementRow,
+    /// A batch whose rows are rotated by one payment against their
+    /// statements: row r proves payment r + 1 while its periodic columns name
+    /// payment r.
+    StatementShift,
     /// Every unit key derived, consistently, from a root key the secret does
     /// not give. The payment is internally sound and its shares are not on
     /// the delegation's line.
@@ -1045,8 +1049,9 @@ fn build_batch<
         _ => {}
     }
     let mut values = Vec::with_capacity(rows * width);
+    let shift = if how == Some(ComposedBreak::StatementShift) { 1 } else { 0 };
     for i in 0..rows {
-        values.extend_from_slice(&payment_rows[i % k]);
+        values.extend_from_slice(&payment_rows[(i + shift) % k]);
     }
     let mut pv = globals;
     for b in blocks {

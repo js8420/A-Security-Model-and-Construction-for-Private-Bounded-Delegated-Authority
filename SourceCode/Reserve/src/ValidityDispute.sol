@@ -9,6 +9,8 @@ interface IReserveV {
     function agentOf(uint256 id) external view returns (address);
     function principalOf(uint256 id) external view returns (address);
     function forfeit(uint256 id) external;
+    function hold(uint256 id) external;
+    function release(uint256 id) external;
     function domain() external view returns (uint64);
     function commitmentOf(uint256 id) external view returns (bytes32);
     function rootAt(uint256 id, uint64 epoch) external view returns (bytes32);
@@ -60,6 +62,7 @@ contract ValidityDispute {
         address challenger;
         uint64 deadline;
         Status status;
+        bool byPrincipal;
     }
 
     /// Values in a settlement's leaf: the payload digest, the revocation
@@ -141,9 +144,14 @@ contract ValidityDispute {
         if (challenges[k].status != Status.None) revert AlreadyChallenged();
         _record(id, digest, s);
         if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
-        uint64 deadline = _queue(reserve.agentOf(id), msg.sender == reserve.principalOf(id));
-        challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open});
+        bool principal = msg.sender == reserve.principalOf(id);
+        uint64 deadline = _queue(reserve.agentOf(id), principal);
+        challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open, byPrincipal: principal});
         openCount[id] += 1;
+        // The principal's challenge stops further settlement until it is
+        // answered; anyone else's does not, or a stranger could halt an honest
+        // agent for the price of a bond.
+        if (principal) reserve.hold(id);
         emit Challenged(id, digest, msg.sender, deadline);
     }
 
@@ -204,8 +212,9 @@ contract ValidityDispute {
         openCount[id] -= 1;
         credit[c.challenger] += challengerBond;
         emit Expired(id, digest);
-        // A bond already taken by a claim or another challenge is simply gone.
-        try reserve.forfeit(id) {} catch {}
+        if (c.byPrincipal) reserve.release(id);
+        // Freezes the delegation and pays the bond if a claim has not already.
+        reserve.forfeit(id);
     }
 
     function withdraw() external {
@@ -245,6 +254,7 @@ contract ValidityDispute {
     function _settle(Challenge storage c, uint256 id, uint64 digest) private {
         c.status = Status.Answered;
         openCount[id] -= 1;
+        if (c.byPrincipal) reserve.release(id);
         credit[reserve.agentOf(id)] += challengerBond;
         emit Answered(id, digest);
     }

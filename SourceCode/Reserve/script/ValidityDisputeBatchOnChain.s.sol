@@ -12,9 +12,9 @@ import {MockToken} from "../test/MockToken.sol";
 import {Statement} from "../test/Statement.sol";
 
 /// Answers as real transactions on a local node: one answerBatch for 1, 2, 4,
-/// 8, 16, 32, 64 and 128 open challenges against payments of the exported
-/// batch, each with Pete's one Groth16 proof, so every gas figure is a
-/// receipt's gasUsed. Each size settles on its own delegation, so no answer
+/// 8, 16, 32, 64 and 128 open challenges by the principal against payments of
+/// the exported batch, each with Pete's one Groth16 proof, so every gas figure
+/// is a receipt's gasUsed. Each size settles on its own delegation, so no answer
 /// meets a settlement an earlier one closed. The node is started at the
 /// exported payments' time: anvil --timestamp 5000.
 contract ValidityDisputeBatchOnChain is Script {
@@ -48,23 +48,25 @@ contract ValidityDisputeBatchOnChain is Script {
             Settlement[] memory ss = new Settlement[](k);
             uint256[] memory at = new uint256[](k);
             bytes32[][] memory paths = new bytes32[][](k);
+            // Every payment settles before any challenge: the principal's
+            // challenge holds the delegation's settlement until answered.
             for (uint256 i = 0; i < k; ++i) {
-                ss[i] = _challenged(d, id, i);
+                ss[i] = _settled(d, id, i);
                 (ids[i], ds[i], at[i], paths[i]) = (id, Statement.digest(d, i), i, Statement.path(d, i));
             }
+            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.01 ether}(id, ds[i], ss[i]);
             vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();
     }
 
-    function _challenged(Statement.Data memory d, uint256 id, uint256 i) internal returns (Settlement memory s) {
+    function _settled(Statement.Data memory d, uint256 id, uint256 i) internal returns (Settlement memory s) {
         uint64[] memory e = Statement.elems(d, i);
         s = Settlement({
             elems: keccak256(abi.encodePacked(e)), amount: Statement.amount(d, i), payee: Statement.payee(d, i),
             time: Statement.time(d, i), epoch: 0
         });
         acc.settleLogged(id, s.payee, s.amount, Statement.digest(d, i), s.time, e, _sign(d, id, i, s));
-        vd.open{value: 0.01 ether}(id, Statement.digest(d, i), s);
     }
 
     function _sign(Statement.Data memory d, uint256 id, uint256 i, Settlement memory s) internal view returns (bytes memory) {
