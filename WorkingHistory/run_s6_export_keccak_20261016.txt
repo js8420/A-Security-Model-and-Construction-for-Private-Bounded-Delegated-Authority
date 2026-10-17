@@ -1,0 +1,6 @@
+﻿  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 3.89 s
+  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 3.31 s
+  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 4.98 s
+  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 6.43 s
+  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 3.73 s
+  Keccak proof of 128 payments and public values written to target/proof_128_keccak.bin: 5378237 bytes, verifies natively true, proved in 6.05 s

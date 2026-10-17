@@ -16,8 +16,10 @@ contract TranscriptGas is Fixture {
         _base();
     }
 
+    /// A payment publishes three values per unit it consumes, so the cost
+    /// follows the units, from one unit to the 64 a slot cover allows.
     function testStoredAgainstLogged() public {
-        uint16[4] memory covers = [uint16(14), 30, 64, 128];
+        uint16[6] memory covers = [uint16(1), 3, 8, 14, 30, 64];
         for (uint256 k = 0; k < covers.length; ++k) {
             uint256 a = _reg(Reserve.Funding.Deposit);
             uint256 b = _reg(Reserve.Funding.Deposit);
@@ -25,7 +27,7 @@ contract TranscriptGas is Fixture {
             uint256 stored = _settle(a, 2, _elems(covers[k], 2), false);
             _settle(b, 1, _elems(covers[k], 1), true);
             uint256 logged = _settle(b, 2, _elems(covers[k], 2), true);
-            console.log("cover", covers[k]);
+            console.log("units", covers[k]);
             console.log("  stored", stored);
             console.log("  logged", logged);
             console.log("  ratio x100", (stored * 100) / logged);
@@ -40,10 +42,10 @@ contract TranscriptGas is Fixture {
         uint256 dep = _settle(a, 2, _elems(64, 2), true);
         _settle(b, 1, _elems(64, 1), true);
         uint256 p2 = _settle(b, 2, _elems(64, 2), true);
-        console.log("settle logged, cover 64, deposit", dep);
-        console.log("settle logged, cover 64, permit2", p2);
+        console.log("settle logged, 64 units, deposit", dep);
+        console.log("settle logged, 64 units, permit2", p2);
         console.log("  permit2 minus deposit", p2 - dep);
-        assertEq(token.balanceOf(payee), 1 + 4 * 1000);
+        assertEq(token.balanceOf(payee), 1 + 4 * 64 * Statement.UNIT);
     }
 
     function testAllOperationsOneWarming() public {
@@ -55,7 +57,7 @@ contract TranscriptGas is Fixture {
         console.log("Open, permit2", g1 - gasleft());
 
         _settle(id, 1, _elems(64, 1), true);
-        console.log("Settle logged, cover 64", _settle(id, 2, _elems(64, 2), true));
+        console.log("Settle logged, 64 units", _settle(id, 2, _elems(64, 2), true));
 
         uint64[] memory s1 = _one(B0);
         uint64[] memory s2 = _one(B0 + 128);
@@ -82,23 +84,24 @@ contract TranscriptGas is Fixture {
 
         _settle(a, 1, _elems(64, 1), true);
         vm.prank(agent);
-        prev.settle(p, payee, 1000, 1);
+        prev.settle(p, payee, 64 * Statement.UNIT, 1);
 
         uint256 logged = _settle(a, 2, _elems(64, 2), true);
         vm.prank(agent);
         uint256 g1 = gasleft();
-        prev.settle(p, payee, 1000, 2);
+        prev.settle(p, payee, 64 * Statement.UNIT, 2);
         uint256 preventive = g1 - gasleft();
 
-        console.log("accountable, logged, cover 64", logged);
+        console.log("accountable, logged, 64 units", logged);
         console.log("preventive", preventive);
         console.log("ratio x100", (logged * 100) / preventive);
     }
 
-    /// Call data alone, at 16 gas a non-zero byte, for presenting the proof
-    /// the harness measures. Not a call: it exceeds the per-transaction cap.
+    /// Call data alone, at 16 gas a non-zero byte, for presenting the batch
+    /// proof of 128 payments the harness measures. Not a call: it exceeds the
+    /// per-transaction cap.
     function testChallengeCallDataBudget() public pure {
-        uint256 proofBytes = 5_170_269;
+        uint256 proofBytes = 5_378_237;
         console.log("challenge call data alone, gas", proofBytes * 16);
         console.log("proof bytes", proofBytes);
         console.log("over the 2^24 per-transaction cap x100", proofBytes * 16 * 100 / (1 << 24));
@@ -146,18 +149,18 @@ contract TranscriptGas is Fixture {
     function testPayeeIsBound() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         uint64[] memory e = _elems(14, 1);
-        bytes memory sg = _sign(id, 1000, 1, _now(), e);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.BadSignature.selector);
-        acc.settleLogged(id, address(0xBAD), 1000, 1, _now(), e, sg);
+        acc.settleLogged(id, address(0xBAD), _amount(e), 1, _now(), e, sg);
     }
 
     function testDigestSettlesOnce() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         _settle(id, 1, _elems(14, 1), true);
         uint64[] memory e = _elems(14, 2);
-        bytes memory sg = _sign(id, 1000, 1, _now(), e);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.IndexAlreadySettled.selector);
-        acc.settleLogged(id, payee, 1000, 1, _now(), e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
     }
 
     /// The signed time must be within maxAge of the reserve's clock either way.
@@ -166,25 +169,43 @@ contract TranscriptGas is Fixture {
         vm.warp(10 days);
         uint64[] memory e = _elems(14, 1);
         uint64 old = _now() - MAX_AGE - 1;
-        bytes memory sg = _sign(id, 1000, 1, old, e);
+        bytes memory sg = _sign(id, _amount(e), 1, old, e);
         vm.expectRevert(Reserve.StaleTime.selector);
-        acc.settleLogged(id, payee, 1000, 1, old, e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, old, e, sg);
         uint64 ahead = _now() + MAX_AGE + 1;
-        sg = _sign(id, 1000, 1, ahead, e);
+        sg = _sign(id, _amount(e), 1, ahead, e);
         vm.expectRevert(Reserve.StaleTime.selector);
-        acc.settleLogged(id, payee, 1000, 1, ahead, e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, ahead, e, sg);
         uint64 edge = _now() - MAX_AGE;
-        sg = _sign(id, 1000, 1, edge, e);
-        acc.settleLogged(id, payee, 1000, 1, edge, e, sg);
+        sg = _sign(id, _amount(e), 1, edge, e);
+        acc.settleLogged(id, payee, _amount(e), 1, edge, e, sg);
+    }
+
+    /// A payment publishes exactly the slots its amount pays for: one more or
+    /// one fewer is refused, and the boundary amounts of a unit count pass.
+    function testSlotCountFollowsTheAmount() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory e = _elems(3, 1);
+        uint64 u = Statement.UNIT;
+        uint64[3] memory bad = [2 * u, 3 * u + 1, 0];
+        for (uint256 i = 0; i < bad.length; ++i) {
+            bytes memory sg = _sign(id, bad[i], 1, _now(), e);
+            vm.expectRevert(Reserve.WrongSlotCount.selector);
+            acc.settleLogged(id, payee, bad[i], 1, _now(), e, sg);
+        }
+        bytes memory ok = _sign(id, 2 * u + 1, 1, _now(), e);
+        acc.settleLogged(id, payee, 2 * u + 1, 1, _now(), e, ok);
+        ok = _sign(id, 3 * u, 2, _now(), e);
+        acc.settleLogged(id, payee, 3 * u, 2, _now(), e, ok);
     }
 
     function testNoSettlementAfterExpiry() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         vm.warp(block.timestamp + LIFE + 1);
         uint64[] memory e = _elems(14, 1);
-        bytes memory sg = _sign(id, 1000, 1, _now(), e);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.Expired.selector);
-        acc.settleLogged(id, payee, 1000, 1, _now(), e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
     }
 
     /// With no dispute contract, close waits only for expiry and the delay,
@@ -199,7 +220,7 @@ contract TranscriptGas is Fixture {
         uint256 tokens = token.balanceOf(principal);
         uint256 bond = agent.balance;
         acc.close(id);
-        assertEq(token.balanceOf(principal), tokens + BUDGET - 1000);
+        assertEq(token.balanceOf(principal), tokens + BUDGET - 14 * Statement.UNIT);
         assertEq(agent.balance, bond + 1 ether);
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(id);

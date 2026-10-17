@@ -17,17 +17,20 @@ interface IReserveV {
 
 /// Challenge answered by a validity proof, never by the proof itself.
 ///
-/// The settlement's STARK stays off chain. Within the acceptance window after
-/// a settlement, a challenger stakes a bond against it. Before the deadline,
-/// anyone holding the STARK answers with one SP1 Groth16 proof that the
-/// Plonky3 verifier, run inside SP1, accepts a proof of this settlement's
-/// statement. The statement is not taken from the answer: the contract
-/// rebuilds it from the reserve's records of the delegation and the settlement
-/// (the digest, the revocation root at the settlement's epoch, the delegation
-/// commitment, the domain, the amount paid, the payee, the signed time, the
-/// unit size, the unit range, H(s), and the hash of the shares and nullifiers
-/// published), so a proof of any other statement fails the pairing check. A settlement whose shares its proof did not compute
-/// therefore cannot be answered.
+/// A STARK proves a batch of payments, one per row, and stays off chain.
+/// Within the acceptance window after a settlement, a challenger stakes a bond
+/// against it. Before the deadline, anyone holding the STARK answers with one
+/// SP1 Groth16 proof that the Plonky3 verifier, run inside SP1, accepts it;
+/// the program commits the Keccak root of the batch's statements. The
+/// statement is not taken from the answer: the contract rebuilds the
+/// settlement's leaf from the reserve's records of the delegation and the
+/// settlement (the digest, the revocation root at the settlement's epoch, the
+/// delegation commitment, the domain, the amount paid, the payee, the signed
+/// time, the unit size, the unit range, H(s), and the hash of the shares and
+/// nullifiers published), hashes it up the answer's path, and checks the proof
+/// against that root, so a proof of any other statement fails the pairing
+/// check. A settlement whose shares its proof did not compute therefore cannot
+/// be answered.
 ///
 /// Many challenges. A settlement is challenged at most once. Each agent has
 /// two deadline queues, one for its principal's challenges and one for
@@ -35,8 +38,8 @@ interface IReserveV {
 /// queues sit on alternate slot boundaries, so no two of an agent's deadlines
 /// fall in one slot: an agent that proves one answer per slot never misses
 /// one, and challenges anyone else opens, the agent's own included, cannot
-/// push back the principal's. One batch answer proves any number of open
-/// challenges with one Groth16 proof.
+/// push back the principal's. One answer proves every open challenge against
+/// settlements of one batch with one Groth16 proof.
 ///
 /// Bonds. An answer credits each challenger's bond to the agent challenged,
 /// which pays for the proving. No answer by the deadline credits the bond back
@@ -59,23 +62,23 @@ contract ValidityDispute {
         Status status;
     }
 
-    /// Values committed per settlement: the payload digest, the revocation
+    /// Values in a settlement's leaf: the payload digest, the revocation
     /// root's four lanes, the delegation commitment's four lanes, the domain,
     /// the amount, the payee's three limbs, the time, the unit size, the
     /// range's base and length, H(s) in four lanes, and the shares' hash in
-    /// four words.
-    uint256 public constant PUBLIC_VALUES = 26;
+    /// four words. Each is one 32-byte word, as abi.encodePacked writes a
+    /// uint64 array.
+    uint256 public constant LEAF_VALUES = 26;
+    /// A batch is at most one payment per trace row.
+    uint256 public constant MAX_DEPTH = 7;
     uint256 private constant LANE = 0xFFFFFFFFFFFFFFFF;
     uint256 private constant LIMB = 0xFFFFFFFFFFFFFF;
 
     IReserveV public immutable reserve;
     ISP1Verifier public immutable verifier;
-    /// The guest program for one settlement: the Plonky3 verifier with the
-    /// circuit's own AIR, compiled for SP1.
+    /// The guest program: the Plonky3 verifier with the circuit's own AIR,
+    /// compiled for SP1.
     bytes32 public immutable programVKey;
-    /// The guest program for any number of settlements, the same verifier run
-    /// once per proof.
-    bytes32 public immutable batchVKey;
     /// How long after a settlement's signed time a challenge may be opened.
     uint64 public immutable acceptWindow;
     uint64 public immutable answerWindow;
@@ -97,7 +100,8 @@ contract ValidityDispute {
     error TooLate();
     error TooEarly();
     error EmptyBatch();
-    error LengthMismatch();
+    error BadPath();
+    error RootMismatch();
     error NothingToWithdraw();
 
     event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline);
@@ -108,7 +112,6 @@ contract ValidityDispute {
         address reserve_,
         address verifier_,
         bytes32 programVKey_,
-        bytes32 batchVKey_,
         uint64 acceptWindow_,
         uint64 answerWindow_,
         uint64 slot_,
@@ -117,7 +120,6 @@ contract ValidityDispute {
         reserve = IReserveV(reserve_);
         verifier = ISP1Verifier(verifier_);
         programVKey = programVKey_;
-        batchVKey = batchVKey_;
         acceptWindow = acceptWindow_;
         answerWindow = answerWindow_;
         slot = slot_;
@@ -145,33 +147,52 @@ contract ValidityDispute {
         emit Challenged(id, digest, msg.sender, deadline);
     }
 
-    function answer(uint256 id, uint64 digest, Settlement calldata s, bytes calldata proof) external {
+    /// `index` and `path` place the settlement's leaf in the batch the proof
+    /// proves: the siblings from the leaf to the root, lowest first.
+    function answer(
+        uint256 id,
+        uint64 digest,
+        Settlement calldata s,
+        uint256 index,
+        bytes32[] calldata path,
+        bytes calldata proof
+    ) external {
         Challenge storage c = _due(id, digest);
         _record(id, digest, s);
-        verifier.verifyProof(programVKey, publicValues(id, digest, s), proof);
+        verifier.verifyProof(programVKey, abi.encodePacked(rootOf(id, digest, s, index, path)), proof);
         _settle(c, id, digest);
     }
 
-    /// One proof of the batch program over these settlements, in this order.
-    function answerBatch(
-        uint256[] calldata ids,
-        uint64[] calldata digests,
-        Settlement[] calldata ss,
-        bytes calldata proof
-    ) external {
-        uint256 n = ids.length;
+    /// A challenged settlement as an answer names it: the record, and its
+    /// leaf's position and path in the batch the proof proves.
+    struct Item {
+        uint256 id;
+        uint64 digest;
+        Settlement s;
+        uint256 index;
+        bytes32[] path;
+    }
+
+    /// One proof answering challenges against settlements of one batch. Every
+    /// path must reach the same root.
+    function answerBatch(Item[] calldata items, bytes calldata proof) external {
+        uint256 n = items.length;
         if (n == 0) revert EmptyBatch();
-        if (digests.length != n || ss.length != n) revert LengthMismatch();
+        bytes32 root;
         for (uint256 i = 0; i < n; ++i) {
-            _due(ids[i], digests[i]);
-            _record(ids[i], digests[i], ss[i]);
+            Item calldata it = items[i];
+            _due(it.id, it.digest);
+            _record(it.id, it.digest, it.s);
+            bytes32 r = rootOf(it.id, it.digest, it.s, it.index, it.path);
+            if (i == 0) root = r;
+            else if (r != root) revert RootMismatch();
         }
-        verifier.verifyProof(batchVKey, batchPublicValues(ids, digests, ss), proof);
+        verifier.verifyProof(programVKey, abi.encodePacked(root), proof);
         for (uint256 i = 0; i < n; ++i) {
-            Challenge storage c = challenges[key(ids[i], digests[i])];
+            Challenge storage c = challenges[key(items[i].id, items[i].digest)];
             // A settlement named twice is answered once; the second finds it closed.
             if (c.status != Status.Open) revert NotOpen();
-            _settle(c, ids[i], digests[i]);
+            _settle(c, items[i].id, items[i].digest);
         }
     }
 
@@ -228,60 +249,51 @@ contract ValidityDispute {
         emit Answered(id, digest);
     }
 
-    /// The bytes the single program commits: a bincode Vec<u64>, the length
-    /// and then each value, little-endian.
-    function publicValues(uint256 id, uint64 digest, Settlement calldata s) public view returns (bytes memory pv) {
-        pv = new bytes(8 * (PUBLIC_VALUES + 1));
-        _le(pv, 0, PUBLIC_VALUES);
-        _write(pv, 8, id, digest, s);
-    }
-
-    /// The bytes the batch program commits: one bincode Vec<u64> holding every
-    /// settlement's values in turn.
-    function batchPublicValues(uint256[] calldata ids, uint64[] calldata digests, Settlement[] calldata ss)
+    /// The root a settlement's leaf reaches along `path` from position
+    /// `index`. An inner node is the Keccak hash of its two children.
+    function rootOf(uint256 id, uint64 digest, Settlement calldata s, uint256 index, bytes32[] calldata path)
         public
         view
-        returns (bytes memory pv)
+        returns (bytes32 h)
     {
-        uint256 n = ids.length;
-        pv = new bytes(8 * (PUBLIC_VALUES * n + 1));
-        _le(pv, 0, PUBLIC_VALUES * n);
-        for (uint256 i = 0; i < n; ++i) _write(pv, 8 + 8 * PUBLIC_VALUES * i, ids[i], digests[i], ss[i]);
+        uint256 depth = path.length;
+        if (depth > MAX_DEPTH || index >> depth != 0) revert BadPath();
+        h = leafHash(id, digest, s);
+        for (uint256 j = 0; j < depth; ++j) {
+            h = (index >> j) & 1 == 0 ? keccak256(abi.encodePacked(h, path[j])) : keccak256(abi.encodePacked(path[j], h));
+        }
     }
 
-    function _write(bytes memory pv, uint256 at, uint256 id, uint64 digest, Settlement calldata s) private view {
+    /// The hash of the settlement's leaf, rebuilt from the reserve's records.
+    function leafHash(uint256 id, uint64 digest, Settlement calldata s) public view returns (bytes32) {
+        return keccak256(abi.encodePacked(leaf(id, digest, s)));
+    }
+
+    function leaf(uint256 id, uint64 digest, Settlement calldata s) public view returns (uint256[LEAF_VALUES] memory v) {
         uint256 root = uint256(reserve.rootAt(id, s.epoch));
         uint256 com = uint256(reserve.commitmentOf(id));
-        _le(pv, at, digest);
+        v[0] = digest;
         for (uint256 j = 0; j < 4; ++j) {
-            _le(pv, at + 8 * (1 + j), (root >> (64 * j)) & LANE);
-            _le(pv, at + 8 * (5 + j), (com >> (64 * j)) & LANE);
+            v[1 + j] = (root >> (64 * j)) & LANE;
+            v[5 + j] = (com >> (64 * j)) & LANE;
         }
-        _le(pv, at + 72, reserve.domain());
-        _le(pv, at + 80, s.amount);
+        v[9] = reserve.domain();
+        v[10] = s.amount;
         uint256 a = uint160(s.payee);
-        _le(pv, at + 88, a & LIMB);
-        _le(pv, at + 96, (a >> 56) & LIMB);
-        _le(pv, at + 104, a >> 112);
-        _le(pv, at + 112, s.time);
-        _terms(pv, at + 120, id);
+        v[11] = a & LIMB;
+        v[12] = (a >> 56) & LIMB;
+        v[13] = a >> 112;
+        v[14] = s.time;
+        _terms(v, id);
         uint256 h = uint256(s.elems);
-        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 176 + 8 * j, (h >> (192 - 64 * j)) & LANE);
+        for (uint256 j = 0; j < 4; ++j) v[22 + j] = (h >> (192 - 64 * j)) & LANE;
     }
 
-    function _terms(bytes memory pv, uint256 at, uint256 id) private view {
+    function _terms(uint256[LEAF_VALUES] memory v, uint256 id) private view {
         (uint64 unit, uint64 base, uint64 len, bytes32 hs) = reserve.termsOf(id);
-        _le(pv, at, unit);
-        _le(pv, at + 8, base);
-        _le(pv, at + 16, len);
-        for (uint256 j = 0; j < 4; ++j) _le(pv, at + 24 + 8 * j, (uint256(hs) >> (64 * j)) & LANE);
-    }
-
-    /// Writes the low eight bytes of x at `at`, least significant first.
-    function _le(bytes memory out, uint256 at, uint256 x) private pure {
-        assembly ("memory-safe") {
-            let p := add(add(out, 32), at)
-            for { let b := 0 } lt(b, 8) { b := add(b, 1) } { mstore8(add(p, b), shr(mul(8, b), x)) }
-        }
+        v[15] = unit;
+        v[16] = base;
+        v[17] = len;
+        for (uint256 j = 0; j < 4; ++j) v[18 + j] = (uint256(hs) >> (64 * j)) & LANE;
     }
 }

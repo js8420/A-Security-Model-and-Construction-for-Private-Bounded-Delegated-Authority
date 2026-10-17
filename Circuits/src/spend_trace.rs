@@ -166,6 +166,10 @@ pub enum SpendBreak {
     /// the control for the one range check that remains after the divisions
     /// went.
     RunPastBudget,
+    /// Slot 0 padded and the run's units in slots 1 to n, every slot otherwise
+    /// consistent. Settle publishes the first n slots, so one consumed unit
+    /// would go unseen.
+    SlotGap,
 }
 
 /// The same payment under the second-invocation variant: the row the
@@ -258,6 +262,8 @@ fn row_keyed<const R: usize, const DEPTH: usize, const COVER: usize>(
     let l = layout(DEPTH, COVER, bw);
     let (spendable, base, off, units) =
         interval(DEPTH, COVER, units_want, off_delta, pindex, part_units);
+    // The gap needs a padded slot to move in front of the run.
+    let units = if how == Some(SpendBreak::SlotGap) { units.min(COVER - 1) } else { units };
     // Placed so the run ends one unit past the delegation's spendable units.
     // The row stays internally consistent and exactly one gap goes negative.
     let off = if how == Some(SpendBreak::RunPastBudget) {
@@ -300,7 +306,7 @@ fn row_keyed<const R: usize, const DEPTH: usize, const COVER: usize>(
     for c in 0..COVER {
         let n = l.node + c * PER_NODE;
         row[l.pos + c] = F::from_u64(pos as u64);
-        let active = c < units;
+        let active = if how == Some(SpendBreak::SlotGap) { c >= 1 && c <= units } else { c < units };
 
         let mut state = [F::ZERO; WIDTH];
         state[..SECRET_ELEMS].copy_from_slice(&root);
@@ -363,7 +369,7 @@ fn row_keyed<const R: usize, const DEPTH: usize, const COVER: usize>(
             // rather than adding a wildcard is deliberate: a wildcard would
             // silently swallow the next variant somebody adds and the control
             // would never fire.
-            SpendBreak::RunPastBudget => {}
+            SpendBreak::RunPastBudget | SpendBreak::SlotGap => {}
         }
     }
 

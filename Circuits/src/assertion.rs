@@ -199,6 +199,7 @@ struct Point<'a> {
     local: &'a [Challenge],
     next: &'a [Challenge],
     pv: &'a [Val],
+    periodic: Vec<Challenge>,
     first: Challenge,
     last: Challenge,
     transition: Challenge,
@@ -214,7 +215,8 @@ fn eval(e: &Expr, at: &Point, memo: &mut HashMap<*const Expr, Challenge>) -> Cha
             BaseEntry::Main { offset: 0 } => at.local[v.index],
             BaseEntry::Main { .. } => at.next[v.index],
             BaseEntry::Public => Challenge::from(at.pv[v.index]),
-            BaseEntry::Preprocessed { .. } | BaseEntry::Periodic => unreachable!("not in this AIR"),
+            BaseEntry::Periodic => at.periodic[v.index],
+            BaseEntry::Preprocessed { .. } => unreachable!("not in this AIR"),
         },
         SymbolicExpr::Leaf(BaseLeaf::IsFirstRow) => at.first,
         SymbolicExpr::Leaf(BaseLeaf::IsLastRow) => at.last,
@@ -253,7 +255,8 @@ fn identity(air: &Air, proof: &RProof, pv: &[Val], ops: &[Op]) -> Identity {
     let pcs = deployed_pcs();
     let init = <Pcs as p3_commit::Pcs<Challenge, Recording>>::natural_domain_for_degree(&pcs, 1 << (proof.degree_bits - 1));
     let sels = init.selectors_at_point(zeta);
-    let at = Point { local, next, pv, first: sels.is_first_row, last: sels.is_last_row, transition: sels.is_transition };
+    let periodic = p3_air::BaseAir::<Val>::periodic_columns(air).iter().map(|c| init.evaluate_periodic_column_at(c, zeta)).collect();
+    let at = Point { local, next, pv, periodic, first: sels.is_first_row, last: sels.is_last_row, transition: sels.is_transition };
 
     let cs = p3_air::get_symbolic_constraints::<Val, _>(air, p3_air::AirLayout::from_air::<Val>(air));
     let mut memo = HashMap::new();
@@ -390,8 +393,8 @@ fn bump8(s: &State) -> State {
 }
 
 pub fn run() -> AssertionReport {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let proof: RProof = prove(&config().0, &air, t, &pv);
     let (ev, ops, verdict) = record_ops(&air, &proof, &pv);
     assert!(verdict.is_ok(), "honest proof must verify");
@@ -476,13 +479,14 @@ pub fn run() -> AssertionReport {
     // solved for so its chain ends where the forgery needs it to.
     let mut forgeries = Vec::new();
     let (tb, pvb) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(ComposedBreak::RunStartMismatch));
+    let airb = Air::from_public_values(&pvb);
 
     // No lie at zeta: the identity's true end misses its target. The sum is
     // affine in each state, so a change of d at state j reaches the end as
     // d * alpha^(n - j).
-    let (pa, _) = forge_with_layer0(&air, tb.clone(), &pvb, Lie::None);
-    let (_, opsa, _) = record_ops(&air, &pa, &pvb);
-    let ida = identity(&air, &pa, &pvb, &opsa);
+    let (pa, _) = forge_with_layer0(&airb, tb.clone(), &pvb, Lie::None);
+    let (_, opsa, _) = record_ops(&airb, &pa, &pvb);
+    let ida = identity(&airb, &pa, &pvb, &opsa);
     let va = ida.values.clone();
     let aa = ida.alpha;
     let ica = Chain::build(Challenge::ZERO, va.len(), |k, a: &Challenge| *a * aa + va[k]);
@@ -498,8 +502,8 @@ pub fn run() -> AssertionReport {
     // The defender asserts the value it committed there instead, and must
     // then cover the difference inside the running sum, where a change of d
     // carries to the end unchanged.
-    let (pc, layer0) = forge_with_layer0(&air, tb.clone(), &pvb, Lie::BalanceAndSmooth);
-    let (evc, _, _) = record_ops(&air, &pc, &pvb);
+    let (pc, layer0) = forge_with_layer0(&airb, tb.clone(), &pvb, Lie::BalanceAndSmooth);
+    let (evc, _, _) = record_ops(&airb, &pc, &pvb);
     let fc = &pc.opening_proof.1;
     let mut outc = outputs(&evc, fc.commit_phase_commits.len());
     outc.positions = all_positions(&evc, log_global(&pc), fc.query_proofs.len());
@@ -550,8 +554,8 @@ pub fn run() -> AssertionReport {
     // polynomial. A defender asserting the value the final polynomial gives
     // is refuted by the fold step itself, from the authenticated row of the
     // last layer.
-    let (pb, _) = forge_with_layer0(&air, tb, &pvb, Lie::BalanceIdentity);
-    let (evb, _, _) = record_ops(&air, &pb, &pvb);
+    let (pb, _) = forge_with_layer0(&airb, tb, &pvb, Lie::BalanceIdentity);
+    let (evb, _, _) = record_ops(&airb, &pb, &pvb);
     let fb = &pb.opening_proof.1;
     let lgc = log_global(&pb);
     let mut outb = outputs(&evb, fb.commit_phase_commits.len());

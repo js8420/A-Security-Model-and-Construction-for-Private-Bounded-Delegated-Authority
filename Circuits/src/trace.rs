@@ -132,9 +132,19 @@ pub fn policy_trace_amount(rows: usize, amount: u64) -> RowMajorMatrix<F> {
 /// recomputed for both. The cap is a parameter so the vacuity demonstration can
 /// put one cap in the columns and another in the commitment.
 pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F> {
+    policy_trace_pay(rows, amount, cap, GOOD.t, NONCE)
+}
+
+/// The nonce of the harness's first payment; a batch numbers its payments
+/// from it.
+const NONCE: u64 = 777;
+
+/// The policy row of one payment of a batch: its amount, its time and its
+/// nonce, under the delegation's one policy.
+pub fn policy_trace_pay(rows: usize, amount: u64, cap: u64, t: u64, nonce: u64) -> RowMajorMatrix<F> {
     let width = VALUE_COLS + GAP_BLOCKS * RANGE_BITS;
     let mut values = Vec::with_capacity(rows * width);
-    let r = Row { amount, cap, ..GOOD };
+    let r = Row { amount, cap, t, ..GOOD };
 
     for _ in 0..rows {
         let mut row = vec![F::ZERO; width];
@@ -142,7 +152,7 @@ pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F
         row[COL_MID] = F::from_u64(7);
         row[COL_PAYEE] = F::from_u64(7);
         row[COL_CID] = F::from_u64(3);
-        row[COL_T] = F::from_u64(GOOD.t);
+        row[COL_T] = F::from_u64(r.t);
         row[COL_B] = F::from_u64(GOOD.budget);
         row[COL_C] = F::from_u64(r.cap);
         for j in 0..DIGEST {
@@ -154,7 +164,7 @@ pub fn policy_trace_full(rows: usize, amount: u64, cap: u64) -> RowMajorMatrix<F
         row[COL_N] = F::from_u64(GOOD.velocity_n);
         row[COL_W] = F::from_u64(100);
         row[COL_R] = F::from_u64(4242);
-        row[COL_NONCE] = F::from_u64(777);
+        row[COL_NONCE] = F::from_u64(nonce);
         row[COL_DOMAIN] = F::from_u64(GOOD.domain);
         row[COL_MERCHANT_OK] = F::ONE;
         row[COL_CATEGORY_OK] = F::ONE;
@@ -381,6 +391,16 @@ fn build_nonmembership<const R: usize, const DEPTH: usize>(
     rows: usize,
     how: Option<RevokeBreak>,
 ) -> RowMajorMatrix<F> {
+    build_nonmembership_run::<R, DEPTH>(rows, how, (RUN_START, RUN_START + RUN_UNITS - 1))
+}
+
+/// Non-membership of a chosen run, for a batch whose payments consume
+/// successive runs.
+fn build_nonmembership_run<const R: usize, const DEPTH: usize>(
+    rows: usize,
+    how: Option<RevokeBreak>,
+    run: (u64, u64),
+) -> RowMajorMatrix<F> {
     let leaf = [
         F::from_u64(REVOKED_START),
         F::from_u64(REVOKED_END),
@@ -395,7 +415,7 @@ fn build_nonmembership<const R: usize, const DEPTH: usize>(
         Some(RevokeBreak::RunStartsInsideRange) => (150, 150 + RUN_UNITS - 1),
         Some(RevokeBreak::RunReachesNextRange) => (RUN_START, NEXT_REVOKED_START),
         Some(RevokeBreak::RunInverted) => (RUN_START, RUN_START - 1),
-        _ => (RUN_START, RUN_START + RUN_UNITS - 1),
+        _ => run,
     };
 
     // Signed, because a control makes one of these negative and the honest
@@ -482,13 +502,35 @@ pub fn whole_trace_payee<const R: usize, const MD: usize, const RD: usize>(
     cap_committed: u64,
     payee: Option<[u64; 3]>,
 ) -> RowMajorMatrix<F> {
+    let pay = Pay { amount, t: GOOD.t, nonce: NONCE, run: (RUN_START, RUN_START + RUN_UNITS - 1) };
+    whole_trace_pay::<R, MD, RD>(rows, &pay, cap_in_columns, cap_committed, payee)
+}
+
+/// One payment of a delegation: what differs between the rows of a batch.
+#[derive(Clone, Copy, Debug)]
+pub struct Pay {
+    pub amount: u64,
+    pub t: u64,
+    pub nonce: u64,
+    /// The absolute first and last units it consumes.
+    pub run: (u64, u64),
+}
+
+pub fn whole_trace_pay<const R: usize, const MD: usize, const RD: usize>(
+    rows: usize,
+    pay: &Pay,
+    cap_in_columns: u64,
+    cap_committed: u64,
+    payee: Option<[u64; 3]>,
+) -> RowMajorMatrix<F> {
+    let amount = pay.amount;
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let pw = VALUE_COLS + GAP_BLOCKS * RANGE_BITS;
 
     let mk = merkle_trace::<R, MD>(1);
     let mm = merchant_path::<R, MD>(payee);
     let mw = mk.width;
-    let rv = nonmembership_trace::<R, RD>(1);
+    let rv = build_nonmembership_run::<R, RD>(1, None, pay.run);
     let rw = rv.width;
 
     let digest = WIDTH / 2;
@@ -498,10 +540,10 @@ pub fn whole_trace_payee<const R: usize, const MD: usize, const RD: usize>(
     let croot: Vec<F> = mk.values[mk_root_off..mk_root_off + digest].to_vec();
     let rroot: Vec<F> = rv.values[rv_root_off..rv_root_off + digest].to_vec();
 
-    let policy = policy_trace_full(1, amount, cap_in_columns);
+    let policy = policy_trace_pay(1, amount, cap_in_columns, pay.t, pay.nonce);
     // What the commitment opens to, which is the real policy whatever the
     // columns say.
-    let committed = policy_trace_full(1, amount, cap_committed);
+    let committed = policy_trace_pay(1, amount, cap_committed, pay.t, pay.nonce);
 
     // C9 absorbs the policy scalars, both roots in full and the blinding value,
     // and stops there. The roots are the ones the paths actually compute, so the
@@ -607,6 +649,18 @@ pub fn whole_public_values_payee<const R: usize, const MD: usize, const RD: usiz
     cap: u64,
     payee: Option<[u64; 3]>,
 ) -> Vec<F> {
+    whole_public_values_pay::<R, MD, RD>(amount, cap, payee, GOOD.t, NONCE)
+}
+
+/// The nine values for one payment of a batch. Only the digest moves with the
+/// payment; the root and the commitment are the delegation's.
+pub fn whole_public_values_pay<const R: usize, const MD: usize, const RD: usize>(
+    amount: u64,
+    cap: u64,
+    payee: Option<[u64; 3]>,
+    t: u64,
+    nonce: u64,
+) -> Vec<F> {
     let bw = num_cols::<WIDTH, SBOX_DEGREE, R, HALF_FULL_ROUNDS, PARTIAL_ROUNDS>();
     let level = DIGEST + DIGEST + 1 + bw;
 
@@ -617,7 +671,7 @@ pub fn whole_public_values_payee<const R: usize, const MD: usize, const RD: usiz
     let rv = nonmembership_trace::<R, RD>(1);
     let rroot: Vec<F> = rv.values[RD * level..RD * level + DIGEST].to_vec();
 
-    let policy = policy_trace_full(1, amount, cap);
+    let policy = policy_trace_pay(1, amount, cap, t, nonce);
 
     let mut absorbed_v: Vec<F> = vec![
         policy.values[COL_B], policy.values[COL_C],
@@ -699,6 +753,10 @@ pub enum ComposedBreak {
     StatementRange,
     /// The same proof offered against a record committing another H(s).
     StatementSecretHash,
+    /// A batch whose first two payments' statements are exchanged: each row
+    /// is an honest payment and each block an honest statement, and the
+    /// blocks name the wrong rows.
+    StatementRow,
     /// Every unit key derived, consistently, from a root key the secret does
     /// not give. The payment is internally sound and its shares are not on
     /// the delegation's line.
@@ -765,6 +823,43 @@ pub fn composed_case<
     build_composed::<R, MD, RD, DEPTH, COVER>(rows, how)
 }
 
+/// A batch of k payments over rows rows: row i proves payment i mod k. The
+/// payments differ in amount, time, nonce and run, and consume
+/// successive runs of the one delegation, so each row's block binds a
+/// different statement.
+pub fn composed_batch<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    k: usize,
+    how: Option<ComposedBreak>,
+) -> (RowMajorMatrix<F>, Vec<F>) {
+    build_batch::<R, MD, RD, DEPTH, COVER>(rows, &batch_payments(k), how)
+}
+
+/// The harness's k payments. The first is the single payment every other
+/// measurement proves.
+pub fn batch_payments(k: usize) -> Vec<(Pay, [u8; 20])> {
+    let u = GOOD.budget / SPENDABLE;
+    let mut next = RUN_START;
+    (0..k)
+        .map(|j| {
+            let amount = if j == 0 { GOOD.amount } else { 1 + (j as u64 * 7) % 31 };
+            let units = (amount + u - 1) / u;
+            let run = (next, next + units - 1);
+            next += units;
+            // One payee: the allowlist's root is in D.com, and the harness's
+            // allowlist has the one merchant.
+            let payee = PAYEE;
+            (Pay { amount, t: GOOD.t + j as u64, nonce: NONCE + j as u64, run }, payee)
+        })
+        .collect()
+}
+
 fn build_composed<
     const R: usize,
     const MD: usize,
@@ -775,6 +870,27 @@ fn build_composed<
     rows: usize,
     how: Option<ComposedBreak>,
 ) -> (RowMajorMatrix<F>, Vec<F>) {
+    build_batch::<R, MD, RD, DEPTH, COVER>(rows, &batch_payments(1), how)
+}
+
+fn build_batch<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    pays: &[(Pay, [u8; 20])],
+    how: Option<ComposedBreak>,
+) -> (RowMajorMatrix<F>, Vec<F>) {
+    use crate::composed::{
+        row_width, GLOBALS, G_BASE, G_COM, G_RANGE, G_SECRET_HASH, G_UNIT, R_AMOUNT, R_DIGEST,
+        R_DOMAIN, R_ELEMS, R_PAYEE, R_ROOT, R_TIME,
+    };
+    use crate::merkle::DIGEST;
+    let k = pays.len();
+    assert!(k.is_power_of_two() && rows % k == 0, "a batch is a power of two of payments dividing the rows");
     // B = u * m, the same relation the composed circuit constrains.
     let u = GOOD.budget / SPENDABLE;
     assert!(
@@ -785,25 +901,6 @@ fn build_composed<
         (BASE_INDEX + SPENDABLE).next_power_of_two() <= (1u64 << DEPTH),
         "the padded range does not fit the deployment's index space"
     );
-
-    // The amount the payment settles, the units it charges, and the unit size
-    // it is proved against. The three controls that move them are the whole
-    // content of binding the two halves: each leaves both halves internally
-    // correct and only their relation false.
-    let amount = GOOD.amount;
-    let units = match how {
-        Some(ComposedBreak::AmountLowered) => (amount + u - 1) / u + 1,
-        _ => (amount + u - 1) / u,
-    };
-    let amount = match how {
-        Some(ComposedBreak::AmountRaised) => units * u + 1,
-        _ => amount,
-    };
-    let u_written = match how {
-        Some(ComposedBreak::UnitSizeWrong) => u + 1,
-        _ => u,
-    };
-
     // A cap larger than the budget. It is written into the policy columns and
     // into the commitment alike, so every other constraint is satisfied and
     // only the well-formedness gap goes negative.
@@ -811,65 +908,87 @@ fn build_composed<
         Some(ComposedBreak::CapAboveBudget) => GOOD.budget + 1,
         _ => GOOD.cap,
     };
-    let limbs = payee_limbs(&PAYEE);
-    let whole = whole_trace_payee::<R, MD, RD>(1, amount, cap, cap, Some(limbs));
-    let w = whole.width;
-    let pv = whole_public_values_payee::<R, MD, RD>(amount, cap, Some(limbs));
-
-    // The run the spend half reserves. Moving it by one unit leaves that half
-    // internally correct and disagreeing with the run C8 was checked against,
-    // which is the binding this control exists to test.
-    let off_delta = match how {
-        Some(ComposedBreak::RunStartMismatch) => 1,
-        _ => 0,
+    let u_written = match how {
+        Some(ComposedBreak::UnitSizeWrong) => u + 1,
+        _ => u,
     };
-    // The domain the shares are formed under. The control forms them, and
-    // states them publicly, under a domain the payload does not name.
-    let share_dom = match how {
-        Some(ComposedBreak::ShareDomain) => GOOD.domain + 1,
-        _ => GOOD.domain,
-    };
-    let mut spend = match how {
-        Some(ComposedBreak::RootKeyFree) => crate::spend_trace::spend_row_keyed::<R, DEPTH, COVER>(
-            pv[0],
-            F::from_u64(share_dom),
-            Some(units as usize),
-            off_delta,
-            BASE_INDEX as usize,
-            SPENDABLE as usize,
-            [F::from_u64(424242), F::from_u64(858585)],
-        ),
-        _ => crate::spend_trace::spend_row::<R, DEPTH, COVER>(
-            pv[0],
-            F::from_u64(share_dom),
-            Some(units as usize),
-            off_delta,
-            BASE_INDEX as usize,
-            SPENDABLE as usize,
-            None,
-        ),
-    };
-    // The composed circuit checks the units against the declared range, not
-    // the deployment's index space, so that gap is the range length less the
-    // spendable units.
-    let last_gap = crate::spend::FIXED_COLS + COVER + 1 + 2 * RANGE_BITS;
-    for (i, b) in bits_of(RANGE_LEN - SPENDABLE).into_iter().enumerate() {
-        spend[last_gap + i] = b;
-    }
     let secret = crate::spend_trace::secret_perm::<R>();
+    let rw = row_width(COVER);
 
-    let width = w + spend.len() + 1 + 3 * RANGE_BITS + secret.len();
-    let mask = (1u64 << RANGE_BITS) - 1;
-    let gaps: [i128; 3] = [
-        units as i128 * u_written as i128 - amount as i128,
-        amount as i128 - (units as i128 - 1) * u_written as i128 - 1,
-        GOOD.budget as i128 - cap as i128,
-    ];
+    let mut globals = vec![F::ZERO; GLOBALS];
+    let mut blocks: Vec<Vec<F>> = Vec::with_capacity(k);
+    let mut payment_rows: Vec<Vec<F>> = Vec::with_capacity(k);
+    let mut width = 0;
+    for (j, (pay, payee)) in pays.iter().enumerate() {
+        // Controls corrupt the first payment; the others stay honest.
+        let how = if j == 0 { how } else { None };
+        // The amount the payment settles, the units it charges, and the unit
+        // size it is proved against. The three controls that move them are the
+        // whole content of binding the two halves: each leaves both halves
+        // internally correct and only their relation false.
+        let amount = pay.amount;
+        let units = match how {
+            Some(ComposedBreak::AmountLowered) => (amount + u - 1) / u + 1,
+            _ => (amount + u - 1) / u,
+        };
+        let amount = match how {
+            Some(ComposedBreak::AmountRaised) => units * u + 1,
+            _ => amount,
+        };
+        let limbs = payee_limbs(payee);
+        let pay_j = Pay { amount, ..*pay };
+        let whole = whole_trace_pay::<R, MD, RD>(1, &pay_j, cap, cap, Some(limbs));
+        let w = whole.width;
+        let wpv = whole_public_values_pay::<R, MD, RD>(amount, cap, Some(limbs), pay.t, pay.nonce);
 
-    // One row is generated and repeated. whole_trace_amount is called for a
-    // single row above, so indexing it by the row counter walks off the end.
-    let mut values = Vec::with_capacity(rows * width);
-    for _ in 0..rows {
+        // The run the spend half reserves. Moving it by one unit leaves that
+        // half internally correct and disagreeing with the run C8 was checked
+        // against, which is the binding this control exists to test.
+        let off_delta = (pay.run.0 - RUN_START) as usize
+            + match how {
+                Some(ComposedBreak::RunStartMismatch) => 1,
+                _ => 0,
+            };
+        // The domain the shares are formed under. The control forms them, and
+        // states them publicly, under a domain the payload does not name.
+        let share_dom = match how {
+            Some(ComposedBreak::ShareDomain) => GOOD.domain + 1,
+            _ => GOOD.domain,
+        };
+        let mut spend = match how {
+            Some(ComposedBreak::RootKeyFree) => crate::spend_trace::spend_row_keyed::<R, DEPTH, COVER>(
+                wpv[0],
+                F::from_u64(share_dom),
+                Some(units as usize),
+                off_delta,
+                BASE_INDEX as usize,
+                SPENDABLE as usize,
+                [F::from_u64(424242), F::from_u64(858585)],
+            ),
+            _ => crate::spend_trace::spend_row::<R, DEPTH, COVER>(
+                wpv[0],
+                F::from_u64(share_dom),
+                Some(units as usize),
+                off_delta,
+                BASE_INDEX as usize,
+                SPENDABLE as usize,
+                None,
+            ),
+        };
+        // The composed circuit checks the units against the declared range,
+        // not the deployment's index space, so that gap is the range length
+        // less the spendable units.
+        let last_gap = crate::spend::FIXED_COLS + COVER + 1 + 2 * RANGE_BITS;
+        for (i, b) in bits_of(RANGE_LEN - SPENDABLE).into_iter().enumerate() {
+            spend[last_gap + i] = b;
+        }
+        width = w + spend.len() + 1 + 3 * RANGE_BITS + secret.len();
+        let mask = (1u64 << RANGE_BITS) - 1;
+        let gaps: [i128; 3] = [
+            units as i128 * u_written as i128 - amount as i128,
+            amount as i128 - (units as i128 - 1) * u_written as i128 - 1,
+            GOOD.budget as i128 - cap as i128,
+        ];
         let mut row = vec![F::ZERO; width];
         row[..w].copy_from_slice(&whole.values[..w]);
         row[w..w + spend.len()].copy_from_slice(&spend);
@@ -886,35 +1005,52 @@ fn build_composed<
         }
         let sb = rb + 3 * RANGE_BITS;
         row[sb..sb + secret.len()].copy_from_slice(&secret);
-        values.extend(row);
+        payment_rows.push(row);
+
+        if j == 0 {
+            globals[G_COM..G_COM + DIGEST].copy_from_slice(&wpv[1 + DIGEST..1 + 2 * DIGEST]);
+            globals[G_UNIT] = F::from_u64(u);
+            globals[G_BASE] = F::from_u64(BASE_INDEX);
+            globals[G_RANGE] = F::from_u64(RANGE_LEN);
+            globals[G_SECRET_HASH..G_SECRET_HASH + 4].copy_from_slice(&crate::spend_trace::secret_hash());
+        }
+        let mut block = vec![F::ZERO; rw];
+        block[R_DIGEST] = wpv[0];
+        block[R_ROOT..R_ROOT + DIGEST].copy_from_slice(&wpv[1..1 + DIGEST]);
+        block[R_DOMAIN] = F::from_u64(share_dom);
+        block[R_AMOUNT] = F::from_u64(amount);
+        for (i, &l) in limbs.iter().enumerate() {
+            block[R_PAYEE + i] = F::from_u64(l);
+        }
+        block[R_TIME] = F::from_u64(pay.t);
+        let nb = crate::spend::SpendAir::<R, DEPTH, COVER>::new().node_base_pub();
+        for c in 0..COVER {
+            let n = nb + c * crate::spend::PER_NODE;
+            block[R_ELEMS + 3 * c] = spend[n + crate::spend::NODE_SHARE];
+            block[R_ELEMS + 3 * c + 1] = spend[n + crate::spend::NODE_SHARE + 1];
+            block[R_ELEMS + 3 * c + 2] = spend[n + crate::spend::NODE_NULL];
+        }
+        blocks.push(block);
     }
-    let mut pv = pv;
-    pv.push(F::from_u64(share_dom));
-    pv.push(F::from_u64(amount));
-    pv.extend(limbs.iter().map(|&l| F::from_u64(l)));
-    pv.push(F::from_u64(GOOD.t));
-    pv.push(F::from_u64(u));
-    pv.push(F::from_u64(BASE_INDEX));
-    pv.push(F::from_u64(RANGE_LEN));
-    pv.extend(crate::spend_trace::secret_hash());
-    let nb = crate::spend::SpendAir::<R, DEPTH, COVER>::new().node_base_pub();
-    for c in 0..COVER {
-        let n = nb + c * crate::spend::PER_NODE;
-        pv.push(spend[n + crate::spend::NODE_SHARE]);
-        pv.push(spend[n + crate::spend::NODE_SHARE + 1]);
-        pv.push(spend[n + crate::spend::NODE_NULL]);
-    }
-    use crate::composed::{PV_AMOUNT, PV_BASE, PV_ELEMS, PV_PAYEE, PV_RANGE, PV_SECRET_HASH, PV_TIME, PV_UNIT};
     match how {
-        Some(ComposedBreak::StatementUnit) => pv[PV_UNIT] += F::ONE,
-        Some(ComposedBreak::StatementBase) => pv[PV_BASE] += F::ONE,
-        Some(ComposedBreak::StatementRange) => pv[PV_RANGE] = F::from_u64(SPENDABLE - 1),
-        Some(ComposedBreak::StatementSecretHash) => pv[PV_SECRET_HASH] += F::ONE,
-        Some(ComposedBreak::StatementShare) => pv[PV_ELEMS] += F::ONE,
-        Some(ComposedBreak::StatementAmount) => pv[PV_AMOUNT] += F::ONE,
-        Some(ComposedBreak::StatementPayee) => pv[PV_PAYEE + 1] += F::ONE,
-        Some(ComposedBreak::StatementTime) => pv[PV_TIME] += F::ONE,
+        Some(ComposedBreak::StatementUnit) => globals[G_UNIT] += F::ONE,
+        Some(ComposedBreak::StatementBase) => globals[G_BASE] += F::ONE,
+        Some(ComposedBreak::StatementRange) => globals[G_RANGE] = F::from_u64(SPENDABLE - 1),
+        Some(ComposedBreak::StatementSecretHash) => globals[G_SECRET_HASH] += F::ONE,
+        Some(ComposedBreak::StatementShare) => blocks[0][R_ELEMS] += F::ONE,
+        Some(ComposedBreak::StatementAmount) => blocks[0][R_AMOUNT] += F::ONE,
+        Some(ComposedBreak::StatementPayee) => blocks[0][R_PAYEE + 1] += F::ONE,
+        Some(ComposedBreak::StatementTime) => blocks[0][R_TIME] += F::ONE,
+        Some(ComposedBreak::StatementRow) if k > 1 => blocks.swap(0, 1),
         _ => {}
+    }
+    let mut values = Vec::with_capacity(rows * width);
+    for i in 0..rows {
+        values.extend_from_slice(&payment_rows[i % k]);
+    }
+    let mut pv = globals;
+    for b in blocks {
+        pv.extend(b);
     }
     (RowMajorMatrix::new(values, width), pv)
 }

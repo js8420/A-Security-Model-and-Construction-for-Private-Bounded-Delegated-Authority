@@ -149,6 +149,7 @@ contract Reserve {
     error RangeOutside();
     error RangeOverlaps();
     error LengthMismatch();
+    error WrongSlotCount();
 
     event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee);
     event Transcript(uint256 indexed id, uint64 digest, uint64[] elems);
@@ -227,7 +228,7 @@ contract Reserve {
     ) external {
         bytes32 elemsHash = keccak256(abi.encodePacked(elems));
         _checkAgentSignature(id, payee, amount, digest, time, elemsHash, signature);
-        _admit(id, payee, amount, digest, time, elemsHash);
+        _admit(id, payee, amount, digest, time, elemsHash, elems.length);
         _append(id, elems);
         _pay(id, payee, amount);
         emit Settled(id, digest, amount, payee);
@@ -245,7 +246,7 @@ contract Reserve {
     ) external {
         bytes32 elemsHash = keccak256(abi.encodePacked(elems));
         _checkAgentSignature(id, payee, amount, digest, time, elemsHash, signature);
-        _admit(id, payee, amount, digest, time, elemsHash);
+        _admit(id, payee, amount, digest, time, elemsHash, elems.length);
         emit Transcript(id, digest, elems);
         _pay(id, payee, amount);
         emit Settled(id, digest, amount, payee);
@@ -290,10 +291,21 @@ contract Reserve {
         if (signer == address(0) || signer != delegations[id].agent) revert BadSignature();
     }
 
-    function _admit(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, bytes32 elemsHash)
-        private
-    {
+    /// A payment of amount a publishes the two share lanes and the nullifier
+    /// of each of its ceil(a / u) units and nothing else. The amount is public,
+    /// so padding to a fixed slot count would hide nothing.
+    function _admit(
+        uint256 id,
+        address payee,
+        uint64 amount,
+        uint64 digest,
+        uint64 time,
+        bytes32 elemsHash,
+        uint256 published
+    ) private {
         Delegation storage d = delegations[id];
+        uint256 u = d.unitSize;
+        if (published != 3 * ((uint256(amount) + u - 1) / u)) revert WrongSlotCount();
         uint64 nowTs = uint64(block.timestamp);
         if (nowTs > d.expiry) revert Expired();
         if (time > nowTs + maxAge || nowTs > time + maxAge) revert StaleTime();

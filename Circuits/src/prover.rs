@@ -484,13 +484,33 @@ pub fn roundtrip_composed_air<
     rows: usize,
     how: Option<ComposedBreak>,
 ) -> (bool, u128) {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let cfg = config();
     let (t, pv) = composed_case::<R, MD, RD, DEPTH, COVER>(rows, how);
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config();
     let start = Instant::now();
     let proof = prove(&cfg, &air, t, &pv);
     let ms = start.elapsed().as_millis();
     (verify(&cfg, &air, &proof, &pv).is_ok(), ms)
+}
+
+/// Prove and verify a batch of k payments in one proof, row i proving payment
+/// i mod k. Controls corrupt one payment and leave the others honest.
+pub fn roundtrip_batch<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    k: usize,
+    how: Option<ComposedBreak>,
+) -> bool {
+    let (t, pv) = crate::trace::composed_batch::<R, MD, RD, DEPTH, COVER>(rows, k, how);
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config();
+    let proof = prove(&cfg, &air, t, &pv);
+    verify(&cfg, &air, &proof, &pv).is_ok()
 }
 
 /// Proof size for the composed circuit, against the sum of the two separate
@@ -504,9 +524,9 @@ pub fn composed_proof_bytes<
 >(
     rows: usize,
 ) -> usize {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let cfg = config();
     let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     bincode::serialize(&proof).expect("proof serialises").len()
 }
@@ -721,6 +741,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     let plain = config_plain();
     let pv: Vec<Goldilocks> = crate::spend_trace::spend_public_values();
     let pv_c = composed_public_values::<{ REGISTERS }, 16, 32, 16, 64>();
+    let (tr_b, pv_b) = crate::trace::composed_batch::<{ REGISTERS }, 16, 32, 16, 64>(ROWS, ROWS, None);
     let pv_full = full_public_values::<{ REGISTERS }>();
 
     // Declared before the closure vectors below, so that the closures which
@@ -796,8 +817,13 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     // The composed circuit is what a settlement actually costs: one proof
     // covering both halves of one payment, rather than a compliance figure that
     // has to be added to an accountability figure the abstract never added.
-    variant!("composed, one proof per payment", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::new(),
+    variant!("composed, one proof per payment", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::from_public_values(&pv_c),
              composed_air_trace::<{ REGISTERS }, 16, 32, 16, 64>(ROWS), &zk, &pv_c);
+    // The same rows, each a different payment: what batching costs over one
+    // payment repeated, which is the statement's public values and nothing
+    // in the trace.
+    variant!("composed, one proof per 128 payments", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::from_public_values(&pv_b),
+             tr_b.clone(), &zk, &pv_b);
 
     // The arrangement the manuscript describes, timed as one thing. Adding the
     // medians of two separately measured rows is not the median of their sum,
@@ -913,9 +939,9 @@ pub fn composed_proof_at<
     log_blowup: usize,
     pow_bits: usize,
 ) -> (usize, usize, usize, usize, u128, u128, bool) {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let cfg = config_with(num_queries, log_blowup, pow_bits);
     let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config_with(num_queries, log_blowup, pow_bits);
     let trace = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
 
     let t0 = Instant::now();
@@ -950,8 +976,8 @@ pub fn composed_times<
     iters: usize,
     share_config: bool,
 ) -> Vec<u128> {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
     let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
     let base = composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows);
     let shared = config();
     let mut out = Vec::with_capacity(iters);
@@ -1001,9 +1027,9 @@ pub fn composed_verifies_at<
     log_blowup: usize,
     pow_bits: usize,
 ) -> bool {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let cfg = config_with(num_queries, log_blowup, pow_bits);
     let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config_with(num_queries, log_blowup, pow_bits);
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     verify(&cfg, &air, &proof, &pv).is_ok()
 }
@@ -1123,9 +1149,9 @@ pub fn verifier_work<
 >(
     rows: usize,
 ) -> VerifierWork {
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let cfg = counting_config();
     let pv = composed_public_values::<R, MD, RD, DEPTH, COVER>();
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = counting_config();
     let proof = prove(&cfg, &air, composed_air_trace::<R, MD, RD, DEPTH, COVER>(rows), &pv);
     PERMUTATIONS.store(0, std::sync::atomic::Ordering::Relaxed);
     let verifies = verify(&cfg, &air, &proof, &pv).is_ok();
@@ -1209,9 +1235,9 @@ pub fn zk_leak<
     use p3_matrix::{Dimensions, Matrix};
 
     type F = Goldilocks;
-    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-    let width = BaseAir::<F>::width(&air);
     let (t, pv) = composed_case::<R, MD, RD, DEPTH, COVER>(rows, None);
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let width = BaseAir::<F>::width(&air);
     let truth: Vec<F> = t.row_slice(0).expect("row").to_vec();
     let proof = prove(&config(), &air, t, &pv);
 
@@ -1307,8 +1333,8 @@ pub fn zk_leak<
 
 /// Whether two proofs of one trace share their blinding.
 pub fn blinding_reused(fixed: bool) -> bool {
-    let air = ComposedAir::<{ REGISTERS }, 8, 8, 16, 14>::new();
     let (t, pv) = composed_case::<{ REGISTERS }, 8, 8, 16, 14>(ROWS, None);
+    let air = ComposedAir::<{ REGISTERS }, 8, 8, 16, 14>::from_public_values(&pv);
     let (c1, c2) = if fixed { (config_fixed_seed(), config_fixed_seed()) } else { (config(), config()) };
     let p1 = prove(&c1, &air, t.clone(), &pv);
     let p2 = prove(&c2, &air, t, &pv);

@@ -36,6 +36,14 @@ impl<G, A: BaseAir<G>> BaseAir<G> for Stated<A> {
         self.air.num_public_values()
     }
 
+    fn num_periodic_columns(&self) -> usize {
+        self.air.num_periodic_columns()
+    }
+
+    fn periodic_columns(&self) -> Vec<Vec<G>> {
+        self.air.periodic_columns()
+    }
+
     fn max_constraint_degree(&self) -> Option<usize> {
         Some(self.degree)
     }

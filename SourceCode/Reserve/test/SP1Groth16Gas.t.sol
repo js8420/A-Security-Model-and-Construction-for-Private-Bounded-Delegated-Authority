@@ -6,19 +6,21 @@ import {Verifier} from "../src/sp1/v6.1.0/Groth16Verifier.sol";
 import {Groth16Result} from "./Groth16Result.sol";
 
 /// The dispute's validity proof on chain: Succinct's v6.1.0 Groth16 verifier
-/// checking the proof Pete made of the deployed STARK verifier.
+/// checking the proof Pete made of the deployed STARK verifier on a batch of
+/// 128 payments.
 contract SP1Groth16Gas is Groth16Result {
     SP1Verifier verifier;
 
     function setUp() public {
         verifier = new SP1Verifier();
         _load();
+        _cache();
     }
 
     /// Gas is taken from transaction receipts by script/ValidityDisputeOnChain.s.sol.
     function testVerifies() public view {
         assertEq(verifier.VERSION(), "v6.1.0");
-        assertEq(publicValues.length, 8 + 8 * VALUES);
+        assertEq(publicValues.length, 32);
         _checkStatement();
         assertEq(proof.length, 356);
         verifier.verifyProof(vkey, publicValues, proof);

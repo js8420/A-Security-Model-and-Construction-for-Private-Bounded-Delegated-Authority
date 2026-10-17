@@ -13,18 +13,16 @@ import {Statement} from "./Statement.sol";
 
 /// Accepts a "proof" that is exactly the public values the contract built,
 /// under the expected key, so these tests check what the contract asks the
-/// verifier, not the pairing. The pairing is tested on Pete's real proofs.
+/// verifier, not the pairing. The pairing is tested on Pete's real proof.
 contract EchoVerifier is ISP1Verifier {
-    bytes32 public immutable single;
-    bytes32 public immutable batch;
+    bytes32 public immutable program;
 
-    constructor(bytes32 single_, bytes32 batch_) {
-        single = single_;
-        batch = batch_;
+    constructor(bytes32 program_) {
+        program = program_;
     }
 
     function verifyProof(bytes32 vk, bytes calldata pv, bytes calldata proof) external view {
-        require(vk == single || vk == batch, "key");
+        require(vk == program, "key");
         require(keccak256(pv) == keccak256(proof), "values");
     }
 }
@@ -45,8 +43,7 @@ contract ValidityDisputeScaleTest is Test {
     uint64 constant WINDOW = 1 days;
     uint64 constant SLOT = 2 hours;
     uint64 constant LIFE = 30 days;
-    bytes32 constant SINGLE = bytes32(uint256(1));
-    bytes32 constant BATCH = bytes32(uint256(2));
+    bytes32 constant PROGRAM = bytes32(uint256(1));
 
     MockToken token;
     Reserve acc;
@@ -61,9 +58,7 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(100 days);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT + 1 hours);
-        vd = new ValidityDispute(
-            address(acc), address(new EchoVerifier(SINGLE, BATCH)), SINGLE, BATCH, ACCEPT, WINDOW, SLOT, BOND
-        );
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND);
         acc.setDispute(address(vd));
         vm.deal(principal, 100 ether);
         vm.deal(challenger, 100 ether);
@@ -82,9 +77,13 @@ contract ValidityDisputeScaleTest is Test {
         return recs[keccak256(abi.encode(r, d))];
     }
 
+    /// A payment of one unit, which publishes one slot: two share lanes and a
+    /// nullifier.
     function _settle(uint256 pk, uint256 r, uint64 d) internal returns (Settlement memory s) {
-        uint64[] memory e = new uint64[](1);
+        uint64[] memory e = new uint64[](3);
         e[0] = d;
+        e[1] = d + 1;
+        e[2] = d + 2;
         uint64 t = uint64(block.timestamp);
         bytes32 h = acc.signedDigest(r, payee, 1, d, t, keccak256(abi.encodePacked(e)));
         (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, h);
@@ -121,6 +120,45 @@ contract ValidityDisputeScaleTest is Test {
 
     function _deadline(uint256 r, uint64 d) internal view returns (uint64) {
         return vd.challengeOf(r, d).deadline;
+    }
+
+    /// A batch of one: the leaf is the root and the path is empty.
+    function _answerAlone(uint256 r, uint64 d) internal {
+        Settlement memory s = _rec(r, d);
+        vd.answer(r, d, s, 0, new bytes32[](0), abi.encodePacked(vd.leafHash(r, d, s)));
+    }
+
+    /// The tree an answer to these settlements would commit, padded with zero
+    /// leaves to a power of two, and each settlement's path in it.
+    function _tree(uint256[] memory ids, uint64[] memory ds)
+        internal
+        view
+        returns (bytes32 root, uint256[] memory at, bytes32[][] memory paths)
+    {
+        uint256 n = ids.length;
+        uint256 width = 1;
+        uint256 depth = 0;
+        while (width < n) {
+            width *= 2;
+            depth += 1;
+        }
+        bytes32[][] memory levels = new bytes32[][](depth + 1);
+        levels[0] = new bytes32[](width);
+        for (uint256 i = 0; i < n; ++i) levels[0][i] = vd.leafHash(ids[i], ds[i], _rec(ids[i], ds[i]));
+        for (uint256 l = 1; l <= depth; ++l) {
+            levels[l] = new bytes32[](levels[l - 1].length / 2);
+            for (uint256 i = 0; i < levels[l].length; ++i) {
+                levels[l][i] = keccak256(abi.encodePacked(levels[l - 1][2 * i], levels[l - 1][2 * i + 1]));
+            }
+        }
+        root = levels[depth][0];
+        at = new uint256[](n);
+        paths = new bytes32[][](n);
+        for (uint256 i = 0; i < n; ++i) {
+            at[i] = i;
+            paths[i] = new bytes32[](depth);
+            for (uint256 l = 0; l < depth; ++l) paths[i][l] = levels[l][(i >> l) ^ 1];
+        }
     }
 
     /// Each queue's deadlines are two slots apart, on its own boundaries:
@@ -220,46 +258,54 @@ contract ValidityDisputeScaleTest is Test {
             vd.open{value: BOND}(r, 5, bad[i]);
         }
         _openBy(challenger, r, 5);
-        bytes memory pv = vd.publicValues(r, 5, bad[0]);
         vm.expectRevert(ValidityDispute.WrongRecord.selector);
-        vd.answer(r, 5, bad[0], pv);
+        vd.answer(r, 5, bad[0], 0, new bytes32[](0), "");
     }
 
-    /// The statement carries the payee as three limbs and the shares' hash as
-    /// four big-endian words, in the order the guest commits them.
-    function testStatementLayout() public {
+    /// A leaf carries the payee as three limbs and the shares' hash as four
+    /// big-endian words, in the order the guest hashes them.
+    function testLeafLayout() public {
         uint256 r = _register(AGENT_PK, 10);
         Settlement memory s = _settle(AGENT_PK, r, 5);
         s.payee = address(uint160(0x007a3f9c2e5b1d84f6a0c9e2b7d5f3a1c8e6b4d2f0));
         s.elems = 0x0102030405060708111213141516171821222324252627283132333435363738;
-        bytes memory pv = vd.publicValues(r, 5, s);
-        assertEq(pv.length, 8 + 8 * 26);
-        assertEq(_word(pv, 10), 1);
-        assertEq(_word(pv, 11), 68576303576830704);
-        assertEq(_word(pv, 12), 37425867368085461);
-        assertEq(_word(pv, 13), 134413621811997);
-        assertEq(_word(pv, 14), s.time);
-        assertEq(_word(pv, 15), Statement.UNIT);
-        assertEq(_word(pv, 16), Statement.RANGE_BASE);
-        assertEq(_word(pv, 17), Statement.RANGE_LEN);
-        for (uint256 j = 0; j < 4; ++j) assertEq(_word(pv, 18 + j), (uint256(Statement.SECRET_HASH) >> (64 * j)) & 0xFFFFFFFFFFFFFFFF);
-        assertEq(_word(pv, 22), 0x0102030405060708);
-        assertEq(_word(pv, 25), 0x3132333435363738);
+        uint256[26] memory v = vd.leaf(r, 5, s);
+        assertEq(v[0], 5);
+        assertEq(v[10], 1);
+        assertEq(v[11], 68576303576830704);
+        assertEq(v[12], 37425867368085461);
+        assertEq(v[13], 134413621811997);
+        assertEq(v[14], s.time);
+        assertEq(v[15], Statement.UNIT);
+        assertEq(v[16], Statement.RANGE_BASE);
+        assertEq(v[17], Statement.RANGE_LEN);
+        for (uint256 j = 0; j < 4; ++j) assertEq(v[18 + j], (uint256(Statement.SECRET_HASH) >> (64 * j)) & 0xFFFFFFFFFFFFFFFF);
+        assertEq(v[22], 0x0102030405060708);
+        assertEq(v[25], 0x3132333435363738);
+        assertEq(vd.leafHash(r, 5, s), keccak256(abi.encodePacked(v)));
     }
 
-    /// The circuit crate hashed the exported shares as the guest does; the
-    /// reserve hashes them as Settle does. The two must agree.
+    /// The circuit crate hashed each payment's published shares as the guest
+    /// does; the reserve hashes them as Settle does. The two must agree, and
+    /// each payment publishes exactly the slots its amount pays for.
     function testGuestAndReserveHashTheSharesAlike() public pure {
-        uint64[] memory e = Statement.elems();
-        assertEq(e.length, 192);
-        assertEq(keccak256(abi.encodePacked(e)), Statement.ELEMS_HASH);
+        Statement.Data memory d = Statement.load();
+        for (uint256 i = 0; i < Statement.PAYMENTS; ++i) {
+            uint64[] memory e = Statement.elems(d, i);
+            uint64 a = Statement.amount(d, i);
+            assertEq(e.length, 3 * ((a + Statement.UNIT - 1) / Statement.UNIT));
+            uint256 h = uint256(keccak256(abi.encodePacked(e)));
+            uint64[] memory l = Statement.leaf(d, i);
+            for (uint256 j = 0; j < 4; ++j) assertEq(l[22 + j], (h >> (192 - 64 * j)) & 0xFFFFFFFFFFFFFFFF);
+        }
     }
 
-    /// The bytes the reserve rebuilds for the exported payment equal what the
-    /// circuit crate computes the guest will commit, before any proof exists.
-    function testRebuiltStatementIsWhatTheGuestCommits() public {
-        uint64[] memory c = Statement.committed();
-        assertEq(c.length, 26);
+    /// The leaves the reserve rebuilds for the exported batch equal what the
+    /// circuit crate computes the guest hashes, and reach the root it commits,
+    /// before any proof exists.
+    function testRebuiltLeavesReachTheRootTheGuestCommits() public {
+        Statement.Data memory d = Statement.load();
+        uint64[] memory c = Statement.leaf(d, 0);
         uint256 root;
         uint256 com;
         for (uint256 j = 0; j < 4; ++j) {
@@ -268,40 +314,19 @@ contract ValidityDisputeScaleTest is Test {
         }
         vm.prank(principal);
         uint256 r = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(com), bytes32(root), uint64(block.timestamp) + LIFE));
+        for (uint256 i = 0; i < Statement.PAYMENTS; ++i) _rebuilt(d, r, i);
+    }
+
+    function _rebuilt(Statement.Data memory d, uint256 r, uint256 i) internal view {
         Settlement memory s = Settlement({
-            elems: Statement.ELEMS_HASH, amount: Statement.AMOUNT, payee: Statement.PAYEE, time: Statement.TIME,
-            epoch: 0
+            elems: keccak256(abi.encodePacked(Statement.elems(d, i))), amount: Statement.amount(d, i),
+            payee: Statement.payee(d, i), time: Statement.time(d, i), epoch: 0
         });
-        bytes memory want = new bytes(8 + 8 * c.length);
-        want[0] = bytes1(uint8(c.length));
-        for (uint256 i = 0; i < c.length; ++i) {
-            for (uint256 b = 0; b < 8; ++b) want[8 + 8 * i + b] = bytes1(uint8(c[i] >> (8 * b)));
-        }
-        assertEq(vd.publicValues(r, Statement.DIGEST, s), want);
-    }
-
-    function _word(bytes memory pv, uint256 i) internal pure returns (uint256 x) {
-        for (uint256 b = 0; b < 8; ++b) x |= uint256(uint8(pv[8 * (i + 1) + b])) << (8 * b);
-    }
-
-    function testBatchValuesAreTheSingleValuesInOrder() public {
-        uint256 a = _register(AGENT_PK, 10);
-        uint256 b = _register(OTHER_PK, 20);
-        _settle(AGENT_PK, a, 5);
-        _settle(OTHER_PK, b, 6);
-        uint256[] memory ids = new uint256[](2);
-        uint64[] memory ds = new uint64[](2);
-        ids[0] = a; ds[0] = 5;
-        ids[1] = b; ds[1] = 6;
-        bytes memory pv = vd.batchPublicValues(ids, ds, _recs(ids, ds));
-        bytes memory one = vd.publicValues(a, 5, _rec(a, 5));
-        bytes memory two = vd.publicValues(b, 6, _rec(b, 6));
-        assertEq(pv.length, 8 + 2 * 208);
-        assertEq(uint8(pv[0]), 52);
-        for (uint256 i = 0; i < 208; ++i) {
-            assertEq(pv[8 + i], one[8 + i]);
-            assertEq(pv[216 + i], two[8 + i]);
-        }
+        uint64 dg = Statement.digest(d, i);
+        uint256[26] memory v = vd.leaf(r, dg, s);
+        uint64[] memory want = Statement.leaf(d, i);
+        for (uint256 j = 0; j < 26; ++j) assertEq(v[j], want[j]);
+        assertEq(vd.rootOf(r, dg, s, i, Statement.path(d, i)), Statement.ROOT);
     }
 
     function testBatchAnswersEveryChallengeAndCreditsEachAgent() public {
@@ -314,7 +339,8 @@ contract ValidityDisputeScaleTest is Test {
         for (uint256 i = 0; i < 3; ++i) (ids[i], ds[i]) = (ia[i], da[i]);
         for (uint256 i = 0; i < 2; ++i) (ids[3 + i], ds[3 + i]) = (ib[i], db[i]);
         Settlement[] memory ss = _recs(ids, ds);
-        vd.answerBatch(ids, ds, ss, vd.batchPublicValues(ids, ds, ss));
+        (bytes32 root, uint256[] memory at, bytes32[][] memory paths) = _tree(ids, ds);
+        vd.answerBatch(_items(ids, ds, ss, at, paths), abi.encodePacked(root));
         for (uint256 i = 0; i < 5; ++i) {
             assertEq(uint256(vd.challengeOf(ids[i], ds[i]).status), uint256(ValidityDispute.Status.Answered));
         }
@@ -328,10 +354,12 @@ contract ValidityDisputeScaleTest is Test {
         uint256 r = _register(AGENT_PK, 10);
         (uint256[] memory ids, uint64[] memory ds) = _openMany(AGENT_PK, r, 2, challenger);
         Settlement[] memory ss = _recs(ids, ds);
-        bytes memory pv = vd.batchPublicValues(ids, ds, ss);
-        pv[pv.length - 1] ^= 0x01;
+        (bytes32 root, uint256[] memory at, bytes32[][] memory paths) = _tree(ids, ds);
         vm.expectRevert(bytes("values"));
-        vd.answerBatch(ids, ds, ss, pv);
+        vd.answerBatch(_items(ids, ds, ss, at, paths), abi.encodePacked(root ^ bytes32(uint256(1))));
+        paths[1][0] ^= bytes32(uint256(1));
+        vm.expectRevert(ValidityDispute.RootMismatch.selector);
+        vd.answerBatch(_items(ids, ds, ss, at, paths), abi.encodePacked(root));
     }
 
     function testBatchNamingASettlementTwiceFails() public {
@@ -342,9 +370,9 @@ contract ValidityDisputeScaleTest is Test {
         (ids[0], ds[0]) = (one[0], d1[0]);
         (ids[1], ds[1]) = (one[0], d1[0]);
         Settlement[] memory ss = _recs(ids, ds);
-        bytes memory pv = vd.batchPublicValues(ids, ds, ss);
+        (bytes32 root, uint256[] memory at, bytes32[][] memory paths) = _tree(ids, ds);
         vm.expectRevert(ValidityDispute.NotOpen.selector);
-        vd.answerBatch(ids, ds, ss, pv);
+        vd.answerBatch(_items(ids, ds, ss, at, paths), abi.encodePacked(root));
     }
 
     function testBatchWithAnUnchallengedSettlementFails() public {
@@ -356,8 +384,9 @@ contract ValidityDisputeScaleTest is Test {
         (ids[0], ds[0]) = (one[0], d1[0]);
         (ids[1], ds[1]) = (r, 999);
         Settlement[] memory ss = _recs(ids, ds);
+        (, uint256[] memory at, bytes32[][] memory paths) = _tree(ids, ds);
         vm.expectRevert(ValidityDispute.NotOpen.selector);
-        vd.answerBatch(ids, ds, ss, "");
+        vd.answerBatch(_items(ids, ds, ss, at, paths), "");
     }
 
     function testBatchAfterAnyDeadlineFails() public {
@@ -365,30 +394,20 @@ contract ValidityDisputeScaleTest is Test {
         (uint256[] memory ids, uint64[] memory ds) = _openMany(AGENT_PK, r, 2, challenger);
         vm.warp(_deadline(ids[0], ds[0]) + 1);
         Settlement[] memory ss = _recs(ids, ds);
-        bytes memory pv = vd.batchPublicValues(ids, ds, ss);
+        (bytes32 root, uint256[] memory at, bytes32[][] memory paths) = _tree(ids, ds);
         vm.expectRevert(ValidityDispute.TooLate.selector);
-        vd.answerBatch(ids, ds, ss, pv);
+        vd.answerBatch(_items(ids, ds, ss, at, paths), abi.encodePacked(root));
     }
 
-    function testEmptyAndUnevenBatchesFail() public {
-        uint256[] memory none = new uint256[](0);
-        uint64[] memory noneD = new uint64[](0);
-        Settlement[] memory noneS = new Settlement[](0);
+    function testEmptyBatchFails() public {
         vm.expectRevert(ValidityDispute.EmptyBatch.selector);
-        vd.answerBatch(none, noneD, noneS, "");
-        uint256 r = _register(AGENT_PK, 10);
-        (uint256[] memory ids, uint64[] memory ds) = _openMany(AGENT_PK, r, 1, challenger);
-        vm.expectRevert(ValidityDispute.LengthMismatch.selector);
-        vd.answerBatch(ids, noneD, noneS, "");
-        vm.expectRevert(ValidityDispute.LengthMismatch.selector);
-        vd.answerBatch(ids, ds, noneS, "");
+        vd.answerBatch(new ValidityDispute.Item[](0), "");
     }
 
-    function testSingleAnswerUsesTheSingleKey() public {
+    function testAnswerOfABatchOfOne() public {
         uint256 r = _register(AGENT_PK, 10);
         (uint256[] memory ids, uint64[] memory ds) = _openMany(AGENT_PK, r, 1, challenger);
-        Settlement memory s = _rec(ids[0], ds[0]);
-        vd.answer(ids[0], ds[0], s, vd.publicValues(ids[0], ds[0], s));
+        _answerAlone(ids[0], ds[0]);
         assertEq(uint256(vd.challengeOf(ids[0], ds[0]).status), uint256(ValidityDispute.Status.Answered));
     }
 
@@ -396,7 +415,7 @@ contract ValidityDisputeScaleTest is Test {
         uint256 r = _register(AGENT_PK, 10);
         (uint256[] memory ids, uint64[] memory ds) = _openMany(AGENT_PK, r, 1, challenger);
         Settlement memory s = _rec(ids[0], ds[0]);
-        vd.answer(ids[0], ds[0], s, vd.publicValues(ids[0], ds[0], s));
+        _answerAlone(ids[0], ds[0]);
         vm.prank(challenger);
         vm.expectRevert(ValidityDispute.AlreadyChallenged.selector);
         vd.open{value: BOND}(r, ds[0], s);
@@ -437,9 +456,9 @@ contract ValidityDisputeScaleTest is Test {
     function testCloseAfterAnAnsweredChallengeReturnsTheBond() public {
         uint256 r = _register(AGENT_PK, 10);
         address agent = vm.addr(AGENT_PK);
-        Settlement memory s = _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 5);
         _openBy(challenger, r, 5);
-        vd.answer(r, 5, s, vd.publicValues(r, 5, s));
+        _answerAlone(r, 5);
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
         uint256 before = agent.balance;
         acc.close(r);
@@ -450,5 +469,18 @@ contract ValidityDisputeScaleTest is Test {
         Reserve short = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT);
         vm.expectRevert(bytes("close delay"));
         short.setDispute(address(vd));
+    }
+
+    function _items(
+        uint256[] memory ids,
+        uint64[] memory ds,
+        Settlement[] memory ss,
+        uint256[] memory at,
+        bytes32[][] memory paths
+    ) internal pure returns (ValidityDispute.Item[] memory items) {
+        items = new ValidityDispute.Item[](ids.length);
+        for (uint256 i = 0; i < ids.length; ++i) {
+            items[i] = ValidityDispute.Item({id: ids[i], digest: ds[i], s: ss[i], index: at[i], path: paths[i]});
+        }
     }
 }

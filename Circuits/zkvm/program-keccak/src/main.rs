@@ -1,8 +1,8 @@
 //! Inside the zkVM: the Plonky3 verifier with Keccak commitments and a Keccak
-//! transcript, otherwise the deployed parameters, run on one settlement's
-//! proof against the composed circuit. It commits the statement the reserve
-//! rebuilds: the scalar public values and the hash of the published shares and
-//! nullifiers. Keccak reaches SP1's precompile through the patched tiny-keccak.
+//! transcript, otherwise the deployed parameters, run on one proof of a batch
+//! of payments against the composed circuit. It commits the Keccak root of the
+//! payments' statements, each the leaf the reserve rebuilds from its record.
+//! Keccak reaches SP1's precompile through the patched tiny-keccak.
 //!
 //! The circuit's own source files are compiled in unchanged, so the AIR the
 //! zkVM checks is the AIR the agent proved.
@@ -109,8 +109,8 @@ fn config() -> Config {
 pub fn main() {
     let bytes = sp1_zkvm::io::read_vec();
     let (proof, pv): (Proof<Config>, Vec<Val>) = bincode::deserialize(&bytes).expect("proof and public values");
-    let air = composed::ComposedAir::<0, 16, 32, 16, 64>::new();
+    let air = composed::ComposedAir::<0, 16, 32, 16, 64>::from_public_values(&pv);
     verify(&config(), &air, &proof, &pv).expect("the proof verifies");
     let values: Vec<u64> = pv.iter().map(|v| v.as_canonical_u64()).collect();
-    sp1_zkvm::io::commit(&statement::committed(&values));
+    sp1_zkvm::io::commit_slice(&statement::committed(&values, 64));
 }

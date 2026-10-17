@@ -26,12 +26,13 @@ use crate::trace::composed_case;
 type Expr = SymbolicExpr<BaseLeaf<Val>>;
 
 /// A value a program reads from outside: an opened column at zeta or at the
-/// next row, a public value, or a selector at zeta.
+/// next row, a public value, a periodic column at zeta, or a selector at zeta.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Read {
     Local(usize),
     Next(usize),
     Public(usize),
+    Periodic(usize),
     First,
     Last,
     Transition,
@@ -110,7 +111,8 @@ impl Compiler {
                 BaseEntry::Main { offset: 0 } => self.leaf(Read::Local(v.index)),
                 BaseEntry::Main { .. } => self.leaf(Read::Next(v.index)),
                 BaseEntry::Public => self.leaf(Read::Public(v.index)),
-                BaseEntry::Preprocessed { .. } | BaseEntry::Periodic => unreachable!("not in this AIR"),
+                BaseEntry::Periodic => self.leaf(Read::Periodic(v.index)),
+                BaseEntry::Preprocessed { .. } => unreachable!("not in this AIR"),
             },
             SymbolicExpr::Leaf(BaseLeaf::IsFirstRow) => self.leaf(Read::First),
             SymbolicExpr::Leaf(BaseLeaf::IsLastRow) => self.leaf(Read::Last),
@@ -182,6 +184,7 @@ struct At<'a> {
     local: &'a [Challenge],
     next: &'a [Challenge],
     pv: &'a [Val],
+    periodic: Vec<Challenge>,
     first: Challenge,
     last: Challenge,
     transition: Challenge,
@@ -194,6 +197,7 @@ fn inputs(p: &Program, at: &At) -> Vec<Challenge> {
             Read::Local(i) => at.local[i],
             Read::Next(i) => at.next[i],
             Read::Public(i) => Challenge::from(at.pv[i]),
+            Read::Periodic(i) => at.periodic[i],
             Read::First => at.first,
             Read::Last => at.last,
             Read::Transition => at.transition,
@@ -267,8 +271,8 @@ fn hex_ext(c: Challenge) -> String {
 /// Every constraint compiled and run on a real proof; the profile, and the
 /// Solidity vectors written to `vectors`.
 pub fn profile(vectors: &str) -> Profile {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let proof: RProof = prove(&config().0, &air, t, &pv);
     let (_, ops, verdict) = record_ops(&air, &proof, &pv);
     assert!(verdict.is_ok(), "honest proof must verify");
@@ -284,6 +288,7 @@ pub fn profile(vectors: &str) -> Profile {
         local: &ov.trace_local,
         next,
         pv: &pv,
+        periodic: p3_air::BaseAir::<Val>::periodic_columns(&air).iter().map(|c| init.evaluate_periodic_column_at(c, zeta)).collect(),
         first: sels.is_first_row,
         last: sels.is_last_row,
         transition: sels.is_transition,

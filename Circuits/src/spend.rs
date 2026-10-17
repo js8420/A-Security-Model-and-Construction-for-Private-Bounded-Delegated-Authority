@@ -133,17 +133,6 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         self.constrain_with(builder, base, false, dom_pv, None);
     }
 
-    /// The same constraints with the last range check against the delegation's
-    /// declared range length, a public value, in place of the deployment's
-    /// index space: the units a payment may reach are those the record
-    /// declares, so a revocation of the declared range reaches all of them.
-    pub(crate) fn constrain_declared<AB>(&self, builder: &mut AB, base: usize, dom_pv: usize, range_pv: usize)
-    where
-        AB: AirBuilder<F = F>,
-    {
-        self.constrain_with(builder, base, false, dom_pv, Some(range_pv));
-    }
-
     /// The same constraints, with the nullifier optionally left to the caller.
     /// `external_nullifier = true` omits only the equality tying a slot's
     /// nullifier to a spare lane of the permutation that produced its key, so
@@ -159,6 +148,27 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
     ) where
         AB: AirBuilder<F = F>,
     {
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
+        let index = pv[0].clone();
+        let dom = pv[dom_pv].clone();
+        let range = range_pv.map(|k| pv[k].clone());
+        self.constrain_anchored(builder, base, external_nullifier, index, dom, range);
+    }
+
+    /// The constraints against a share index and a range length the caller
+    /// supplies: public values when proved alone, a row's own payment when a
+    /// batch is proved.
+    pub(crate) fn constrain_anchored<AB>(
+        &self,
+        builder: &mut AB,
+        base: usize,
+        external_nullifier: bool,
+        index_anchor: AB::Expr,
+        dom_anchor: AB::Expr,
+        range: Option<AB::Expr>,
+    ) where
+        AB: AirBuilder<F = F>,
+    {
         let bw = self.block_width();
         let vals = base + self.value_cols();
 
@@ -168,7 +178,6 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
             self.hash.eval(&mut sub);
         }
 
-        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
 
         let secret: Vec<AB::Var> =
@@ -180,14 +189,14 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
         let units = row[base + COL_UNITS].clone();
         let pbase = row[base + COL_BASE].clone();
 
-        builder.assert_eq(index.clone().into(), pv[0].clone());
-        builder.assert_eq(dom.clone().into(), pv[dom_pv].clone());
+        builder.assert_eq(index.clone().into(), index_anchor);
+        builder.assert_eq(dom.clone().into(), dom_anchor);
         // A non-zero digest makes the index non-zero, so no share is the secret.
         builder.assert_one(index.clone().into() * row[base + COL_INDEX_INV].clone().into());
         let w: AB::Expr = AB::Expr::from(<F as BinomiallyExtendable<2>>::W);
 
-        let last_gap: AB::Expr = match range_pv {
-            Some(k) => pv[k].clone() - m.clone().into(),
+        let last_gap: AB::Expr = match range {
+            Some(l) => l - m.clone().into(),
             None => {
                 let mut p: AB::Expr = AB::Expr::ONE;
                 for _ in 0..DEPTH {
@@ -226,6 +235,13 @@ impl<const R: usize, const DEPTH: usize, const COVER: usize> SpendAir<R, DEPTH, 
             let n = nb + c * PER_NODE;
             let active = row[n + NODE_ACTIVE].clone();
             builder.assert_bool(active.clone());
+            // The real slots come first. Settle publishes only the slots the
+            // amount pays for, so a real slot after a padded one would be a
+            // consumed unit nobody sees.
+            if c + 1 < COVER {
+                let next = row[nb + (c + 1) * PER_NODE + NODE_ACTIVE].clone();
+                builder.assert_zero(next.into() * (AB::Expr::ONE - active.clone().into()));
+            }
             charged = charged + active.clone().into();
             builder.assert_eq(
                 row[posb + c + 1].clone().into(),

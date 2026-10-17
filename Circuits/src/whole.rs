@@ -44,6 +44,15 @@ pub const PUBLIC_VALUES: usize = 1 + DIGEST + DIGEST;
 /// Limbs of a payee address: 56, 56 and 48 bits, low limb first.
 pub const PAYEE_LIMBS: usize = 3;
 
+/// What the compliance half is proved against: the payload digest, the
+/// revocation root, the delegation commitment and, when bound, the payee.
+pub(crate) struct Anchors<E> {
+    pub digest: E,
+    pub rroot: Vec<E>,
+    pub com: Vec<E>,
+    pub payee: Option<Vec<E>>,
+}
+
 pub struct WholeAir<const R: usize, const MD: usize, const RD: usize> {
     policy: PolicyAir,
     hash: HashAir<R>,
@@ -114,17 +123,6 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
         self.constrain_with(builder, base, true, None);
     }
 
-    /// The same constraints with the merchant leaf read as the payee's address.
-    /// `payee_pv` is where the address's three limbs sit among the public
-    /// values, so the allowlist proves membership of the party the reserve
-    /// actually pays rather than of an identifier nothing on chain sees.
-    pub(crate) fn constrain_payee<AB>(&self, builder: &mut AB, base: usize, payee_pv: usize)
-    where
-        AB: AirBuilder<F = F>,
-    {
-        self.constrain_with(builder, base, true, Some(payee_pv));
-    }
-
     /// The same constraints, with C9's binding of the absorbed lanes to the
     /// policy columns optionally omitted. `bind_policy = false` is not a
     /// configuration anyone should deploy; it exists so the evaluation can
@@ -136,6 +134,31 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
         base: usize,
         bind_policy: bool,
         payee_pv: Option<usize>,
+    )
+    where
+        AB: AirBuilder<F = F>,
+    {
+        // Copied out before any assertion, because public_values() borrows the
+        // builder and the assertions need it mutably.
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
+        let anchors = Anchors {
+            digest: pv[0].clone(),
+            rroot: pv[1..1 + DIGEST].to_vec(),
+            com: pv[1 + DIGEST..1 + 2 * DIGEST].to_vec(),
+            payee: payee_pv.map(|k| pv[k..k + PAYEE_LIMBS].to_vec()),
+        };
+        self.constrain_anchored(builder, base, bind_policy, anchors);
+    }
+
+    /// The constraints against values the caller supplies for the digest, the
+    /// revocation root, the commitment and the payee. A batch of payments
+    /// supplies the per-payment ones row by row and the delegation's once.
+    pub(crate) fn constrain_anchored<AB>(
+        &self,
+        builder: &mut AB,
+        base: usize,
+        bind_policy: bool,
+        anchors: Anchors<AB::Expr>,
     )
     where
         AB: AirBuilder<F = F>,
@@ -177,9 +200,6 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
             self.revocation.eval(&mut sub);
         }
 
-        // Copied out before any assertion, because public_values() borrows the
-        // builder and the assertions need it mutably.
-        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
         let g_rroot = rv;
         let g_payload = rv + DIGEST;
@@ -210,16 +230,16 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
         // only that a satisfying assignment exists, for no particular
         // delegation, against no particular accumulator, for no particular
         // payment.
-        builder.assert_eq(row[g_payload].clone().into(), pv[0].clone());
+        builder.assert_eq(row[g_payload].clone().into(), anchors.digest.clone());
         for j in 0..DIGEST {
-            builder.assert_eq(row[g_rroot + j].clone().into(), pv[1 + j].clone());
+            builder.assert_eq(row[g_rroot + j].clone().into(), anchors.rroot[j].clone());
         }
 
         // The commitment is the sponge's final output, and it is public, so the
         // policy the circuit reads is the policy the principal committed.
         let last = p + (C9_PERMUTATIONS - 1) * bw + output_offset::<R>();
         for j in 0..DIGEST {
-            builder.assert_eq(row[last + j].clone().into(), pv[1 + DIGEST + j].clone());
+            builder.assert_eq(row[last + j].clone().into(), anchors.com[j].clone());
         }
 
         // Each sponge starts at its own domain separator, not at zero, so the
@@ -275,10 +295,10 @@ impl<const R: usize, const MD: usize, const RD: usize> WholeAir<R, MD, RD> {
         // An address is 160 bits and a lane holds 64, so the payee's leaf
         // carries it in three limbs, each tied to the public value the reserve
         // rebuilds from the address it paid.
-        match payee_pv {
-            Some(k) => {
+        match &anchors.payee {
+            Some(limbs) => {
                 for j in 0..PAYEE_LIMBS {
-                    builder.assert_eq(row[h + j].clone().into(), pv[k + j].clone());
+                    builder.assert_eq(row[h + j].clone().into(), limbs[j].clone());
                 }
                 for j in PAYEE_LIMBS..DIGEST {
                     builder.assert_zero(row[h + j].clone());

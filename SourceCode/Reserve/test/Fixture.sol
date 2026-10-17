@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "./TermsOf.sol";
+import {Statement} from "./Statement.sol";
 import {PreventiveReserve} from "../src/PreventiveReserve.sol";
 import {MockToken} from "./MockToken.sol";
 
@@ -91,17 +92,23 @@ contract Fixture is Test {
         return uint64(block.timestamp);
     }
 
+    /// The amount whose units are exactly the slots e publishes.
+    function _amount(uint64[] memory e) internal pure returns (uint64) {
+        return uint64(e.length / 3) * Statement.UNIT;
+    }
+
     /// Gas of one settlement call and nothing else: the signature is made
-    /// before the meter starts.
+    /// before the meter starts. The amount is the one the slots pay for.
     function _settle(uint256 id, uint64 digest, uint64[] memory e, bool logged)
         internal
         returns (uint256 used)
     {
         uint64 t = _now();
-        bytes memory sg = _sign(id, 1000, digest, t, e);
+        uint64 a = _amount(e);
+        bytes memory sg = _sign(id, a, digest, t, e);
         uint256 g = gasleft();
-        if (logged) acc.settleLogged(id, payee, 1000, digest, t, e, sg);
-        else acc.settle(id, payee, 1000, digest, t, e, sg);
+        if (logged) acc.settleLogged(id, payee, a, digest, t, e, sg);
+        else acc.settle(id, payee, a, digest, t, e, sg);
         used = g - gasleft();
     }
 

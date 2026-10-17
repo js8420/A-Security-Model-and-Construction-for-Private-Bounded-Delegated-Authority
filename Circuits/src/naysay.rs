@@ -267,8 +267,8 @@ pub(crate) fn all_positions(events: &[Event], log_global: usize, queries: usize)
 /// written with bincode for the zkVM verifier to read. Returns the bytes
 /// written and whether the proof verifies natively.
 pub fn export(path: &str) -> (usize, bool) {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let proof: RProof = prove(&config().0, &air, t, &pv);
     let ok = record(&air, &proof, &pv).1.is_ok();
     let bytes = bincode::serialize(&(&proof, &pv)).expect("serialise");
@@ -341,9 +341,9 @@ pub struct Report {
 }
 
 pub fn run() -> Report {
-    let air = Air::new();
-    let width = BaseAir::<Val>::width(&air);
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
+    let width = BaseAir::<Val>::width(&air);
     let proof: RProof = prove(&config().0, &air, t, &pv);
 
     let (events, honest) = record(&air, &proof, &pv);
@@ -365,7 +365,7 @@ pub fn run() -> Report {
 
     let mut landings = Vec::new();
     let mut land = |label: &'static str, p: &RProof, pvs: &[Val]| {
-        let (ev, r) = record(&air, p, pvs);
+        let (ev, r) = record(&Air::from_public_values(pvs), p, pvs);
         // Positions move exactly when the state they are drawn from does.
         // Comparing the positions themselves would mislead: Plonky3 stops at
         // the first failing query or at the proof-of-work, so fewer are drawn.
@@ -419,7 +419,8 @@ pub fn run() -> Report {
         ("control: shares under another domain", ComposedBreak::ShareDomain),
     ] {
         let (t, pvb) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(b));
-        let pb: RProof = prove(&config().0, &air, t, &pvb);
+        let airb = Air::from_public_values(&pvb);
+        let pb: RProof = prove(&config().0, &airb, t, &pvb);
         land(label, &pb, &pvb);
     }
 
@@ -452,6 +453,7 @@ pub struct PerConstraint<'a> {
     next: &'a [Challenge],
     empty: RowWindow<'a, Challenge>,
     public_values: &'a [Val],
+    periodic: Vec<Challenge>,
     is_first_row: Challenge,
     is_last_row: Challenge,
     is_transition: Challenge,
@@ -502,7 +504,7 @@ impl<'a> AirBuilder for PerConstraint<'a> {
     }
 
     fn periodic_values(&self) -> &[Challenge] {
-        &[]
+        &self.periodic
     }
 }
 
@@ -555,6 +557,7 @@ pub(crate) fn sides(
         next,
         empty: RowWindow::from_two_rows(&[], &[]),
         public_values: pv,
+        periodic: air.periodic_columns().iter().map(|c| init.evaluate_periodic_column_at(c, zeta)).collect(),
         is_first_row: sels.is_first_row,
         is_last_row: sels.is_last_row,
         is_transition: sels.is_transition,
@@ -645,8 +648,8 @@ pub struct OodReport {
 /// The identity for the honest proof and for the three controls, each judged
 /// both by this decomposition and by Plonky3.
 pub fn run_identity() -> OodReport {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let proof: RProof = prove(&config().0, &air, t, &pv);
     let (ev, _) = record(&air, &proof, &pv);
     let honest = identity(&air, &proof, &pv, &ev);
@@ -658,9 +661,10 @@ pub fn run_identity() -> OodReport {
         ("shares under another domain", ComposedBreak::ShareDomain),
     ] {
         let (t, pvb) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(b));
-        let pb: RProof = prove(&config().0, &air, t, &pvb);
-        let (ev, verdict) = record(&air, &pb, &pvb);
-        let ours = identity(&air, &pb, &pvb, &ev).holds;
+        let airb = Air::from_public_values(&pvb);
+        let pb: RProof = prove(&config().0, &airb, t, &pvb);
+        let (ev, verdict) = record(&airb, &pb, &pvb);
+        let ours = identity(&airb, &pb, &pvb, &ev).holds;
         let theirs = !verdict.err().map(|e| e.contains("OodEvaluationMismatch")).unwrap_or(false);
         controls.push((label, ours, theirs));
     }
@@ -1097,8 +1101,8 @@ pub struct QueryReport {
 /// The query phase of the honest proof, of the three controls, and of every
 /// corruption that leaves the transcript untouched.
 pub fn run_query_phase() -> QueryReport {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let proof: RProof = prove(&config().0, &air, t, &pv);
     let (ev, verdict) = record(&air, &proof, &pv);
     assert!(verdict.is_ok(), "honest proof must verify");
@@ -1116,8 +1120,9 @@ pub fn run_query_phase() -> QueryReport {
         ("shares under another domain", ComposedBreak::ShareDomain),
     ] {
         let (t, pvb) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(b));
-        let pb: RProof = prove(&config().0, &air, t, &pvb);
-        let (evb, vb) = record(&air, &pb, &pvb);
+        let airb = Air::from_public_values(&pvb);
+        let pb: RProof = prove(&config().0, &airb, t, &pvb);
+        let (evb, vb) = record(&airb, &pb, &pvb);
         let ob = outputs(&evb, pb.opening_proof.1.commit_phase_commits.len());
         let (rb, _) = run_queries(&pb, &ob);
         let held = rb.iter().all(|r| r.failed.is_empty() && r.library_agrees);

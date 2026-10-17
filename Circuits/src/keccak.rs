@@ -10,15 +10,14 @@ use p3_uni_stark::{prove, verify, Proof};
 
 use crate::naysay::Air;
 use crate::prover::{config, p2_config, Config as KConfig, ROWS};
-use crate::trace::composed_case;
+use crate::trace::{composed_batch, composed_case};
 
-/// One 128-row proof under the Keccak configuration, written as the Poseidon2
-/// export is, for the zkVM verifier built against the same configuration.
-/// Returns the bytes written, whether it verifies natively, and the seconds
-/// proving took.
-pub fn export(path: &str) -> (usize, bool, f64) {
-    let air = Air::new();
-    let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+/// One 128-row proof of a batch of k payments under the Keccak configuration,
+/// for the zkVM verifier built against the same configuration. Returns the
+/// bytes written, whether it verifies natively, and the seconds proving took.
+pub fn export(path: &str, k: usize) -> (usize, bool, f64) {
+    let (t, pv) = composed_batch::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, k, None);
+    let air = Air::from_public_values(&pv);
     let cfg = config();
     let start = Instant::now();
     let proof: Proof<KConfig> = prove(&cfg, &air, t, &pv);
@@ -30,58 +29,149 @@ pub fn export(path: &str) -> (usize, bool, f64) {
     (bytes.len(), ok, secs)
 }
 
-/// Where the reserve's tests read the exported payment's statement: what a
-/// settlement of it pays, to whom, when, and the shares it publishes.
+/// Where the reserve's tests read the exported batch's statements: what each
+/// settlement pays, to whom, when, the shares it publishes, its leaf and its
+/// path to the root the answer commits.
 pub const STATEMENT_SOL: &str = "../SourceCode/Reserve/test/Statement.sol";
 
-/// The exported payment's statement as Solidity constants, so a test can
-/// settle exactly what the proof proves and nothing else.
+fn hex64(vals: impl IntoIterator<Item = u64>) -> String {
+    vals.into_iter().map(|v| format!("{v:016x}")).collect()
+}
+
+fn hex32(words: impl IntoIterator<Item = [u8; 32]>) -> String {
+    words.into_iter().flat_map(|w| w.into_iter()).map(|b| format!("{b:02x}")).collect()
+}
+
+/// The exported batch's statements as Solidity constants, so a test can settle
+/// exactly what the proof proves and nothing else. Lists are packed big-endian
+/// in hex and read back by the accessors.
 fn write_statement(pv: &[p3_goldilocks::Goldilocks]) {
-    use crate::composed::{PV_AMOUNT, PV_BASE, PV_ELEMS, PV_RANGE, PV_SECRET_HASH, PV_TIME, PV_UNIT};
-    use crate::trace::PAYEE;
+    use crate::composed::{row_width, GLOBALS, G_BASE, G_RANGE, G_SECRET_HASH, G_UNIT, R_AMOUNT, R_DIGEST, R_TIME};
+    use crate::statement::{committed, leaf, path, payments, published, COMMITTED};
+    use crate::trace::batch_payments;
+    const COVER: usize = 64;
     let v: Vec<u64> = pv.iter().map(|x| x.as_canonical_u64()).collect();
-    let addr: String = PAYEE.iter().map(|b| format!("{b:02x}")).collect();
-    let hash: String = crate::statement::elems_hash(&v[PV_ELEMS..]).iter().map(|b| format!("{b:02x}")).collect();
+    let k = payments(&v, COVER);
+    let depth = k.trailing_zeros() as usize;
+    let rw = row_width(COVER);
+    let field = |i: usize, off: usize| v[GLOBALS + i * rw + off];
+    let pays = batch_payments(k);
+    let mut starts = Vec::with_capacity(k + 1);
+    let mut flat = Vec::new();
+    for i in 0..k {
+        starts.push(flat.len() as u64);
+        flat.extend(published(&v, COVER, i));
+    }
+    starts.push(flat.len() as u64);
+    let payees: String = pays.iter().flat_map(|(_, a)| a.iter()).map(|b| format!("{b:02x}")).collect();
     let mut s = String::new();
     s.push_str("// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\n\n");
-    s.push_str("/// The statement of the payment proof `delegation-circuit export-keccak` wrote.\n");
+    s.push_str("/// The statements of the batch proof `delegation-circuit export-keccak` wrote.\n");
     s.push_str("/// Generated with the proof; do not edit.\nlibrary Statement {\n");
-    s.push_str(&format!("    uint64 internal constant DIGEST = {};\n", v[0]));
-    s.push_str(&format!("    uint64 internal constant AMOUNT = {};\n", v[PV_AMOUNT]));
-    s.push_str(&format!("    address internal constant PAYEE = address(uint160(0x00{addr}));\n"));
-    s.push_str(&format!("    uint64 internal constant TIME = {};\n", v[PV_TIME]));
-    s.push_str(&format!("    uint64 internal constant UNIT = {};\n", v[PV_UNIT]));
-    s.push_str(&format!("    uint64 internal constant RANGE_BASE = {};\n", v[PV_BASE]));
-    s.push_str(&format!("    uint64 internal constant RANGE_LEN = {};\n", v[PV_RANGE]));
-    let lanes: String = (0..4).rev().map(|j| format!("{:016x}", v[PV_SECRET_HASH + j])).collect();
+    s.push_str(&format!("    uint256 internal constant PAYMENTS = {k};\n"));
+    s.push_str(&format!("    uint256 internal constant DEPTH = {depth};\n"));
+    s.push_str(&format!("    uint256 internal constant LEAF = {COMMITTED};\n"));
+    s.push_str(&format!("    uint64 internal constant UNIT = {};\n", v[G_UNIT]));
+    s.push_str(&format!("    uint64 internal constant RANGE_BASE = {};\n", v[G_BASE]));
+    s.push_str(&format!("    uint64 internal constant RANGE_LEN = {};\n", v[G_RANGE]));
+    let lanes: String = (0..4).rev().map(|j| format!("{:016x}", v[G_SECRET_HASH + j])).collect();
     s.push_str("    /// H(s), four lanes packed low lane first, as the reserve stores it.\n");
     s.push_str(&format!("    bytes32 internal constant SECRET_HASH = 0x{lanes};\n"));
     let sec = crate::spend_trace::SECRET;
     s.push_str(&format!("    uint64 internal constant SECRET0 = {};\n", sec[0]));
     s.push_str(&format!("    uint64 internal constant SECRET1 = {};\n", sec[1]));
-    s.push_str(&format!("    bytes32 internal constant ELEMS_HASH = 0x{hash};\n\n"));
-    let c = crate::statement::committed(&v);
-    s.push_str("    /// What the dispute program commits for this payment, as the guest computes it.\n");
-    s.push_str("    function committed() internal pure returns (uint64[] memory c) {\n");
-    s.push_str(&format!("        c = new uint64[]({});\n", c.len()));
-    for (i, x) in c.iter().enumerate() {
-        s.push_str(&format!("        c[{i}] = {x};\n"));
+    s.push_str(&format!("    bytes32 internal constant ROOT = 0x{};\n\n", hex32([committed(&v, COVER)])));
+    s.push_str(&format!("    bytes internal constant DIGESTS = hex\"{}\";\n", hex64((0..k).map(|i| field(i, R_DIGEST)))));
+    s.push_str(&format!("    bytes internal constant AMOUNTS = hex\"{}\";\n", hex64((0..k).map(|i| field(i, R_AMOUNT)))));
+    s.push_str(&format!("    bytes internal constant TIMES = hex\"{}\";\n", hex64((0..k).map(|i| field(i, R_TIME)))));
+    s.push_str(&format!("    bytes internal constant PAYEES = hex\"{payees}\";\n"));
+    s.push_str(&format!("    bytes internal constant STARTS = hex\"{}\";\n", hex64(starts)));
+    s.push_str(&format!("    bytes internal constant ELEMS = hex\"{}\";\n", hex64(flat)));
+    s.push_str(&format!("    bytes internal constant LEAVES = hex\"{}\";\n", hex64((0..k).flat_map(|i| leaf(&v, COVER, i)))));
+    s.push_str(&format!("    bytes internal constant PATHS = hex\"{}\";\n\n", hex32((0..k).flat_map(|i| path(&v, COVER, i)))));
+    s.push_str(r#"    /// Every list at once. Each read of a constant copies it whole, so a
+    /// caller reading many payments loads once and reads from the copy.
+    struct Data {
+        bytes digests;
+        bytes amounts;
+        bytes times;
+        bytes payees;
+        bytes starts;
+        bytes elems;
+        bytes leaves;
+        bytes paths;
     }
-    s.push_str("    }\n\n");
-    s.push_str("    function elems() internal pure returns (uint64[] memory e) {\n");
-    s.push_str(&format!("        e = new uint64[]({});\n", v.len() - PV_ELEMS));
-    for (i, x) in v[PV_ELEMS..].iter().enumerate() {
-        s.push_str(&format!("        e[{i}] = {x};\n"));
+
+    function load() internal pure returns (Data memory d) {
+        d = Data(DIGESTS, AMOUNTS, TIMES, PAYEES, STARTS, ELEMS, LEAVES, PATHS);
     }
-    s.push_str("    }\n}\n");
+
+    function _u64(bytes memory b, uint256 i) private pure returns (uint64 x) {
+        assembly {
+            x := shr(192, mload(add(add(b, 32), mul(i, 8))))
+        }
+    }
+
+    function digest(Data memory d, uint256 i) internal pure returns (uint64) {
+        return _u64(d.digests, i);
+    }
+
+    function amount(Data memory d, uint256 i) internal pure returns (uint64) {
+        return _u64(d.amounts, i);
+    }
+
+    function time(Data memory d, uint256 i) internal pure returns (uint64) {
+        return _u64(d.times, i);
+    }
+
+    function payee(Data memory d, uint256 i) internal pure returns (address a) {
+        bytes memory b = d.payees;
+        assembly {
+            a := shr(96, mload(add(add(b, 32), mul(i, 20))))
+        }
+    }
+
+    /// The shares and nullifiers payment i publishes: its first n slots.
+    function elems(Data memory d, uint256 i) internal pure returns (uint64[] memory e) {
+        uint256 a = _u64(d.starts, i);
+        uint256 z = _u64(d.starts, i + 1);
+        e = new uint64[](z - a);
+        for (uint256 j = 0; j < z - a; j++) {
+            e[j] = _u64(d.elems, a + j);
+        }
+    }
+
+    /// Payment i's leaf, as the guest computes it.
+    function leaf(Data memory d, uint256 i) internal pure returns (uint64[] memory c) {
+        c = new uint64[](LEAF);
+        for (uint256 j = 0; j < LEAF; j++) {
+            c[j] = _u64(d.leaves, i * LEAF + j);
+        }
+    }
+
+    /// The siblings from payment i's leaf to ROOT, lowest first.
+    function path(Data memory d, uint256 i) internal pure returns (bytes32[] memory p) {
+        bytes memory all = d.paths;
+        p = new bytes32[](DEPTH);
+        for (uint256 j = 0; j < DEPTH; j++) {
+            bytes32 w;
+            uint256 at = 32 + (i * DEPTH + j) * 32;
+            assembly {
+                w := mload(add(all, at))
+            }
+            p[j] = w;
+        }
+    }
+}
+"#);
     std::fs::write(STATEMENT_SOL, s).expect("write Statement.sol");
 }
 
 /// Proving and verifying one payment under each hash, timed in batches whose
 /// order rotates, as the cost table is. Milliseconds.
 pub fn hash_cost(batches: usize, per_batch: usize) {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
     let pcfg = p2_config();
     let kcfg = config();
     let pproof = prove(&pcfg, &air, t.clone(), &pv);
@@ -148,22 +238,4 @@ pub fn hash_cost(batches: usize, per_batch: usize) {
         let b: Vec<String> = batch_med[k].iter().map(|x| format!("{x:.0}")).collect();
         println!("  {name} per-batch prove medians: {}", b.join(" "));
     }
-}
-
-/// `n` fresh proofs of the same payment, each serialised as `export` writes
-/// one, gathered into one file for the batch verifier.
-pub fn export_batch(path: &str, n: usize) -> (usize, bool) {
-    let air = Air::new();
-    let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
-    let mut all: Vec<Vec<u8>> = Vec::with_capacity(n);
-    let mut ok = true;
-    for _ in 0..n {
-        let proof: Proof<KConfig> = prove(&config(), &air, t.clone(), &pv);
-        ok &= verify(&config(), &air, &proof, &pv).is_ok();
-        all.push(bincode::serialize(&(&proof, &pv)).expect("serialise"));
-    }
-    let bytes = bincode::serialize(&all).expect("serialise");
-    std::fs::write(path, &bytes).expect("write batch");
-    write_statement(&pv);
-    (bytes.len(), ok)
 }

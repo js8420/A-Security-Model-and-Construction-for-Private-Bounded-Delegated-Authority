@@ -10,7 +10,8 @@ use crate::spend::{
     SpendAir, COL_BASE, COL_DOM, COL_M, COL_ROOT_KEY, COL_SECRET, COL_UNITS, NODE_NULL, NODE_SHARE,
     PER_NODE, SECRET_ELEMS,
 };
-use crate::whole::{WholeAir, PAYEE_LIMBS, PUBLIC_VALUES};
+use crate::merkle::DIGEST;
+use crate::whole::{Anchors, WholeAir, PAYEE_LIMBS};
 
 type F = Goldilocks;
 
@@ -49,6 +50,8 @@ pub struct ComposedAir<
     whole: WholeAir<R, MD, RD>,
     spend: SpendAir<R, DEPTH, COVER>,
     hash: HashAir<R>,
+    rows: usize,
+    periodic: Vec<Vec<F>>,
 }
 
 /// units * u - amount; amount - (units - 1) * u - 1; and the cap fitting inside
@@ -64,31 +67,39 @@ pub const RANGE_BLOCKS: usize = 3;
 /// unit size.
 pub const EXTRA_COLS: usize = 1;
 
-/// The statement a settlement is checked against, in public-value order: the
-/// compliance half's nine values, the domain, then everything the reserve pays
-/// or publishes. The reserve rebuilds each of these from its own record, so
-/// a proof of one payment cannot answer for a settlement that paid a different
-/// amount, to a different address, at a different time, or published shares
-/// the proof did not compute.
-pub const PV_DOMAIN: usize = PUBLIC_VALUES;
-pub const PV_AMOUNT: usize = PV_DOMAIN + 1;
-pub const PV_PAYEE: usize = PV_AMOUNT + 1;
-pub const PV_TIME: usize = PV_PAYEE + PAYEE_LIMBS;
-/// The delegation's terms the reserve records in the clear: the unit size,
-/// the first index of its unit range and the range's declared length, and
-/// H(s). Each was a free witness before, and each freedom was an overdraft:
-/// a unit size or a base chosen per payment moves payments into disjoint
-/// index spaces, and a secret chosen per payment puts their shares on
-/// different lines, so no unit is ever consumed twice under one key.
-pub const PV_UNIT: usize = PV_TIME + 1;
-pub const PV_BASE: usize = PV_UNIT + 1;
-pub const PV_RANGE: usize = PV_BASE + 1;
-pub const PV_SECRET_HASH: usize = PV_RANGE + 1;
+/// The public values are the delegation's terms once, then one block per
+/// payment. A proof is of a batch: row i of the trace is payment i mod the
+/// batch size, and each row is bound to its own block through periodic
+/// columns the verifier evaluates itself, so one proof carries up to one
+/// payment per row at no extra height. A batch of one is the single payment.
+///
+/// The terms are those the reserve records in the clear: D.com, the unit size,
+/// the first index of the unit range and its declared length, and H(s). Each
+/// was a free witness once, and each freedom was an overdraft.
+pub const G_COM: usize = 0;
+pub const G_UNIT: usize = G_COM + DIGEST;
+pub const G_BASE: usize = G_UNIT + 1;
+pub const G_RANGE: usize = G_BASE + 1;
+pub const G_SECRET_HASH: usize = G_RANGE + 1;
 pub const SECRET_HASH_LANES: usize = 4;
-/// Every slot's two share lanes and its nullifier, slot by slot, in the order
-/// Settle publishes them.
-pub const PV_ELEMS: usize = PV_SECRET_HASH + SECRET_HASH_LANES;
+pub const GLOBALS: usize = G_SECRET_HASH + SECRET_HASH_LANES;
+
+/// A payment's block: what the reserve pays, records or publishes for it. The
+/// payload digest, the revocation root it was proved against, the domain, the
+/// amount, the payee's limbs, the signed time, and every slot's two share
+/// lanes and nullifier, slot by slot.
+pub const R_DIGEST: usize = 0;
+pub const R_ROOT: usize = R_DIGEST + 1;
+pub const R_DOMAIN: usize = R_ROOT + DIGEST;
+pub const R_AMOUNT: usize = R_DOMAIN + 1;
+pub const R_PAYEE: usize = R_AMOUNT + 1;
+pub const R_TIME: usize = R_PAYEE + PAYEE_LIMBS;
+pub const R_ELEMS: usize = R_TIME + 1;
 pub const ELEMS_PER_SLOT: usize = 3;
+
+pub const fn row_width(cover: usize) -> usize {
+    R_ELEMS + ELEMS_PER_SLOT * cover
+}
 
 impl<
         const R: usize,
@@ -98,11 +109,32 @@ impl<
         const COVER: usize,
     > ComposedAir<R, MD, RD, DEPTH, COVER>
 {
+    /// A batch of one, with every payment value zero: the shape the
+    /// measurements and the degree check need, not a statement to prove.
     pub fn new() -> Self {
+        Self::with_statements(1, vec![F::ZERO; row_width(COVER)])
+    }
+
+    /// The circuit proved against these public values: the terms, then one
+    /// block per payment. The batch size is read from their length and must be
+    /// a power of two no larger than the trace.
+    pub fn from_public_values(pv: &[F]) -> Self {
+        let rw = row_width(COVER);
+        assert!(pv.len() > GLOBALS && (pv.len() - GLOBALS) % rw == 0, "public values are not terms and whole payments");
+        let rows = (pv.len() - GLOBALS) / rw;
+        Self::with_statements(rows, pv[GLOBALS..].to_vec())
+    }
+
+    fn with_statements(rows: usize, blocks: Vec<F>) -> Self {
+        assert!(rows.is_power_of_two(), "a batch is a power of two of payments");
+        let rw = row_width(COVER);
+        let periodic = (0..rw).map(|j| (0..rows).map(|r| blocks[r * rw + j]).collect()).collect();
         Self {
             whole: WholeAir::<R, MD, RD>::new(),
             spend: SpendAir::<R, DEPTH, COVER>::new(),
             hash: new_hash_air::<R>(),
+            rows,
+            periodic,
         }
     }
 
@@ -145,7 +177,18 @@ impl<
     /// reserve pays and publishes. The spend component reads the digest and the
     /// domain, so the two halves are proved against one public statement.
     fn num_public_values(&self) -> usize {
-        PV_ELEMS + ELEMS_PER_SLOT * COVER
+        GLOBALS + self.rows * row_width(COVER)
+    }
+
+    /// Each payment's block as columns the verifier evaluates at the
+    /// out-of-domain point itself. They are also public values, so the
+    /// Fiat-Shamir transcript absorbs them before any challenge is drawn.
+    fn num_periodic_columns(&self) -> usize {
+        row_width(COVER)
+    }
+
+    fn periodic_columns(&self) -> Vec<Vec<F>> {
+        self.periodic.clone()
     }
 
     /// The S-box registers alone set the degree: 7 with none, 3 with one.
@@ -168,9 +211,28 @@ where
 {
     fn eval(&self, builder: &mut AB) {
         let w = self.whole_width();
+        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
+        let per: Vec<AB::Expr> = builder.periodic_values().iter().map(|v| (*v).into()).collect();
 
-        self.whole.constrain_payee(builder, 0, PV_PAYEE);
-        self.spend.constrain_declared(builder, w, PV_DOMAIN, PV_RANGE);
+        self.whole.constrain_anchored(
+            builder,
+            0,
+            true,
+            Anchors {
+                digest: per[R_DIGEST].clone(),
+                rroot: per[R_ROOT..R_ROOT + DIGEST].to_vec(),
+                com: pv[G_COM..G_COM + DIGEST].to_vec(),
+                payee: Some(per[R_PAYEE..R_PAYEE + PAYEE_LIMBS].to_vec()),
+            },
+        );
+        self.spend.constrain_anchored(
+            builder,
+            w,
+            false,
+            per[R_DIGEST].clone(),
+            per[R_DOMAIN].clone(),
+            Some(pv[G_RANGE].clone()),
+        );
         let sb = self.secret_block();
         {
             let bw = self.block_width();
@@ -178,13 +240,12 @@ where
             self.hash.eval(&mut sub);
         }
 
-        let pv: Vec<AB::Expr> = builder.public_values().iter().map(|v| (*v).into()).collect();
         let row = builder.main().current_slice().to_vec();
 
-        builder.assert_eq(row[COL_AMOUNT].clone().into(), pv[PV_AMOUNT].clone());
-        builder.assert_eq(row[COL_T].clone().into(), pv[PV_TIME].clone());
-        builder.assert_eq(row[self.unit_col()].clone().into(), pv[PV_UNIT].clone());
-        builder.assert_eq(row[w + COL_BASE].clone().into(), pv[PV_BASE].clone());
+        builder.assert_eq(row[COL_AMOUNT].clone().into(), per[R_AMOUNT].clone());
+        builder.assert_eq(row[COL_T].clone().into(), per[R_TIME].clone());
+        builder.assert_eq(row[self.unit_col()].clone().into(), pv[G_UNIT].clone());
+        builder.assert_eq(row[w + COL_BASE].clone().into(), pv[G_BASE].clone());
 
         // H(s) and the root key are one permutation of the secret: the secret
         // in the first lanes, the separator after it, zeros elsewhere. Its
@@ -202,15 +263,15 @@ where
             builder.assert_eq(row[out + j].clone(), row[w + COL_ROOT_KEY + j].clone());
         }
         for j in 0..SECRET_HASH_LANES {
-            builder.assert_eq(row[out + SECRET_ELEMS + j].clone().into(), pv[PV_SECRET_HASH + j].clone());
+            builder.assert_eq(row[out + SECRET_ELEMS + j].clone().into(), pv[G_SECRET_HASH + j].clone());
         }
         let nb = w + self.spend.node_base_pub();
         for c in 0..COVER {
             let n = nb + c * PER_NODE;
-            let at = PV_ELEMS + ELEMS_PER_SLOT * c;
-            builder.assert_eq(row[n + NODE_SHARE].clone().into(), pv[at].clone());
-            builder.assert_eq(row[n + NODE_SHARE + 1].clone().into(), pv[at + 1].clone());
-            builder.assert_eq(row[n + NODE_NULL].clone().into(), pv[at + 2].clone());
+            let at = R_ELEMS + ELEMS_PER_SLOT * c;
+            builder.assert_eq(row[n + NODE_SHARE].clone().into(), per[at].clone());
+            builder.assert_eq(row[n + NODE_SHARE + 1].clone().into(), per[at + 1].clone());
+            builder.assert_eq(row[n + NODE_NULL].clone().into(), per[at + 2].clone());
         }
 
         let u_col = self.unit_col();
@@ -283,20 +344,26 @@ pub fn check_degree() -> bool {
     fn one<const R: usize, const MD: usize, const RD: usize, const DEPTH: usize, const COVER: usize>(
         label: &str,
     ) -> bool {
-        let a = ComposedAir::<R, MD, RD, DEPTH, COVER>::new();
-        let layout = AirLayout::from_air::<F>(&a);
-        let symbolic = get_max_constraint_degree::<F, _>(&a, layout);
-        let stated = BaseAir::<F>::max_constraint_degree(&a);
-        let mut agree = stated == Some(symbolic);
-        for is_zk in [0usize, 1] {
-            let derived = ((symbolic + is_zk).max(2) - 1).next_power_of_two().trailing_zeros() as usize;
-            let used = p3_uni_stark::get_log_num_quotient_chunks::<F, _>(&a, layout, is_zk);
-            agree &= derived == used;
+        let mut agree = true;
+        for rows in [1usize, 128] {
+            let a = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(
+                &vec![F::ZERO; GLOBALS + rows * row_width(COVER)],
+            );
+            let layout = AirLayout::from_air::<F>(&a);
+            let symbolic = get_max_constraint_degree::<F, _>(&a, layout);
+            let stated = BaseAir::<F>::max_constraint_degree(&a);
+            let mut here = stated == Some(symbolic);
+            for is_zk in [0usize, 1] {
+                let derived = ((symbolic + is_zk).max(2) - 1).next_power_of_two().trailing_zeros() as usize;
+                let used = p3_uni_stark::get_log_num_quotient_chunks::<F, _>(&a, layout, is_zk);
+                here &= derived == used;
+            }
+            println!("  {:<22} {:>5} {:>9} {:>9} {:>7}", label, rows, symbolic, format!("{stated:?}"), here);
+            agree &= here;
         }
-        println!("  {:<28} {:>9} {:>9} {:>7}", label, symbolic, format!("{stated:?}"), agree);
         agree
     }
-    println!("  {:<28} {:>9} {:>9} {:>7}", "registers / MD RD DEPTH COVER", "symbolic", "stated", "agree");
+    println!("  {:<22} {:>5} {:>9} {:>9} {:>7}", "registers / MD RD D C", "batch", "symbolic", "stated", "agree");
     let mut ok = true;
     ok &= one::<0, 16, 32, 16, 64>("0 / 16 32 16 64");
     ok &= one::<1, 16, 32, 16, 64>("1 / 16 32 16 64");

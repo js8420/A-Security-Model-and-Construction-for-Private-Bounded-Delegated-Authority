@@ -1,0 +1,30 @@
+﻿MockToken                           375695 0x1
+Poseidon2Goldilocks                    871186 0x1
+Reserve                            2191537 0x1
+SP1Verifier                        1508005 0x1
+ValidityDispute                    1914651 0x1
+Reserve          setDispute          47606 0x1
+MockToken        mint                68279 0x1
+MockToken        mint                51119 0x1
+MockToken        approve             46463 0x1
+Reserve          register           307356 0x1
+Reserve          settleLogged       118093 0x1
+SP1Verifier      verifyProof        246696 0x1
+ValidityDispute  open               106914 0x1
+ValidityDispute  answer             320230 0x1
+MockToken                           375695 0x1
+Poseidon2Goldilocks                    871186 0x1
+Reserve                            2191537 0x1
+ValidityDispute                    1914603 0x1
+Reserve          setDispute          47618 0x1
+MockToken        mint                68279 0x1
+MockToken        mint                51119 0x1
+MockToken        approve             46463 0x1
+Reserve          register           307356 0x1
+Reserve          settleLogged       118093 0x1
+ValidityDispute  open               106914 0x1
+MockToken        mint                34019 0x1
+MockToken        mint                34019 0x1
+MockToken        mint                34019 0x1
+ValidityDispute  expire              73506 0x1
+ValidityDispute  withdraw            28540 0x1

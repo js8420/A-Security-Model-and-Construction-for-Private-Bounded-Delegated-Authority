@@ -4,27 +4,20 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {Statement} from "./Statement.sol";
 
-/// The Groth16 proofs Pete made of the dispute verifiers, read from the files
-/// the prove binary wrote, and the statement of the payment proof they verify.
+/// The Groth16 proof Pete made of the dispute verifier on the exported batch
+/// proof, read from the file the prove binary wrote, and the statements of the
+/// batch's payments it commits to.
 abstract contract Groth16Result is Test {
-    string constant DIR = "../../WorkingHistory/groth16_s5b/";
-    string constant SINGLE = "../../WorkingHistory/groth16_s5b/out_s5b_keccak_a/onchain.txt";
-    uint256 constant VALUES = 26;
+    string constant RESULT = "../../WorkingHistory/groth16_s6/out_s6_batch_a/onchain.txt";
 
     bytes32 vkey;
     bytes publicValues;
     bytes proof;
 
     function _load() internal {
-        vkey = vm.parseBytes32(_field(SINGLE, "vkey"));
-        publicValues = vm.parseBytes(_field(SINGLE, "public_values"));
-        proof = vm.parseBytes(_field(SINGLE, "proof"));
-    }
-
-    function _batchFile(uint256 k) internal pure returns (string memory) {
-        if (k == 1) return string.concat(DIR, "out_s5b_batch1_a/onchain.txt");
-        if (k == 2) return string.concat(DIR, "out_s5b_batch2_a/onchain.txt");
-        return string.concat(DIR, "out_s5b_batch4_a/onchain.txt");
+        vkey = vm.parseBytes32(_field(RESULT, "vkey"));
+        publicValues = vm.parseBytes(_field(RESULT, "public_values"));
+        proof = vm.parseBytes(_field(RESULT, "proof"));
     }
 
     /// Reads the whole file at once: a line cursor is shared by every test
@@ -38,41 +31,104 @@ abstract contract Groth16Result is Test {
         revert(string.concat("no ", key, " in ", file));
     }
 
-    /// Public value i, decoded from the little-endian bincode the guest commits.
-    function _pv(uint256 i) internal view returns (uint64 x) {
-        for (uint64 b = 0; b < 8; ++b) x |= uint64(uint8(publicValues[8 * (i + 1) + b])) << (8 * b);
+    /// The batch's statements, read once from Statement.sol into storage so
+    /// that a test reading many payments does not copy the lists each time.
+    uint64[] digests;
+    uint64[] amounts;
+    uint64[] times;
+    address[] payees;
+    mapping(uint256 => uint64[]) elemsOf;
+    mapping(uint256 => uint64[]) leafOf;
+    mapping(uint256 => bytes32[]) pathOf;
+
+    function _cache() internal {
+        Statement.Data memory d = Statement.load();
+        for (uint256 i = 0; i < Statement.PAYMENTS; ++i) {
+            digests.push(Statement.digest(d, i));
+            amounts.push(Statement.amount(d, i));
+            times.push(Statement.time(d, i));
+            payees.push(Statement.payee(d, i));
+            elemsOf[i] = Statement.elems(d, i);
+            leafOf[i] = Statement.leaf(d, i);
+            pathOf[i] = Statement.path(d, i);
+        }
     }
 
-    /// Four public values from `first`, packed low lane first.
-    function _lanes(uint256 first) internal view returns (bytes32) {
+    function _digest(uint256 i) internal view returns (uint64) {
+        return digests[i];
+    }
+
+    function _amount(uint256 i) internal view returns (uint64) {
+        return amounts[i];
+    }
+
+    function _time(uint256 i) internal view returns (uint64) {
+        return times[i];
+    }
+
+    function _payee(uint256 i) internal view returns (address) {
+        return payees[i];
+    }
+
+    function _elems(uint256 i) internal view returns (uint64[] memory) {
+        return elemsOf[i];
+    }
+
+    function _leaf(uint256 i) internal view returns (uint64[] memory) {
+        return leafOf[i];
+    }
+
+    function _path(uint256 i) internal view returns (bytes32[] memory) {
+        return pathOf[i];
+    }
+
+    /// Four values of a leaf from `first`, packed low lane first.
+    function _lanes(uint64[] memory leaf, uint256 first) internal pure returns (bytes32) {
         uint256 w;
-        for (uint256 j = 0; j < 4; ++j) w |= uint256(_pv(first + j)) << (64 * j);
+        for (uint256 j = 0; j < 4; ++j) w |= uint256(leaf[first + j]) << (64 * j);
         return bytes32(w);
     }
 
-    /// The committed hash of the shares, from its four big-endian words.
-    function _elemsHash() internal view returns (bytes32) {
-        uint256 w;
-        for (uint256 j = 0; j < 4; ++j) w |= uint256(_pv(22 + j)) << (192 - 64 * j);
-        return bytes32(w);
+    /// The delegation commitment and the revocation root every leaf carries.
+    function _com() internal view returns (bytes32) {
+        return _lanes(leafOf[0], 5);
     }
 
-    /// The proof is of the exported statement and nothing else: same digest,
-    /// amount, payee, time, unit, range, secret hash, and the hash of exactly
-    /// the shares Statement.sol lists.
+    function _root0() internal view returns (bytes32) {
+        return _lanes(leafOf[0], 1);
+    }
+
+    /// The root the leaf of payment i reaches along its path.
+    function _rootFrom(uint256 i) internal view returns (bytes32 h) {
+        uint64[] memory l = leafOf[i];
+        uint256[] memory w = new uint256[](l.length);
+        for (uint256 j = 0; j < l.length; ++j) w[j] = l[j];
+        h = keccak256(abi.encodePacked(w));
+        bytes32[] memory p = pathOf[i];
+        for (uint256 j = 0; j < p.length; ++j) {
+            h = (i >> j) & 1 == 0 ? keccak256(abi.encodePacked(h, p[j])) : keccak256(abi.encodePacked(p[j], h));
+        }
+    }
+
+    /// The proof commits the root of exactly the exported statements: every
+    /// leaf carries its payment's digest, amount, time, the delegation's terms
+    /// and the hash of exactly the shares Statement.sol lists, and reaches the
+    /// root the proof commits. Reads the cache `_cache` fills.
     function _checkStatement() internal view {
-        uint256 a = uint160(Statement.PAYEE);
-        require(_pv(0) == Statement.DIGEST, "digest");
-        require(_pv(10) == Statement.AMOUNT, "amount");
-        require(_pv(11) == a & ((1 << 56) - 1), "payee limb 0");
-        require(_pv(12) == (a >> 56) & ((1 << 56) - 1), "payee limb 1");
-        require(_pv(13) == a >> 112, "payee limb 2");
-        require(_pv(14) == Statement.TIME, "time");
-        require(_pv(15) == Statement.UNIT, "unit");
-        require(_pv(16) == Statement.RANGE_BASE, "range base");
-        require(_pv(17) == Statement.RANGE_LEN, "range length");
-        require(_lanes(18) == Statement.SECRET_HASH, "secret hash");
-        require(_elemsHash() == Statement.ELEMS_HASH, "shares hash");
-        require(keccak256(abi.encodePacked(Statement.elems())) == Statement.ELEMS_HASH, "shares");
+        require(publicValues.length == 32 && bytes32(publicValues) == Statement.ROOT, "root");
+        bytes32 com = _com();
+        bytes32 root0 = _root0();
+        for (uint256 i = 0; i < Statement.PAYMENTS; ++i) {
+            uint64[] memory l = leafOf[i];
+            require(l[0] == digests[i], "digest");
+            require(l[10] == amounts[i], "amount");
+            require(l[14] == times[i], "time");
+            require(l[15] == Statement.UNIT && l[16] == Statement.RANGE_BASE && l[17] == Statement.RANGE_LEN, "terms");
+            require(_lanes(l, 18) == Statement.SECRET_HASH, "secret hash");
+            require(_lanes(l, 5) == com && _lanes(l, 1) == root0, "delegation");
+            uint256 h = uint256(keccak256(abi.encodePacked(elemsOf[i])));
+            for (uint256 j = 0; j < 4; ++j) require(l[22 + j] == (h >> (192 - 64 * j)) & 0xFFFFFFFFFFFFFFFF, "shares hash");
+            require(_rootFrom(i) == Statement.ROOT, "path");
+        }
     }
 }

@@ -1,0 +1,16 @@
+﻿STATED CONSTRAINT DEGREE AGAINST SYMBOLIC EVALUATION, COMPOSED CIRCUIT
+==============================================================================
+  registers / MD RD D C  batch  symbolic    stated   agree
+  0 / 16 32 16 64            1         7   Some(7)    true
+  0 / 16 32 16 64          128         7   Some(7)    true
+  1 / 16 32 16 64            1         3   Some(3)    true
+  1 / 16 32 16 64          128         3   Some(3)    true
+  0 / 16 32 16 14            1         7   Some(7)    true
+  0 / 16 32 16 14          128         7   Some(7)    true
+  1 / 16 32 16 14            1         3   Some(3)    true
+  1 / 16 32 16 14          128         3   Some(3)    true
+  0 / 8 8 16 14              1         7   Some(7)    true
+  0 / 8 8 16 14            128         7   Some(7)    true
+  1 / 8 8 16 14              1         3   Some(3)    true
+  1 / 8 8 16 14            128         3   Some(3)    true
+  stated degree equals the symbolic degree everywhere: true

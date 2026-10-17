@@ -390,8 +390,8 @@ pub struct ForgeReport {
 }
 
 pub fn run() -> ForgeReport {
-    let air = Air::new();
     let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, None);
+    let air = Air::from_public_values(&pv);
 
     // The port of the opening, telling no lie, against Plonky3's verifier.
     let honest = forge(&air, t.clone(), &pv, Lie::None);
@@ -399,7 +399,8 @@ pub fn run() -> ForgeReport {
 
     let mut rows = Vec::new();
     let mut row = |label: &'static str, trace: &RowMajorMatrix<Val>, pv: &[Val], lie: Lie, times: usize| {
-        let runs = (0..times).map(|_| judge(&air, &forge(&air, trace.clone(), pv, lie), pv)).collect();
+        let a = Air::from_public_values(pv);
+        let runs = (0..times).map(|_| judge(&a, &forge(&a, trace.clone(), pv, lie), pv)).collect();
         rows.push(Row { label, lie, runs });
     };
 

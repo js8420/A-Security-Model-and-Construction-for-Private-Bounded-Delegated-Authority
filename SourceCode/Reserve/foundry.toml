@@ -11,5 +11,5 @@ gas_reports = ["Reserve"]
 # and read the Groth16 proof Pete made.
 fs_permissions = [
     { access = "read", path = "./lib/permit2/out" },
-    { access = "read", path = "../../WorkingHistory/groth16_s5b" },
+    { access = "read", path = "../../WorkingHistory/groth16_s6" },
 ]

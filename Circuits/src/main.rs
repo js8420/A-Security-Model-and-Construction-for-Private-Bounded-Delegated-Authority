@@ -380,6 +380,7 @@ fn controls() {
         ("  ... range base moved", spend_trace::SpendBreak::RangeBase),
         ("  ... a slot spanning two units", spend_trace::SpendBreak::CoarseSpan),
         ("  ... run ends past the budget", spend_trace::SpendBreak::RunPastBudget),
+        ("  ... a padded slot before a real one", spend_trace::SpendBreak::SlotGap),
     ] {
         check(label, prover::roundtrip_spend::<{ prover::REGISTERS }, 16, 14>(prover::ROWS, Some(b), pl, dm), false);
     }
@@ -418,11 +419,22 @@ fn controls() {
         let (got, _) = prover::roundtrip_composed_air::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, Some(b));
         check(label, got, false);
     }
+    for (label, k, b, want) in [
+        ("COMPOSED BATCH, 2 payments in 128 rows", 2, None, true),
+        ("COMPOSED BATCH, 8 payments in 128 rows", 8, None, true),
+        ("COMPOSED BATCH, 128 payments in 128 rows", 128, None, true),
+        ("  ... two payments' statements exchanged", 8, Some(trace::ComposedBreak::StatementRow), false),
+        ("  ... one payment's amount altered", 8, Some(trace::ComposedBreak::StatementAmount), false),
+        ("  ... one payment's share altered", 8, Some(trace::ComposedBreak::StatementShare), false),
+        ("  ... one payment's run moved off its C8 run", 8, Some(trace::ComposedBreak::RunStartMismatch), false),
+    ] {
+        check(label, prover::roundtrip_batch::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, k, b), want);
+    }
     {
         use p3_field::PrimeField64;
-        let words = |b: Option<trace::ComposedBreak>| -> Vec<u64> {
-            let (_, pv) = trace::composed_case::<{ prover::REGISTERS }, 16, 32, 16, 64>(1, b);
-            statement::committed(&pv.iter().map(|x| x.as_canonical_u64()).collect::<Vec<u64>>())
+        let values = |k: usize, b: Option<trace::ComposedBreak>| -> Vec<u64> {
+            let (_, pv) = trace::composed_batch::<{ prover::REGISTERS }, 16, 32, 16, 64>(1usize.max(k), k, b);
+            pv.iter().map(|x| x.as_canonical_u64()).collect()
         };
         let l = trace::payee_limbs(&trace::PAYEE);
         let mut back = [0u8; 20];
@@ -431,13 +443,27 @@ fn controls() {
             back[19 - b / 8] |= bit << (b % 8);
         }
         check("payee limbs recompose to the address", back == trace::PAYEE && l.iter().all(|&x| x < 1 << 56), true);
-        let honest = words(None);
-        let swapped = words(Some(trace::ComposedBreak::StatementShare));
-        check("an answer commits the statement in the reserve's layout",
-              honest.len() == statement::COMMITTED, true);
-        check("  ... one substituted share changes the committed hash",
-              honest[..composed::PV_ELEMS] == swapped[..composed::PV_ELEMS]
-                  && honest[composed::PV_ELEMS..] != swapped[composed::PV_ELEMS..], true);
+        let honest = values(128, None);
+        let swapped = values(128, Some(trace::ComposedBreak::StatementShare));
+        let root = statement::committed(&honest, 64);
+        check("an answer commits a leaf per payment in the reserve's layout",
+              statement::leaf(&honest, 64, 0).len() == statement::COMMITTED, true);
+        check("  ... every payment's path reaches the committed root",
+              (0..128).all(|i| statement::root_from(&statement::leaf(&honest, 64, i), i, &statement::path(&honest, 64, i)) == root), true);
+        check("  ... a leaf at another position does not",
+              statement::root_from(&statement::leaf(&honest, 64, 0), 1, &statement::path(&honest, 64, 1)) == root, false);
+        check("  ... one substituted share changes the leaf's hash and the root",
+              statement::leaf(&honest, 64, 0)[..statement::LEAF_ELEMS_HASH] == statement::leaf(&swapped, 64, 0)[..statement::LEAF_ELEMS_HASH]
+                  && statement::leaf(&honest, 64, 0) != statement::leaf(&swapped, 64, 0)
+                  && statement::committed(&swapped, 64) != root, true);
+        check("  ... each payment publishes exactly 3 ceil(a/u) values",
+              (0..128).all(|i| {
+                  let b = composed::GLOBALS + i * composed::row_width(64);
+                  statement::published(&honest, 64, i).len()
+                      == 3 * honest[b + composed::R_AMOUNT].div_ceil(honest[composed::G_UNIT]) as usize
+              }), true);
+        check("  ... payments consume disjoint successive runs",
+              trace::batch_payments(128).windows(2).all(|w| w[1].0.run.0 == w[0].0.run.1 + 1), true);
     }
     let (ok32, ms32) = prover::roundtrip_whole::<{ prover::REGISTERS }>(prover::ROWS, None);
     check("WHOLE CIRCUIT at full parameters", ok32, true);
@@ -479,10 +505,11 @@ fn main() {
         println!("  proof and public values written to {path}: {bytes} bytes, verifies natively {ok}");
         return;
     }
-    if std::env::args().any(|a| a == "export-keccak") {
+    if let Some(at) = std::env::args().position(|a| a == "export-keccak") {
+        let k: usize = std::env::args().nth(at + 1).and_then(|a| a.parse().ok()).unwrap_or(prover::ROWS);
         let path = "target/proof_128_keccak.bin";
-        let (bytes, ok, secs) = keccak::export(path);
-        println!("  Keccak proof and public values written to {path}: {bytes} bytes, verifies natively {ok}, proved in {secs:.2} s");
+        let (bytes, ok, secs) = keccak::export(path, k);
+        println!("  Keccak proof of {k} payments and public values written to {path}: {bytes} bytes, verifies natively {ok}, proved in {secs:.2} s");
         return;
     }
     if std::env::args().any(|a| a == "degree") {
@@ -493,12 +520,6 @@ fn main() {
         if !ok {
             std::process::exit(1);
         }
-        return;
-    }
-    if std::env::args().any(|a| a == "export-keccak-batch") {
-        let path = "target/proof_128_keccak_batch.bin";
-        let (bytes, ok) = keccak::export_batch(path, 8);
-        println!("  eight Keccak proofs written to {path}: {bytes} bytes, every one verifies natively {ok}");
         return;
     }
     if std::env::args().any(|a| a == "hash-cost") {
@@ -897,6 +918,7 @@ fn main() {
     let find = |l: &str| study.iter().find(|r| r.label == l);
     for (a, b) in [
         ("composed, one proof per payment", "two halves, one timed region"),
+        ("composed, one proof per payment", "composed, one proof per 128 payments"),
         ("+ allowlists + revocation d32", "  same, revocation d20"),
         ("+ allowlists + revocation d32", "  allowlists outside the proof"),
         ("accountability, grain 1/64", "  coarser, grain 1/30"),
@@ -910,6 +932,11 @@ fn main() {
         } else {
             println!("  missing variant: {} or {}", a, b);
         }
+    }
+    if let (Some(one), Some(b)) = (find("composed, one proof per payment"), find("composed, one proof per 128 payments")) {
+        let r = prover::ROWS as f64;
+        println!("  one proof, grinding off: one payment {:.1} ms, {} payments {:.1} ms; per payment in the batch {:.2} ms and {} proof bytes",
+                 one.prove.median * r, prover::ROWS, b.prove.median * r, b.prove.median, b.bytes / prover::ROWS);
     }
     println!();
     println!("  Dispersion of the proving figures above. A median on its own says");

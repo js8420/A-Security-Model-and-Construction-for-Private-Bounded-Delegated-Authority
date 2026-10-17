@@ -1,0 +1,1 @@
+5da65ca010f9a8bba222b36d687e4fcf7c88886da61761b9a6b0ddbe99110faf  program-keccak/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-keccak
