@@ -15,6 +15,7 @@ export interface BoundedPayload {
   digest: string;
   time: string;
   elems: string[];
+  opening: `0x${string}`;
   signature: `0x${string}`;
 }
 
@@ -24,24 +25,31 @@ export interface BoundedExtra {
   reserve: `0x${string}`;
 }
 
-/** The shares and nullifiers of one payment, from the agent's prover. */
+/**
+ * The shares and nullifiers of one payment, from the agent's prover, and the
+ * commitment to its fields in the clear, which the engine opens to the
+ * principal.
+ */
 export interface FormedPayment {
   digest: bigint;
   elems: bigint[];
+  opening: `0x${string}`;
 }
 
 /**
  * The agent's payment engine: reserves units for a payment and returns its
- * payload digest and the values it publishes. The scheme only carries them.
+ * payload digest, the values it publishes and the commitment to its opening.
+ * The scheme only carries them.
  */
 export interface PaymentSource {
-  form(args: { reserve: `0x${string}`; delegation: bigint; payee: `0x${string}`; amount: bigint }): Promise<FormedPayment>;
+  form(args: { reserve: `0x${string}`; delegation: bigint; payee: `0x${string}`; amount: bigint; time: bigint }): Promise<FormedPayment>;
 }
 
 export function isBoundedPayload(p: Record<string, unknown>): p is BoundedPayload {
   const s = (k: string) => typeof p[k] === "string";
   return (
     s("reserve") && s("delegation") && s("payee") && s("amount") && s("digest") && s("time") && s("signature") &&
+    typeof p.opening === "string" && /^0x[0-9a-fA-F]{64}$/.test(p.opening) &&
     Array.isArray(p.elems) && (p.elems as unknown[]).every((e) => typeof e === "string")
   );
 }

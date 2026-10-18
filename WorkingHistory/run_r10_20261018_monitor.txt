@@ -1,0 +1,24 @@
+THE MONITOR ON TWO LOCAL CHAINS: BUDGET, OPENINGS, PROOFS AND CHALLENGES
+==============================================================================
+  budget tripwire, no proof read
+  PASS  five payments of 10,000 across two domains, total 50,000 = B, no freeze
+  PASS  the sixth, on domain B, takes the total past B and the monitor freezes both domains
+  PASS  a further payment refused on both domains: Frozen, Frozen
+  openings checked in the clear, no proof read
+  PASS  a payment in an allowed category: no freeze
+  PASS  a payment whose opening names a category the policy does not allow settles, and the monitor freezes both domains: domain B digest 1001: category not allowed
+  PASS  a further payment on the other domain refused: Frozen
+  PASS  the same unit consumed on two domains: the monitor sees it in the openings and freezes both: domain B digest 1001: units already consumed by domain A digest 1000
+  PASS  an opening that disagrees with its own record freezes the delegation: domain A digest 1000: the opening disagrees with the record
+  proofs, the gate and challenges on domain A
+  PASS  the 4 payments the honest proof states settle on domain A: settled, settled, settled, settled
+  PASS  their openings and the honest proof are delivered: both verifiers accept, nothing is challenged, nothing frozen
+  PASS  an honest proof does not back a settlement of one more unit of value than it states: the monitor challenges it: settled
+  PASS  the same payments settle under a second delegation: settled, settled, settled, settled
+  PASS  the same payments under a second delegation, delivered with a forged proof: the gate refuses it beside a deployed verifier that accepts anything
+  PASS  the monitor challenges all 4 on chain and the delegation is held: holds 4
+  PASS  a further payment on the held delegation is refused: Held
+  PASS  forged answers through an answer system that accepts anything lift the hold: holds 0
+  PASS  no backing proof arrives, so the monitor freezes the delegation: domain A/15375361056544014202: answered, and no backing opening and proof arrived
+  PASS  the honest delegation is neither held nor frozen
+  all checks pass

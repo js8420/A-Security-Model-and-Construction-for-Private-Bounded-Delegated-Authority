@@ -1,13 +1,20 @@
 import { parseAbi } from "viem";
 
-/** The calls of Reserve.sol the scheme makes, and the errors it can revert with. */
+/** The calls of Reserve.sol the scheme and the monitor make, and the errors it can revert with. */
 export const reserveAbi = parseAbi([
-  "function settleLogged(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, uint64[] elems, bytes signature)",
-  "function signedDigest(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, bytes32 elemsHash) view returns (bytes32)",
+  "function settleLogged(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, uint64[] elems, bytes32 opening, bytes signature)",
+  "function signedDigest(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, bytes32 elemsHash, bytes32 opening) view returns (bytes32)",
   "function agentOf(uint256 id) view returns (address)",
   "function token() view returns (address)",
+  "function domain() view returns (uint64)",
   "function frozenOf(uint256 id) view returns (bool frozen, uint32 holds)",
-  "event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee)",
+  "function epochOf(uint256 id) view returns (uint64)",
+  "function rootAt(uint256 id, uint64 epoch) view returns (bytes32)",
+  "function commitmentOf(uint256 id) view returns (bytes32)",
+  "function termsOf(uint256 id) view returns (uint64 unitSize, uint64 rangeBase, uint64 rangeLen, bytes32 secretHash)",
+  "function freeze(uint256 id)",
+  "event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee, uint64 time, bytes32 opening)",
+  "event Transcript(uint256 indexed id, uint64 digest, uint64[] elems)",
   "error IndexAlreadySettled()",
   "error AmountAboveCap()",
   "error BadSignature()",
@@ -18,4 +25,18 @@ export const reserveAbi = parseAbi([
   "error Frozen()",
   "error Held()",
   "error WrongSlotCount()",
+]);
+
+/** The calls of ValidityDispute.sol the monitor makes. */
+export const disputeAbi = parseAbi([
+  "struct Settlement { bytes32 elems; uint64 amount; address payee; uint64 time; uint64 epoch; }",
+  "function open(uint256 id, uint64 digest, Settlement s) payable",
+  "function answer(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, bytes proof)",
+  "function rootOf(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path) view returns (bytes32)",
+  "function challengerBond() view returns (uint256)",
+  "event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline)",
+  "event Answered(uint256 indexed id, uint64 digest)",
+  "error AlreadyChallenged()",
+  "error WindowClosed()",
+  "error WrongRecord()",
 ]);

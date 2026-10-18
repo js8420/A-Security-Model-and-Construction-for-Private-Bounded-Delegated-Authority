@@ -113,15 +113,14 @@ async function main() {
   const buggy: Check = async () => ({ ok: true });
   const honestGate = new ProofGate([{ name: "deployed", check: deployed }, { name: "independent", check: independent }], air.globals, air.rowWidth);
   const h = await honestGate.deliver(full);
-  check("the gate accepts the honest batch and backs its 128 settlements", h.accepted && h.digests.length === 128 && h.digests.every((d) => honestGate.backed(d)));
+  check("the gate accepts the honest batch and states its 128 payments", h.accepted && h.payments.length === 128 && h.terms !== null);
   const alone = new ProofGate([{ name: "deployed, with a bug that accepts", check: buggy }], air.globals, air.rowWidth);
   const a = await alone.deliver(forged);
-  check("a verifier bug alone: the batch whose hidden cap exceeds the budget is accepted and backs its settlements", a.accepted && a.digests.length > 0);
+  check("a verifier bug alone: the batch whose hidden cap exceeds the budget is accepted and states its payment", a.accepted && a.payments.length > 0);
   const guarded = new ProofGate([{ name: "deployed, with a bug that accepts", check: buggy }, { name: "independent", check: independent }], air.globals, air.rowWidth);
   const g = await guarded.deliver(forged);
-  const first = parse(forged).pv[air.globals];
   check("the same bug beside the independent verifier: the batch is refused", !g.accepted && g.verdicts[1].verdict.ok === false);
-  check("so its settlements stay unbacked and the monitor challenges them", !guarded.backed(first));
+  check("so it states nothing and backs no settlement", g.payments.length === 0 && g.terms === null);
 
   const reps = Number(process.env.REPS ?? "11");
   const dMs: number[] = [];

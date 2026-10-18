@@ -34,6 +34,9 @@ contract RefusesEther {
 }
 
 contract ValidityDisputeScaleTest is Test {
+    /// Stands for the agent's commitment to a payment's hidden fields, which
+    /// the reserve signs over and emits but never reads.
+    bytes32 constant OPENING = keccak256("hidden fields");
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
     uint256 constant OTHER_PK = 0xB0B;
@@ -85,9 +88,9 @@ contract ValidityDisputeScaleTest is Test {
         e[1] = d + 1;
         e[2] = d + 2;
         uint64 t = uint64(block.timestamp);
-        bytes32 h = acc.signedDigest(r, payee, 1, d, t, keccak256(abi.encodePacked(e)));
+        bytes32 h = acc.signedDigest(r, payee, 1, d, t, keccak256(abi.encodePacked(e)), OPENING);
         (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, h);
-        acc.settleLogged(r, payee, 1, d, t, e, abi.encodePacked(rr, ss, v));
+        acc.settleLogged(r, payee, 1, d, t, e, OPENING, abi.encodePacked(rr, ss, v));
         s = Settlement({elems: keccak256(abi.encodePacked(e)), amount: 1, payee: payee, time: t, epoch: 0});
         recs[keccak256(abi.encode(r, d))] = s;
     }

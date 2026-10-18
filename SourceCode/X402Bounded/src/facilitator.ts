@@ -99,6 +99,7 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
       BigInt(p.digest),
       BigInt(p.time),
       p.elems.map((e) => BigInt(e)),
+      p.opening,
       p.signature,
     ] as const;
   }

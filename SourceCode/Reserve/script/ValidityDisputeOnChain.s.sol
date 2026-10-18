@@ -20,6 +20,9 @@ import {Statement} from "../test/Statement.sol";
 /// The exported payments were signed from time 5000, so the node is started
 /// with its clock there: anvil --timestamp 5000.
 contract ValidityDisputeOnChain is Script {
+    /// Stands for the agent's commitment to a payment's hidden fields, which
+    /// the reserve signs over and emits but never reads.
+    bytes32 constant OPENING = keccak256("hidden fields");
     string constant RESULT = "../../WorkingHistory/groth16_s6/out_s6_batch_a/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
@@ -89,9 +92,9 @@ contract ValidityDisputeOnChain is Script {
         address to = Statement.payee(d, 0);
         uint64 t = Statement.time(d, 0);
         uint64 a = Statement.amount(d, 0);
-        bytes32 h = acc.signedDigest(id, to, a, digest, t, eh);
+        bytes32 h = acc.signedDigest(id, to, a, digest, t, eh, OPENING);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(AGENT_PK, h);
-        acc.settleLogged(id, to, a, digest, t, e, abi.encodePacked(r, s, v));
+        acc.settleLogged(id, to, a, digest, t, e, OPENING, abi.encodePacked(r, s, v));
         rec = Settlement({elems: eh, amount: a, payee: to, time: t, epoch: 0});
     }
 

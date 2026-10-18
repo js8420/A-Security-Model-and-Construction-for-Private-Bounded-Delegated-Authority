@@ -178,7 +178,9 @@ contract Reserve {
     error NotAnswerer();
     error NotClosed();
 
-    event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee);
+    /// `opening` is the agent's commitment to the payment's hidden fields,
+    /// which the agent opens to the principal alone.
+    event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee, uint64 time, bytes32 opening);
     event Transcript(uint256 indexed id, uint64 digest, uint64[] elems);
     event BondForfeited(uint256 indexed id, address to, uint256 amount);
     event Revoked(uint256 indexed id, uint64 start, uint64 length);
@@ -251,9 +253,9 @@ contract Reserve {
 
     /// One payment, transcript stored. Called by whoever delivers the service,
     /// under the agent's signature over everything the agent answers for: the
-    /// domain, the payee, the amount, the digest, the time and the shares. A
-    /// payee holding a signed payload therefore cannot settle it with shares of
-    /// its own.
+    /// domain, the payee, the amount, the digest, the time, the shares and the
+    /// commitment to the hidden fields. A payee holding a signed payload
+    /// therefore cannot settle it with shares or an opening of its own.
     function settle(
         uint256 id,
         address payee,
@@ -261,14 +263,15 @@ contract Reserve {
         uint64 digest,
         uint64 time,
         uint64[] calldata elems,
+        bytes32 opening,
         bytes calldata signature
     ) external {
         bytes32 elemsHash = keccak256(abi.encodePacked(elems));
-        _checkAgentSignature(id, payee, amount, digest, time, elemsHash, signature);
+        _checkAgentSignature(id, payee, amount, digest, time, elemsHash, opening, signature);
         _admit(id, payee, amount, digest, time, elemsHash, elems.length);
         _append(id, elems);
         _pay(id, payee, amount);
-        emit Settled(id, digest, amount, payee);
+        emit Settled(id, digest, amount, payee, time, opening);
     }
 
     /// The same settlement with the transcript emitted rather than stored.
@@ -279,14 +282,15 @@ contract Reserve {
         uint64 digest,
         uint64 time,
         uint64[] calldata elems,
+        bytes32 opening,
         bytes calldata signature
     ) external {
         bytes32 elemsHash = keccak256(abi.encodePacked(elems));
-        _checkAgentSignature(id, payee, amount, digest, time, elemsHash, signature);
+        _checkAgentSignature(id, payee, amount, digest, time, elemsHash, opening, signature);
         _admit(id, payee, amount, digest, time, elemsHash, elems.length);
         emit Transcript(id, digest, elems);
         _pay(id, payee, amount);
-        emit Settled(id, digest, amount, payee);
+        emit Settled(id, digest, amount, payee, time, opening);
     }
 
     function signedDigest(
@@ -295,10 +299,11 @@ contract Reserve {
         uint64 amount,
         uint64 digest,
         uint64 time,
-        bytes32 elemsHash
+        bytes32 elemsHash,
+        bytes32 opening
     ) public view returns (bytes32) {
         return keccak256(
-            abi.encode(block.chainid, address(this), domain, id, payee, amount, digest, time, elemsHash)
+            abi.encode(block.chainid, address(this), domain, id, payee, amount, digest, time, elemsHash, opening)
         );
     }
 
@@ -309,9 +314,10 @@ contract Reserve {
         uint64 digest,
         uint64 time,
         bytes32 elemsHash,
+        bytes32 opening,
         bytes calldata signature
     ) private view {
-        bytes32 h = signedDigest(id, payee, amount, digest, time, elemsHash);
+        bytes32 h = signedDigest(id, payee, amount, digest, time, elemsHash, opening);
         if (signature.length != 65) revert BadSignature();
         bytes32 r;
         bytes32 s;

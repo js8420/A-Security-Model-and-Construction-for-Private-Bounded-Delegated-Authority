@@ -21,7 +21,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { BoundedEvmClient, BoundedEvmFacilitator, BoundedEvmServer, type PaymentSource } from "../src/index.js";
+import { BoundedEvmClient, BoundedEvmFacilitator, BoundedEvmServer, commitOpening, unitsOf, type Opening, type PaymentSource } from "../src/index.js";
 
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
 const OUT = fileURLToPath(new URL("../../Reserve/out/", import.meta.url));
@@ -64,16 +64,30 @@ async function send(hash: Hex) {
   return r;
 }
 
-/** Stands in for the agent's prover: one fresh digest and 3 values a unit. */
+const DOMAIN = 8453n;
+
+/**
+ * Stands in for the agent's payment engine: one fresh digest, 3 values a unit,
+ * and the opening of the payment's fields, kept for the principal.
+ */
 class DemoSource implements PaymentSource {
   private next = 1_000n;
-  async form(a: { amount: bigint }) {
+  private run = 0n;
+  readonly openings: Opening[] = [];
+  async form(a: { payee: `0x${string}`; amount: bigint; time: bigint }) {
     const digest = this.next++;
-    const n = 3n * ((a.amount + UNIT - 1n) / UNIT);
-    const elems = Array.from({ length: Number(n) }, (_, i) =>
+    const units = unitsOf(a.amount, UNIT);
+    const elems = Array.from({ length: Number(3n * units) }, (_, i) =>
       BigInt(keccak256(encodePacked(["uint64", "uint64"], [digest, BigInt(i)]))) % P,
     );
-    return { digest, elems };
+    const o: Opening = {
+      salt: keccak256(encodePacked(["string", "uint64"], ["salt", digest])),
+      amount: a.amount, merchant: 1n, category: 1n, time: a.time, payee: a.payee,
+      domain: DOMAIN, nonce: digest, runStart: this.run,
+    };
+    this.run += units;
+    this.openings.push(o);
+    return { digest, elems, opening: commitOpening(o) };
   }
 }
 
@@ -93,7 +107,7 @@ function listen(app: express.Express, port: number): Promise<Server> {
 async function main() {
   const token = await deploy("MockToken.sol", "MockToken");
   const poseidon = await deploy("Poseidon2Goldilocks.sol", "Poseidon2Goldilocks");
-  const reserve = await deploy("Reserve.sol", "Reserve", [8453n, token, "0x0000000000000000000000000000000000000000", poseidon, 3600n, 2n * 86400n]);
+  const reserve = await deploy("Reserve.sol", "Reserve", [DOMAIN, token, "0x0000000000000000000000000000000000000000", poseidon, 3600n, 2n * 86400n]);
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   const reserveFull = artifact("Reserve.sol", "Reserve").abi;
   await send(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10_000_000n] }));

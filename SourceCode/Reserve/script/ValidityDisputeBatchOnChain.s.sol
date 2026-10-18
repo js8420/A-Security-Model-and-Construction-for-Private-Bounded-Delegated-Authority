@@ -18,6 +18,9 @@ import {Statement} from "../test/Statement.sol";
 /// meets a settlement an earlier one closed. The node is started at the
 /// exported payments' time: anvil --timestamp 5000.
 contract ValidityDisputeBatchOnChain is Script {
+    /// Stands for the agent's commitment to a payment's hidden fields, which
+    /// the reserve signs over and emits but never reads.
+    bytes32 constant OPENING = keccak256("hidden fields");
     string constant RESULT = "../../WorkingHistory/groth16_s6/out_s6_batch_a/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
@@ -66,11 +69,11 @@ contract ValidityDisputeBatchOnChain is Script {
             elems: keccak256(abi.encodePacked(e)), amount: Statement.amount(d, i), payee: Statement.payee(d, i),
             time: Statement.time(d, i), epoch: 0
         });
-        acc.settleLogged(id, s.payee, s.amount, Statement.digest(d, i), s.time, e, _sign(d, id, i, s));
+        acc.settleLogged(id, s.payee, s.amount, Statement.digest(d, i), s.time, e, OPENING, _sign(d, id, i, s));
     }
 
     function _sign(Statement.Data memory d, uint256 id, uint256 i, Settlement memory s) internal view returns (bytes memory) {
-        bytes32 h = acc.signedDigest(id, s.payee, s.amount, Statement.digest(d, i), s.time, s.elems);
+        bytes32 h = acc.signedDigest(id, s.payee, s.amount, Statement.digest(d, i), s.time, s.elems, OPENING);
         (uint8 v, bytes32 r, bytes32 sg) = vm.sign(AGENT_PK, h);
         return abi.encodePacked(r, sg, v);
     }

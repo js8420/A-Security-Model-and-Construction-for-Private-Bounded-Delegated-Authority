@@ -151,7 +151,28 @@ contract TranscriptGas is Fixture {
         uint64[] memory e = _elems(14, 1);
         bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.BadSignature.selector);
-        acc.settleLogged(id, address(0xBAD), _amount(e), 1, _now(), e, sg);
+        acc.settleLogged(id, address(0xBAD), _amount(e), 1, _now(), e, OPENING, sg);
+    }
+
+    /// The signature covers the commitment to the hidden fields, so no one can
+    /// settle the payment under an opening the agent did not sign.
+    function testOpeningIsBound() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory e = _elems(14, 1);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
+        vm.expectRevert(Reserve.BadSignature.selector);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, keccak256("other fields"), sg);
+    }
+
+    /// The record the monitor reads carries the signed time and the opening.
+    function testSettledCarriesTimeAndOpening() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory e = _elems(14, 1);
+        uint64 t = _now();
+        bytes memory sg = _sign(id, _amount(e), 1, t, e);
+        vm.expectEmit(true, false, false, true, address(acc));
+        emit Reserve.Settled(id, 1, _amount(e), payee, t, OPENING);
+        acc.settleLogged(id, payee, _amount(e), 1, t, e, OPENING, sg);
     }
 
     function testDigestSettlesOnce() public {
@@ -160,7 +181,7 @@ contract TranscriptGas is Fixture {
         uint64[] memory e = _elems(14, 2);
         bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.IndexAlreadySettled.selector);
-        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, OPENING, sg);
     }
 
     /// The signed time must be within maxAge of the reserve's clock either way.
@@ -171,14 +192,14 @@ contract TranscriptGas is Fixture {
         uint64 old = _now() - MAX_AGE - 1;
         bytes memory sg = _sign(id, _amount(e), 1, old, e);
         vm.expectRevert(Reserve.StaleTime.selector);
-        acc.settleLogged(id, payee, _amount(e), 1, old, e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, old, e, OPENING, sg);
         uint64 ahead = _now() + MAX_AGE + 1;
         sg = _sign(id, _amount(e), 1, ahead, e);
         vm.expectRevert(Reserve.StaleTime.selector);
-        acc.settleLogged(id, payee, _amount(e), 1, ahead, e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, ahead, e, OPENING, sg);
         uint64 edge = _now() - MAX_AGE;
         sg = _sign(id, _amount(e), 1, edge, e);
-        acc.settleLogged(id, payee, _amount(e), 1, edge, e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, edge, e, OPENING, sg);
     }
 
     /// A payment publishes exactly the slots its amount pays for: one more or
@@ -191,12 +212,12 @@ contract TranscriptGas is Fixture {
         for (uint256 i = 0; i < bad.length; ++i) {
             bytes memory sg = _sign(id, bad[i], 1, _now(), e);
             vm.expectRevert(Reserve.WrongSlotCount.selector);
-            acc.settleLogged(id, payee, bad[i], 1, _now(), e, sg);
+            acc.settleLogged(id, payee, bad[i], 1, _now(), e, OPENING, sg);
         }
         bytes memory ok = _sign(id, 2 * u + 1, 1, _now(), e);
-        acc.settleLogged(id, payee, 2 * u + 1, 1, _now(), e, ok);
+        acc.settleLogged(id, payee, 2 * u + 1, 1, _now(), e, OPENING, ok);
         ok = _sign(id, 3 * u, 2, _now(), e);
-        acc.settleLogged(id, payee, 3 * u, 2, _now(), e, ok);
+        acc.settleLogged(id, payee, 3 * u, 2, _now(), e, OPENING, ok);
     }
 
     function testNoSettlementAfterExpiry() public {
@@ -205,7 +226,7 @@ contract TranscriptGas is Fixture {
         uint64[] memory e = _elems(14, 1);
         bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.Expired.selector);
-        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, OPENING, sg);
     }
 
     /// With no dispute contract, close waits only for expiry and the delay,
@@ -242,7 +263,7 @@ contract TranscriptGas is Fixture {
         uint64[] memory e = _elems(1, 1);
         bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.Frozen.selector);
-        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, sg);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, OPENING, sg);
         vm.warp(block.timestamp + LIFE + CLOSE_DELAY + 1);
         uint256 bond = agent.balance;
         acc.close(id);

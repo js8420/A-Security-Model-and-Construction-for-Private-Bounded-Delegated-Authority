@@ -17,6 +17,9 @@ interface IPermit2Approve {
 /// Permit2 is the real contract, built by its own pinned toolchain in
 /// lib/permit2 and deployed here from that artifact.
 contract Fixture is Test {
+    /// Stands for the agent's commitment to a payment's hidden fields, which
+    /// the reserve signs over and emits but never reads.
+    bytes32 constant OPENING = keccak256("hidden fields");
     uint64 constant DOMAIN = 8453;
     uint64 constant CAP = 1_000_000;
     uint64 constant BUDGET = 100_000_000;
@@ -83,7 +86,7 @@ contract Fixture is Test {
         view
         returns (bytes memory)
     {
-        bytes32 h = acc.signedDigest(id, payee, amount, digest, time, keccak256(abi.encodePacked(elems)));
+        bytes32 h = acc.signedDigest(id, payee, amount, digest, time, keccak256(abi.encodePacked(elems)), OPENING);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(AGENT_PK, h);
         return abi.encodePacked(r, s, v);
     }
@@ -107,8 +110,8 @@ contract Fixture is Test {
         uint64 a = _amount(e);
         bytes memory sg = _sign(id, a, digest, t, e);
         uint256 g = gasleft();
-        if (logged) acc.settleLogged(id, payee, a, digest, t, e, sg);
-        else acc.settle(id, payee, a, digest, t, e, sg);
+        if (logged) acc.settleLogged(id, payee, a, digest, t, e, OPENING, sg);
+        else acc.settle(id, payee, a, digest, t, e, OPENING, sg);
         used = g - gasleft();
     }
 

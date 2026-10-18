@@ -7,7 +7,7 @@ import { SCHEME, type BoundedExtra, type BoundedPayload, type PaymentSource } fr
  * The agent's side. It pays only through reserves it holds a delegation on,
  * and signs exactly what the reserve checks: the reserve's own signed digest
  * over the domain, the delegation, the payee, the amount, the payload digest,
- * the time and the published values.
+ * the time, the published values and the commitment to the opening.
  */
 export class BoundedEvmClient implements SchemeNetworkClient {
   readonly scheme = SCHEME;
@@ -28,14 +28,14 @@ export class BoundedEvmClient implements SchemeNetworkClient {
     if (delegation === undefined) throw new Error(`no delegation on reserve ${reserve}`);
     const payee = getAddress(req.payTo);
     const amount = BigInt(req.amount);
-    const { digest, elems } = await this.source.form({ reserve, delegation, payee, amount });
     const time = (await this.chain.getBlock({ blockTag: "latest" })).timestamp;
+    const { digest, elems, opening } = await this.source.form({ reserve, delegation, payee, amount, time });
     const elemsHash = keccak256(encodePacked(["uint64[]"], [elems]));
     const hash = await this.chain.readContract({
       address: reserve,
       abi: reserveAbi,
       functionName: "signedDigest",
-      args: [delegation, payee, amount, digest, time, elemsHash],
+      args: [delegation, payee, amount, digest, time, elemsHash, opening],
     });
     const signature = await this.account.sign({ hash });
     const payload: BoundedPayload = {
@@ -46,6 +46,7 @@ export class BoundedEvmClient implements SchemeNetworkClient {
       digest: digest.toString(),
       time: time.toString(),
       elems: elems.map((e) => e.toString()),
+      opening,
       signature,
     };
     return { x402Version, payload };

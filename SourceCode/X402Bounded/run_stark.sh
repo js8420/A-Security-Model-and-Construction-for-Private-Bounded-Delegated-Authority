@@ -2,7 +2,8 @@
 # The independent STARK verifier against the deployed Plonky3 one: honest
 # proofs, altered proofs, proofs of statements with no witness, and the
 # monitor's gate under a simulated verifier bug, then the timing study of
-# both verifiers. Usage: run_stark.sh TAG
+# both verifiers. Usage: run_stark.sh TAG [checks], where checks skips the
+# timing study.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
@@ -10,6 +11,7 @@ for t in cargo node npm; do
     command -v $t >/dev/null || { echo "missing: $t"; exit 1; }
 done
 tag=${1:?tag}
+only=${2:-}
 here=$(cd "$(dirname "$0")" && pwd)
 circuits=$(cd "$here/../../Circuits" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
@@ -43,5 +45,6 @@ npx tsc --noEmit
 CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" PROOF_SMALL="$work/small.bin" \
     BROKEN_DIR="$work/broken" CIRCUIT_BIN="$bin" REPS=11 \
     npx tsx e2e/stark.ts | tee "$hist/run_${tag}_stark.txt"
+if [ "$only" = checks ]; then exit 0; fi
 CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" CIRCUIT_BIN="$bin" \
     npx tsx e2e/stark_time.ts | tee "$hist/run_${tag}_stark_time.txt"

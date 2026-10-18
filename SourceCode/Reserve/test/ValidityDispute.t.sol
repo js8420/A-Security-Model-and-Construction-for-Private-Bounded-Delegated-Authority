@@ -18,6 +18,9 @@ import {Statement} from "./Statement.sol";
 /// payments: their amounts, payee, times and shares. Gas is measured as
 /// transaction receipts by script/ValidityDisputeOnChain.s.sol.
 contract ValidityDisputeTest is Groth16Result {
+    /// Stands for the agent's commitment to a payment's hidden fields, which
+    /// the reserve signs over and emits but never reads.
+    bytes32 constant OPENING = keccak256("hidden fields");
     uint64 constant DOMAIN = 8453;
     uint64 constant CAP = 1_000_000;
     uint64 constant BUDGET = 100_000_000;
@@ -73,11 +76,11 @@ contract ValidityDisputeTest is Groth16Result {
             elems: keccak256(abi.encodePacked(e)), amount: amount, payee: _payee(i), time: _time(i),
             epoch: 0
         });
-        acc.settleLogged(r, s.payee, amount, _digest(i), s.time, e, _sign(r, i, s));
+        acc.settleLogged(r, s.payee, amount, _digest(i), s.time, e, OPENING, _sign(r, i, s));
     }
 
     function _sign(uint256 r, uint256 i, Settlement memory s) internal view returns (bytes memory) {
-        bytes32 h = acc.signedDigest(r, s.payee, s.amount, _digest(i), s.time, s.elems);
+        bytes32 h = acc.signedDigest(r, s.payee, s.amount, _digest(i), s.time, s.elems, OPENING);
         (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(AGENT_PK, h);
         return abi.encodePacked(rr, ss, v);
     }
