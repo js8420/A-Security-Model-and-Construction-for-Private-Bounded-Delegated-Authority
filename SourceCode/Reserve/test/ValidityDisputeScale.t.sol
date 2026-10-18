@@ -596,8 +596,9 @@ contract ValidityDisputeScaleTest is Test {
     }
 
     /// The answerer acknowledged the batch and stayed silent: the principal
-    /// still gets the agent's bond, and the agent gets the answerer's stake.
-    function testSilentAnswererPaysTheAgent() public {
+    /// still gets the agent's bond, and the answerer's stake is burnt, paid to
+    /// nobody, so neither the principal nor the agent profits from silencing it.
+    function testSilentAnswererLosesItsStake() public {
         (uint256 r, address ans) = _registerWithAnswerer();
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
@@ -610,11 +611,20 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(principal.balance, p0 + AGENT_BOND);
         address agent = vm.addr(AGENT_PK);
         uint256 a0 = agent.balance;
+        uint256 p1 = principal.balance;
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
-        assertEq(agent.balance, a0 + AGENT_BOND);
+        assertEq(agent.balance, a0);
+        assertEq(principal.balance, p1);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
-        assertEq(ans.balance, 10 ether - AGENT_BOND);
+        assertEq(acc.burnt(), AGENT_BOND);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
+        acc.close(r);
+        uint256 b0 = ans.balance;
+        vm.prank(ans);
+        acc.unstakeAnswerer(r);
+        assertEq(ans.balance, b0);
+        assertEq(address(acc).balance >= AGENT_BOND, true);
     }
 
     function testSlashBeforeExpiryRefused() public {

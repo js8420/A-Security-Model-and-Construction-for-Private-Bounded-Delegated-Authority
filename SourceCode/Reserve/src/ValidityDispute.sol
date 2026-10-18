@@ -56,9 +56,9 @@ interface IReserveV {
 /// Answerers. An answerer signs a receipt for each batch root it holds a
 /// proof of. If a challenge against a settlement in that batch then expires,
 /// and the receipt left the answerer a full answer window, the receipt and the
-/// settlement's path to the root move the answerer's stake to the agent. A
-/// stake of at least the agent's bond leaves a principal nothing to pay an
-/// answerer to stay silent with.
+/// settlement's path to the root burn the answerer's stake. A stake of at
+/// least the agent's bond leaves a principal nothing to pay an answerer to
+/// stay silent with, and burning it leaves nobody a reason to silence one.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can

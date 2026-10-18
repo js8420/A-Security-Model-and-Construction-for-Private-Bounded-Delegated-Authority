@@ -1,0 +1,24 @@
+{
+  "name": "x402-bounded-reserve",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The bounded-reserve payment scheme for x402: client, resource-server and facilitator mechanisms, and an end-to-end run on a local chain",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "e2e": "tsx e2e/run.ts"
+  },
+  "dependencies": {
+    "@x402/core": "2.28.0",
+    "@x402/express": "2.28.0",
+    "@x402/fetch": "2.28.0",
+    "express": "4.22.3",
+    "viem": "2.57.7"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.25",
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

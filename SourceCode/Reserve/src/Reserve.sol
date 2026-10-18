@@ -80,8 +80,8 @@ contract Reserve {
         address monitor;
         /// Holds the agent's batch proofs and answers for it; zero if none.
         address answerer;
-        /// What the answerer stakes, lost to the agent if a challenge it
-        /// could have answered expires.
+        /// What the answerer stakes, burnt if a challenge it could have
+        /// answered expires.
         uint256 answererStake;
     }
 
@@ -152,6 +152,8 @@ contract Reserve {
     mapping(uint256 => uint64[2][]) private revoked;
 
     uint256 public nextId;
+    /// Answerer stakes slashed, held here for good.
+    uint256 public burnt;
 
     error IndexAlreadySettled();
     error AmountAboveCap();
@@ -184,7 +186,7 @@ contract Reserve {
     event FrozenBy(uint256 indexed id, address by);
     event Reclaimed(uint256 indexed id, uint256 deposit);
     event AnswererStaked(uint256 indexed id, uint256 amount);
-    event AnswererSlashed(uint256 indexed id, address to, uint256 amount);
+    event AnswererSlashed(uint256 indexed id, uint256 amount);
 
     constructor(
         uint64 domainId,
@@ -425,17 +427,18 @@ contract Reserve {
     }
 
     /// An answerer that acknowledged a batch and let a challenge against it
-    /// expire loses its stake to the agent, which lost its bond.
+    /// expire loses its stake. The stake is burnt rather than paid to anyone:
+    /// paid to the agent, an agent and principal acting together could knock
+    /// the answerer offline and split it; paid to the principal, a bribe for
+    /// silence would cost the principal nothing. It stays in this contract,
+    /// which has no way to send it.
     function slashAnswerer(uint256 id) external {
         if (msg.sender != dispute) revert NotArbiter();
         Delegation storage d = delegations[id];
         uint256 amount = d.answererStake;
         d.answererStake = 0;
-        emit AnswererSlashed(id, d.agent, amount);
-        if (amount != 0) {
-            (bool ok, ) = payable(d.agent).call{value: amount}("");
-            require(ok, "stake");
-        }
+        burnt += amount;
+        emit AnswererSlashed(id, amount);
     }
 
     /// Pulled rather than paid at close, so an answerer cannot block a close.

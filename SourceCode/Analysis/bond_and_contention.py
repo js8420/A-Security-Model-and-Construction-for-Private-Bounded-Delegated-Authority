@@ -9,11 +9,11 @@ import math
 
 DAY = 24.0  # hours
 
-# Windows on Base, hours. Delta_f: the 12-hour sequencing window plus an hour
-# on Ethereum. sigma_x: a block's time lies within the sequencing window
+# Windows on Base, hours. Delta_f: the 12-hour sequencing window plus two
+# hours on Ethereum, which the censorship table below sizes. sigma_x: a block's time lies within the sequencing window
 # behind and max_sequencer_drift (1800 s) ahead of Ethereum's clock.
 W_D = 8.0
-DELTA_F = 12.0 + 1.0
+DELTA_F = 12.0 + 2.0
 SIGMA_X = 12.0 + 0.5
 THETA = 1.0
 C_ANS = 82.0 / 60.0
@@ -51,8 +51,12 @@ def profiles(k_w):
     ]
     print("BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY")
     print("=" * 78)
+    print(f"  {'':<52} {'bonds':>8} {'with answerer':>14}")
     for name, T, ca, pm in rows:
-        print(f"  {name:<56} {100 * bond_ratio(k_w, W, T, ca, pm):8.1f}%")
+        r = bond_ratio(k_w, W, T, ca, pm)
+        print(f"  {name:<52} {100 * r:7.1f}% {200 * r:13.1f}%")
+    print("  A staked answerer stakes at least the bond on each domain, so it doubles")
+    print("  the capital the agent's side holds.")
     print("  A declared expiry longer than the task changes none of these: the bond")
     print("  follows the rate the task needs and the life it actually spends.")
     print()
@@ -67,11 +71,15 @@ def trade_off(k_w):
     print("HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD")
     print("FOR 30 DAYS, B = %.2f USD, DEPOSIT MODE" % B)
     print("=" * 78)
-    print(f"  {'declared expiry':<16} {'f':>7} {'bonds':>9} {'bonds/B':>8} {'funding fB':>11} {'total':>10} {'total/B':>8}")
+    print(f"  {'declared expiry':<16} {'f':>6} {'bonds':>7} {'stake':>7} {'funding fB':>11} {'total':>9} {'total/B':>8}")
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
         R = f * B
-        print(f"  {f'{mult} x the task':<16} {f:>7.2f} {bonds:>9.2f} {100 * bonds / B:>7.1f}% {R:>11.2f} {R + bonds:>10.2f} {(R + bonds) / B:>8.2f}")
+        tot = R + 2 * bonds
+        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {bonds:>7.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
+    print(f"  Without an answerer the total is less by the stake, {bonds:.2f}.")
+    print(f"  Carrying the stake for the task costs {bonds * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
+    print("  point of annual interest on it.")
     print("  The same f reached by a short declared life instead needs bonds of")
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
@@ -132,11 +140,11 @@ def contention():
 def censorship():
     print("PROPOSERS THAT EXCLUDE A FORCED TRANSACTION")
     print("=" * 78)
-    print(f"  {'including share':>16} {'P(out for 1 h, 300 slots)':>27} {'slots for 2^-40':>17} {'minutes':>9}")
-    for alpha in (0.54, 0.21, 0.10, 0.05):
-        p = (1 - alpha) ** 300
+    print(f"  {'including share':>16} {'P(out for 2 h, 600 slots)':>27} {'slots for 2^-40':>17} {'minutes':>9}")
+    for alpha in (0.54, 0.21, 0.10, 0.052):
+        p = (1 - alpha) ** 600
         k = math.ceil(40 / -math.log2(1 - alpha))
-        print(f"  {alpha:>16.2f} {p:>27.2e} {k:>17} {12 * k / 60:>9.1f}")
+        print(f"  {alpha:>16.3f} {p:>27.2e} {k:>17} {12 * k / 60:>9.1f}")
     print()
 
 if __name__ == "__main__":
