@@ -1,7 +1,7 @@
-"""Bond ratios for delegation profiles, one worked deployment's capital, and
-the delay an adversary can buy against a forced transaction on an OP Stack
-chain. Every figure is arithmetic on the paper's formulas and on protocol
-constants, so one run is the result.
+"""Windows, bond ratios and capital for delegation profiles, and the delay an
+adversary or a censoring set of proposers can impose on a forced transaction
+on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
+protocol constants, so one run is the result.
 
 Run: python3 bond_and_contention.py
 """
@@ -9,13 +9,38 @@ import math
 
 DAY = 24.0  # hours
 
-# Assumption 1: total bonds over the budget, with W >= w + theta, are about
-# 2 (W / T) (C / mean amount) (peak rate / mean rate).
-def bond_ratio(W, T, c_over_a, peak_over_mean):
-    return 2.0 * (W / T) * c_over_a * peak_over_mean
+# Windows on Base, hours. Delta_f: the 12-hour sequencing window plus an hour
+# on Ethereum. sigma_x: a block's time lies within the sequencing window
+# behind and max_sequencer_drift (1800 s) ahead of Ethereum's clock.
+W_D = 8.0
+DELTA_F = 12.0 + 1.0
+SIGMA_X = 12.0 + 0.5
+THETA = 1.0
+C_ANS = 82.0 / 60.0
+W_RATE = DAY
 
-def profiles():
-    W = DAY
+def windows():
+    w = W_D + DELTA_F + SIGMA_X + THETA
+    k_w = math.ceil((w + THETA) / W_RATE) + 1
+    w_a = C_ANS + DELTA_F + SIGMA_X
+    print("WINDOWS ON BASE, HOURS")
+    print("=" * 78)
+    print(f"  delivery w_d                               {W_D:8.1f}")
+    print(f"  forced inclusion Delta_f                   {DELTA_F:8.1f}")
+    print(f"  clock bound sigma_x                        {SIGMA_X:8.1f}")
+    print(f"  signed-time tolerance theta                {THETA:8.1f}")
+    print(f"  acceptance window w = w_d + Delta_f + sigma_x + theta {w:5.1f}")
+    print(f"  rate window W                              {W_RATE:8.1f}")
+    print(f"  windows a bond covers, ceil((w+theta)/W)+1 {k_w:8d}")
+    print(f"  answer window at least c + Delta_f + sigma_x {w_a:6.1f}, set to 30")
+    print()
+    return k_w
+
+def bond_ratio(k_w, W, T, c_over_a, peak_over_mean):
+    return k_w * (W / T) * c_over_a * peak_over_mean
+
+def profiles(k_w):
+    W = W_RATE
     rows = [
         ("steady, one price, 30-day delegation", 30 * DAY, 1.0, 1.0),
         ("bursty, peak 5x the mean rate, 30 days", 30 * DAY, 1.0, 5.0),
@@ -27,37 +52,38 @@ def profiles():
     print("BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY")
     print("=" * 78)
     for name, T, ca, pm in rows:
-        print(f"  {name:<56} {100 * bond_ratio(W, T, ca, pm):8.1f}%")
+        print(f"  {name:<56} {100 * bond_ratio(k_w, W, T, ca, pm):8.1f}%")
+    print("  A declared expiry longer than the task changes none of these: the bond")
+    print("  follows the rate the task needs and the life it actually spends.")
     print()
 
-# The rate channel: the most that can settle over a declared life T_d is
-# U = C * sum N (ceil(T_d / W) + 1); bonds are C * sum N (ceil((w+theta)/W) + 1).
-def hiding(W, w_theta, T_d):
-    return (math.ceil(w_theta / W) + 1) / (math.ceil(T_d / W) + 1)
+def hiding_factor(T_d, T_a, W=W_RATE):
+    return (math.ceil(T_d / W) + 1) / (math.ceil(T_a / W) + 1)
 
-def rate_channel():
-    W, w_theta, T_a = DAY, 21.5, 30 * DAY
-    print("HIDING FACTOR AGAINST BOND, TASK OF 30 DAYS, CAP AT THE PRICE")
+def trade_off(k_w):
+    rate, price, T_a = 1440, 0.01, 30 * DAY
+    B = rate * (T_a / DAY) * price
+    bonds = k_w * rate * price
+    print("HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD")
+    print("FOR 30 DAYS, B = %.2f USD, DEPOSIT MODE" % B)
     print("=" * 78)
-    print(f"  {'declared expiry':<22} {'hiding factor U/B':>18} {'bonds / B':>12} {'bonds / U':>12}")
+    print(f"  {'declared expiry':<16} {'f':>7} {'bonds':>9} {'bonds/B':>8} {'funding fB':>11} {'total':>10} {'total/B':>8}")
     for mult in (1, 2, 5, 10):
-        T_d = mult * T_a
-        f = (math.ceil(T_d / W) + 1) / (math.ceil(T_a / W) + 1)
-        bu = hiding(W, w_theta, T_d)
-        print(f"  {f'{mult} x the task':<22} {f:>18.2f} {100 * bu * f:>11.1f}% {100 * bu:>11.2f}%")
+        f = hiding_factor(mult * T_a, T_a)
+        R = f * B
+        print(f"  {f'{mult} x the task':<16} {f:>7.2f} {bonds:>9.2f} {100 * bonds / B:>7.1f}% {R:>11.2f} {R + bonds:>10.2f} {(R + bonds) / B:>8.2f}")
+    print("  The same f reached by a short declared life instead needs bonds of")
+    for mult in (1, 2, 5, 10):
+        f = hiding_factor(mult * T_a, T_a)
+        print(f"    f = {f:5.2f}: about {100 * k_w * f * W_RATE / T_a:6.1f}% of B in bonds, plus funding fB")
     print()
-
-def capital():
-    rate, days, price = 1440, 30, 0.01
-    B = rate * days * price
-    bond = 2 * rate * price
-    deposit = 2 * B
-    print("CAPITAL FOR ONE DEPLOYMENT: ONE PAYMENT A MINUTE AT 0.01 USD FOR 30 DAYS")
+    print("ONE-DAY TASK, ONE PRICE, UNDER A LONG DECLARED EXPIRY")
     print("=" * 78)
-    print(f"  budget B                                   {B:10.2f} USD")
-    print(f"  principal's funding R = Lu, hiding factor 2 {deposit:9.2f} USD")
-    print(f"  agent's bonds, 2 r C                        {bond:9.2f} USD")
-    print(f"  together                                    {deposit + bond:9.2f} USD")
+    T1 = 1 * DAY
+    B1 = rate * price
+    for days in (1, 30, 300):
+        f = hiding_factor(days * DAY, T1)
+        print(f"  declared {days:>3} days: f = {f:7.2f}, bonds / B = {100 * bond_ratio(k_w, W_RATE, T1, 1, 1):5.1f}%, funding fB = {f * B1:9.2f} USD")
     print()
 
 # Delay purchasable against one forced transaction.
@@ -98,9 +124,24 @@ def contention():
     print("  The monitor tips nothing here; any priority fee it pays makes the adversary")
     print("  outbid it on every slot of every block, so the delay only shrinks. The last")
     print("  column is the longer of the two routes.")
+    print()
+
+# Proposers that exclude a transaction without being paid to. If a share alpha
+# of slots go to proposers that include it, k slots all exclude it with
+# probability (1 - alpha)^k.
+def censorship():
+    print("PROPOSERS THAT EXCLUDE A FORCED TRANSACTION")
+    print("=" * 78)
+    print(f"  {'including share':>16} {'P(out for 1 h, 300 slots)':>27} {'slots for 2^-40':>17} {'minutes':>9}")
+    for alpha in (0.54, 0.21, 0.10, 0.05):
+        p = (1 - alpha) ** 300
+        k = math.ceil(40 / -math.log2(1 - alpha))
+        print(f"  {alpha:>16.2f} {p:>27.2e} {k:>17} {12 * k / 60:>9.1f}")
+    print()
 
 if __name__ == "__main__":
-    profiles()
-    rate_channel()
-    capital()
+    k_w = windows()
+    profiles(k_w)
+    trade_off(k_w)
     contention()
+    censorship()

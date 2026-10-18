@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "./TermsOf.sol";
@@ -563,6 +563,185 @@ contract ValidityDisputeScaleTest is Test {
         vm.expectRevert(Reserve.NotPrincipal.selector);
         vm.prank(address(0));
         acc.freeze(r);
+    }
+
+    uint256 constant ANSWERER_PK = 0xA45E;
+
+    function _registerWithAnswerer() internal returns (uint256 r, address ans) {
+        ans = vm.addr(ANSWERER_PK);
+        vm.deal(ans, 10 ether);
+        Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
+        t.answerer = ans;
+        vm.prank(principal);
+        r = acc.register{value: AGENT_BOND}(t);
+        vm.prank(ans);
+        acc.stakeAnswerer{value: AGENT_BOND}(r);
+    }
+
+    function _receipt(uint256 pk, uint256 r, bytes32 root, uint64 at) internal view returns (bytes memory) {
+        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, at));
+        return abi.encodePacked(rr, ss, v);
+    }
+
+    /// An answer pays the registered answerer, whoever sends it.
+    function testAnswerCreditsTheAnswererWhoeverSendsIt() public {
+        (uint256 r, address ans) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        _openBy(principal, r, 5);
+        vm.prank(challenger);
+        _answerAlone(r, 5);
+        assertEq(vd.credit(ans), BOND);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), 0);
+        assertEq(vd.credit(challenger), 0);
+    }
+
+    /// The answerer acknowledged the batch and stayed silent: the principal
+    /// still gets the agent's bond, and the agent gets the answerer's stake.
+    function testSilentAnswererPaysTheAgent() public {
+        (uint256 r, address ans) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        uint64 at = uint64(block.timestamp);
+        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        _openBy(principal, r, 5);
+        vm.warp(_deadline(r, 5) + 1);
+        uint256 p0 = principal.balance;
+        vd.expire(r, 5);
+        assertEq(principal.balance, p0 + AGENT_BOND);
+        address agent = vm.addr(AGENT_PK);
+        uint256 a0 = agent.balance;
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        assertEq(agent.balance, a0 + AGENT_BOND);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+        assertEq(ans.balance, 10 ether - AGENT_BOND);
+    }
+
+    function testSlashBeforeExpiryRefused() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        uint64 at = uint64(block.timestamp);
+        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        _openBy(principal, r, 5);
+        vm.expectRevert(ValidityDispute.NotExpired.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        _answerAlone(r, 5);
+        vm.expectRevert(ValidityDispute.NotExpired.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+    }
+
+    function _expired() internal returns (uint256 r, Settlement memory s, uint64 at) {
+        (r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        s = _rec(r, 5);
+        at = uint64(block.timestamp);
+        _openBy(principal, r, 5);
+        vm.warp(_deadline(r, 5) + 1);
+        vd.expire(r, 5);
+    }
+
+    /// A receipt signed by anyone but the registered answerer moves nothing.
+    function testReceiptByAnotherKeyRefused() public {
+        (uint256 r, Settlement memory s, uint64 at) = _expired();
+        bytes memory rc = _receipt(OTHER_PK, r, vd.leafHash(r, 5, s), at);
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+    }
+
+    /// A receipt for a batch the settlement is not in moves nothing.
+    function testReceiptForAnotherBatchRefused() public {
+        (uint256 r, Settlement memory s, uint64 at) = _expired();
+        bytes32[] memory path = new bytes32[](1);
+        path[0] = keccak256("other");
+        bytes memory rc = _receipt(ANSWERER_PK, r, keccak256("another root"), at);
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.slashAnswerer(r, 5, s, 0, path, at, rc);
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+    }
+
+    /// An answerer handed the proof with less than an answer window left is
+    /// not to blame.
+    function testReceiptWithoutAFullWindowRefused() public {
+        (uint256 r, Settlement memory s, ) = _expired();
+        uint64 late = _deadline(r, 5) - WINDOW + 1;
+        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), late);
+        vm.expectRevert(ValidityDispute.ReceiptTooLate.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), late, rc);
+    }
+
+    /// A receipt with a different time than the one signed moves nothing.
+    function testReceiptTimeIsSigned() public {
+        (uint256 r, Settlement memory s, uint64 at) = _expired();
+        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at - 1, rc);
+    }
+
+    /// Only the registered answerer stakes, and it takes its stake back only
+    /// after the close.
+    function testAnswererStakeLifecycle() public {
+        (uint256 r, address ans) = _registerWithAnswerer();
+        vm.deal(challenger, 10 ether);
+        vm.prank(challenger);
+        vm.expectRevert(Reserve.NotAnswerer.selector);
+        acc.stakeAnswerer{value: 1}(r);
+        vm.prank(ans);
+        vm.expectRevert(Reserve.NotClosed.selector);
+        acc.unstakeAnswerer(r);
+        vm.prank(principal);
+        acc.freeze(r);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
+        acc.close(r);
+        vm.prank(challenger);
+        vm.expectRevert(Reserve.NotAnswerer.selector);
+        acc.unstakeAnswerer(r);
+        uint256 b0 = ans.balance;
+        vm.prank(ans);
+        acc.unstakeAnswerer(r);
+        assertEq(ans.balance, b0 + AGENT_BOND);
+        vm.prank(ans);
+        vm.expectRevert(Reserve.NotClosable.selector);
+        acc.stakeAnswerer{value: 1}(r);
+    }
+
+    /// Gas of the answerer's two calls: staking, and the slash a silent
+    /// answerer's receipt brings.
+    function testAnswererGas() public {
+        address ans = vm.addr(ANSWERER_PK);
+        vm.deal(ans, 10 ether);
+        Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
+        t.answerer = ans;
+        vm.prank(principal);
+        uint256 r = acc.register{value: AGENT_BOND}(t);
+        vm.prank(ans);
+        uint256 g0 = gasleft();
+        acc.stakeAnswerer{value: AGENT_BOND}(r);
+        console.log("stake answerer", g0 - gasleft());
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        uint64 at = uint64(block.timestamp);
+        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        _openBy(principal, r, 5);
+        vm.warp(_deadline(r, 5) + 1);
+        vd.expire(r, 5);
+        g0 = gasleft();
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        console.log("slash answerer, batch of one", g0 - gasleft());
+    }
+
+    /// Without an answerer the agent is credited, as before, and nobody can
+    /// stake.
+    function testNoAnswererCreditsTheAgent() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(principal, r, 5);
+        _answerAlone(r, 5);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), BOND);
+        vm.prank(address(0));
+        vm.expectRevert(Reserve.NotAnswerer.selector);
+        acc.stakeAnswerer(r);
     }
 
     function testReclaimNeedsAFreeze() public {

@@ -1,0 +1,70 @@
+WINDOWS ON BASE, HOURS
+==============================================================================
+  delivery w_d                                    8.0
+  forced inclusion Delta_f                       13.0
+  clock bound sigma_x                            12.5
+  signed-time tolerance theta                     1.0
+  acceptance window w = w_d + Delta_f + sigma_x + theta  34.5
+  rate window W                                  24.0
+  windows a bond covers, ceil((w+theta)/W)+1        3
+  answer window at least c + Delta_f + sigma_x   26.9, set to 30
+
+BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY
+==============================================================================
+  steady, one price, 30-day delegation                         10.0%
+  bursty, peak 5x the mean rate, 30 days                       50.0%
+  three prices 0.001/0.01/0.05, cap 2.5x mean, 30 days         25.0%
+  one-day task, one price, steady                             300.0%
+  one-day task, bursty 5x, three prices                      3750.0%
+  the same task under a standing 30-day delegation            125.0%
+  A declared expiry longer than the task changes none of these: the bond
+  follows the rate the task needs and the life it actually spends.
+
+HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD
+FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
+==============================================================================
+  declared expiry        f     bonds  bonds/B  funding fB      total  total/B
+  1 x the task        1.00     43.20    10.0%      432.00     475.20     1.10
+  2 x the task        1.97     43.20    10.0%      850.06     893.26     2.07
+  5 x the task        4.87     43.20    10.0%     2104.26    2147.46     4.97
+  10 x the task       9.71     43.20    10.0%     4194.58    4237.78     9.81
+  The same f reached by a short declared life instead needs bonds of
+    f =  1.00: about   10.0% of B in bonds, plus funding fB
+    f =  1.97: about   19.7% of B in bonds, plus funding fB
+    f =  4.87: about   48.7% of B in bonds, plus funding fB
+    f =  9.71: about   97.1% of B in bonds, plus funding fB
+
+ONE-DAY TASK, ONE PRICE, UNDER A LONG DECLARED EXPIRY
+==============================================================================
+  declared   1 days: f =    1.00, bonds / B = 300.0%, funding fB =     14.40 USD
+  declared  30 days: f =   15.50, bonds / B = 300.0%, funding fB =    223.20 USD
+  declared 300 days: f =  150.50, bonds / B = 300.0%, funding fB =   2167.20 USD
+
+ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
+==============================================================================
+   budget, ETH  L1 base fee, gwei  by filling L1  by filling deposits  minutes, worse
+            10                  1             26                    8             5.2
+            10                 10              9                    8             1.8
+            10                 50              2                    8             1.6
+           100                  1             45                   11             9.0
+           100                 10             26                   11             5.2
+           100                 50             13                   11             2.6
+          1000                  1             64                   14            12.8
+          1000                 10             45                   14             9.0
+          1000                 50             31                   14             6.2
+         10000                  1             84                   17            16.8
+         10000                 10             64                   17            12.8
+         10000                 50             51                   17            10.2
+
+  The monitor tips nothing here; any priority fee it pays makes the adversary
+  outbid it on every slot of every block, so the delay only shrinks. The last
+  column is the longer of the two routes.
+
+PROPOSERS THAT EXCLUDE A FORCED TRANSACTION
+==============================================================================
+   including share   P(out for 1 h, 300 slots)   slots for 2^-40   minutes
+              0.54                   6.72e-102                36       7.2
+              0.21                    1.94e-31               118      23.6
+              0.10                    1.87e-14               264      52.8
+              0.05                    2.08e-07               541     108.2
+

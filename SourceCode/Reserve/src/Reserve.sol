@@ -78,6 +78,11 @@ contract Reserve {
         /// lane first. A proof's public values must carry it.
         bytes32 commitment;
         address monitor;
+        /// Holds the agent's batch proofs and answers for it; zero if none.
+        address answerer;
+        /// What the answerer stakes, lost to the agent if a challenge it
+        /// could have answered expires.
+        uint256 answererStake;
     }
 
     struct Window {
@@ -124,6 +129,9 @@ contract Reserve {
         /// that is a contract wallet needs one: a transaction forced in through
         /// L1 arrives from the sender's own address only when that is an EOA.
         address monitor;
+        /// The agent's answerer, if it has one. An answer credits the
+        /// challenger's bond to it rather than to the agent.
+        address answerer;
     }
 
     /// The contract allowed to forfeit a bond on an unanswered challenge. Set
@@ -165,6 +173,8 @@ contract Reserve {
     error Frozen();
     error Held();
     error NotFrozen();
+    error NotAnswerer();
+    error NotClosed();
 
     event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee);
     event Transcript(uint256 indexed id, uint64 digest, uint64[] elems);
@@ -173,6 +183,8 @@ contract Reserve {
     event Closed(uint256 indexed id, uint256 deposit, uint256 bond);
     event FrozenBy(uint256 indexed id, address by);
     event Reclaimed(uint256 indexed id, uint256 deposit);
+    event AnswererStaked(uint256 indexed id, uint256 amount);
+    event AnswererSlashed(uint256 indexed id, address to, uint256 amount);
 
     constructor(
         uint64 domainId,
@@ -225,7 +237,9 @@ contract Reserve {
             unitSize: t.unitSize,
             secretHash: t.secretHash,
             commitment: t.commitment,
-            monitor: t.monitor
+            monitor: t.monitor,
+            answerer: t.answerer,
+            answererStake: 0
         });
         rootAt[id][0] = t.revocationRoot;
         if (t.funding == Funding.Deposit && t.deposit != 0) {
@@ -401,6 +415,42 @@ contract Reserve {
         if (!delegations[id].bondPaid) _forfeit(id);
     }
 
+    /// The answerer's stake, held until the delegation closes.
+    function stakeAnswerer(uint256 id) external payable {
+        Delegation storage d = delegations[id];
+        if (d.answerer == address(0) || msg.sender != d.answerer) revert NotAnswerer();
+        if (d.closed) revert NotClosable();
+        d.answererStake += msg.value;
+        emit AnswererStaked(id, msg.value);
+    }
+
+    /// An answerer that acknowledged a batch and let a challenge against it
+    /// expire loses its stake to the agent, which lost its bond.
+    function slashAnswerer(uint256 id) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        Delegation storage d = delegations[id];
+        uint256 amount = d.answererStake;
+        d.answererStake = 0;
+        emit AnswererSlashed(id, d.agent, amount);
+        if (amount != 0) {
+            (bool ok, ) = payable(d.agent).call{value: amount}("");
+            require(ok, "stake");
+        }
+    }
+
+    /// Pulled rather than paid at close, so an answerer cannot block a close.
+    function unstakeAnswerer(uint256 id) external {
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.answerer) revert NotAnswerer();
+        if (!d.closed) revert NotClosed();
+        uint256 amount = d.answererStake;
+        d.answererStake = 0;
+        if (amount != 0) {
+            (bool ok, ) = payable(msg.sender).call{value: amount}("");
+            require(ok, "stake");
+        }
+    }
+
     /// The principal's challenge holds settlement until it is answered.
     function hold(uint256 id) external {
         if (msg.sender != dispute) revert NotArbiter();
@@ -519,6 +569,10 @@ contract Reserve {
 
     function monitorOf(uint256 id) external view returns (address) {
         return delegations[id].monitor;
+    }
+
+    function answererOf(uint256 id) external view returns (address, uint256) {
+        return (delegations[id].answerer, delegations[id].answererStake);
     }
 
     function principalOf(uint256 id) external view returns (address) {

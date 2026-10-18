@@ -9,6 +9,8 @@ interface IReserveV {
     function agentOf(uint256 id) external view returns (address);
     function principalOf(uint256 id) external view returns (address);
     function monitorOf(uint256 id) external view returns (address);
+    function answererOf(uint256 id) external view returns (address, uint256);
+    function slashAnswerer(uint256 id) external;
     function forfeit(uint256 id) external;
     function hold(uint256 id) external;
     function release(uint256 id) external;
@@ -45,10 +47,18 @@ interface IReserveV {
 /// settlements of one batch with one Groth16 proof.
 ///
 /// Bonds. An answer credits each challenger's bond to the agent challenged,
-/// which pays for the proving. No answer by the deadline credits the bond back
-/// to the challenger and forfeits the agent's bond in the reserve to the
+/// or to its answerer if it has one, whoever sends the answer, so copying an
+/// answer gains nothing. No answer by the deadline credits the bond back to
+/// the challenger and forfeits the agent's bond in the reserve to the
 /// principal. Credits are withdrawn, never pushed, so no recipient can block
 /// an answer or an expiry.
+///
+/// Answerers. An answerer signs a receipt for each batch root it holds a
+/// proof of. If a challenge against a settlement in that batch then expires,
+/// and the receipt left the answerer a full answer window, the receipt and the
+/// settlement's path to the root move the answerer's stake to the agent. A
+/// stake of at least the agent's bond leaves a principal nothing to pay an
+/// answerer to stay silent with.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can
@@ -107,10 +117,14 @@ contract ValidityDispute {
     error BadPath();
     error RootMismatch();
     error NothingToWithdraw();
+    error NotExpired();
+    error BadReceipt();
+    error ReceiptTooLate();
 
     event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline);
     event Answered(uint256 indexed id, uint64 digest);
     event Expired(uint256 indexed id, uint64 digest);
+    event AnswererSlashed(uint256 indexed id, uint64 digest);
 
     constructor(
         address reserve_,
@@ -218,6 +232,48 @@ contract ValidityDispute {
         reserve.forfeit(id);
     }
 
+    /// What an answerer signs on receiving a batch: the delegation, the
+    /// batch's root, and when it received the proof.
+    function receiptDigest(uint256 id, bytes32 root, uint64 receivedAt) public view returns (bytes32) {
+        return keccak256(abi.encode(block.chainid, address(this), id, root, receivedAt));
+    }
+
+    function slashAnswerer(
+        uint256 id,
+        uint64 digest,
+        Settlement calldata s,
+        uint256 index,
+        bytes32[] calldata path,
+        uint64 receivedAt,
+        bytes calldata signature
+    ) external {
+        Challenge storage c = challenges[key(id, digest)];
+        if (c.status != Status.Expired) revert NotExpired();
+        _record(id, digest, s);
+        if (uint256(receivedAt) + answerWindow > c.deadline) revert ReceiptTooLate();
+        bytes32 root = rootOf(id, digest, s, index, path);
+        (address answerer, ) = reserve.answererOf(id);
+        if (answerer == address(0) || _signer(receiptDigest(id, root, receivedAt), signature) != answerer) {
+            revert BadReceipt();
+        }
+        emit AnswererSlashed(id, digest);
+        reserve.slashAnswerer(id);
+    }
+
+    function _signer(bytes32 h, bytes calldata signature) private pure returns (address) {
+        if (signature.length != 65) revert BadReceipt();
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) revert BadReceipt();
+        return ecrecover(h, v, r, s);
+    }
+
     function withdraw() external {
         uint256 amount = credit[msg.sender];
         if (amount == 0) revert NothingToWithdraw();
@@ -256,7 +312,8 @@ contract ValidityDispute {
         c.status = Status.Answered;
         openCount[id] -= 1;
         if (c.byPrincipal) reserve.release(id);
-        credit[reserve.agentOf(id)] += challengerBond;
+        (address answerer, ) = reserve.answererOf(id);
+        credit[answerer != address(0) ? answerer : reserve.agentOf(id)] += challengerBond;
         emit Answered(id, digest);
     }
 
