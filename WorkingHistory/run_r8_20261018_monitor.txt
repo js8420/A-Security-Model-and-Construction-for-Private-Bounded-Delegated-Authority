@@ -1,0 +1,10 @@
+BUDGET TRIPWIRE, TWO DOMAINS ON TWO LOCAL CHAINS
+==============================================================================
+  budget 50000, unit 10000; no proof is read at any step
+  PASS  five payments of 10,000 across two domains, total 50,000 = B, no freeze
+  PASS  the sixth, on domain B, takes the total past B
+  PASS  the monitor freezes the delegation on both domains
+  PASS  a further payment on domain A refused: Frozen
+  PASS  a further payment on domain B refused: Frozen
+  spent past the budget before the freeze: 10000
+  all checks pass

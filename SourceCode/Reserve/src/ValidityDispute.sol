@@ -10,7 +10,7 @@ interface IReserveV {
     function principalOf(uint256 id) external view returns (address);
     function monitorOf(uint256 id) external view returns (address);
     function answererOf(uint256 id) external view returns (address, uint256);
-    function slashAnswerer(uint256 id) external;
+    function slashAnswerer(uint256 id, address caller, uint256 bounty) external;
     function forfeit(uint256 id) external;
     function hold(uint256 id) external;
     function release(uint256 id) external;
@@ -56,9 +56,11 @@ interface IReserveV {
 /// Answerers. An answerer signs a receipt for each batch root it holds a
 /// proof of. If a challenge against a settlement in that batch then expires,
 /// and the receipt left the answerer a full answer window, the receipt and the
-/// settlement's path to the root burn the answerer's stake. A stake of at
-/// least the agent's bond leaves a principal nothing to pay an answerer to
-/// stay silent with, and burning it leaves nobody a reason to silence one.
+/// settlement's path to the root burn the answerer's stake, less a bounty of
+/// one challenger's bond to whoever brings them. A stake of at least the
+/// agent's bond plus that bounty leaves a principal nothing to pay an
+/// answerer to stay silent with, and burning the rest leaves nobody a reason
+/// to silence one.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can
@@ -257,7 +259,7 @@ contract ValidityDispute {
             revert BadReceipt();
         }
         emit AnswererSlashed(id, digest);
-        reserve.slashAnswerer(id);
+        reserve.slashAnswerer(id, msg.sender, challengerBond);
     }
 
     function _signer(bytes32 h, bytes calldata signature) private pure returns (address) {

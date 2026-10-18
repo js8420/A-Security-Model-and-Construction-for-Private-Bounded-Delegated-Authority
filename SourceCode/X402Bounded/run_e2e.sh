@@ -1,5 +1,6 @@
 #!/bin/bash
-# The bounded scheme through the x402 SDK on a local chain. Usage: run_e2e.sh TAG
+# The bounded scheme through the x402 SDK on a local chain, and the budget
+# tripwire across two local chains. Usage: run_e2e.sh TAG
 set -euo pipefail
 export PATH="$HOME/.foundry/bin:$PATH"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
@@ -18,10 +19,15 @@ npm ci --no-audit --no-fund >/dev/null
 npx tsc --noEmit
 
 anvil --silent &
-node_pid=$!
-trap 'kill $node_pid 2>/dev/null || true' EXIT
-for i in $(seq 1 50); do
-    cast block-number --rpc-url http://127.0.0.1:8545 >/dev/null 2>&1 && break
-    sleep 0.2
+a=$!
+anvil --silent --port 8546 --chain-id 31338 &
+b=$!
+trap 'kill $a $b 2>/dev/null || true' EXIT
+for port in 8545 8546; do
+    for i in $(seq 1 50); do
+        cast block-number --rpc-url http://127.0.0.1:$port >/dev/null 2>&1 && break
+        sleep 0.2
+    done
 done
 npx tsx e2e/run.ts | tee "$hist/run_${tag}_x402.txt"
+npx tsx e2e/monitor.ts | tee "$hist/run_${tag}_monitor.txt"

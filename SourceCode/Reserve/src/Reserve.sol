@@ -427,18 +427,24 @@ contract Reserve {
     }
 
     /// An answerer that acknowledged a batch and let a challenge against it
-    /// expire loses its stake. The stake is burnt rather than paid to anyone:
-    /// paid to the agent, an agent and principal acting together could knock
-    /// the answerer offline and split it; paid to the principal, a bribe for
-    /// silence would cost the principal nothing. It stays in this contract,
-    /// which has no way to send it.
-    function slashAnswerer(uint256 id) external {
+    /// expire loses its stake. Whoever brings the receipt is paid a fixed
+    /// bounty, so someone always has a reason to; the rest is burnt rather
+    /// than paid to anyone: paid to the agent, an agent and principal acting
+    /// together could knock the answerer offline and split it; paid to the
+    /// principal, a bribe for silence would cost the principal nothing. The
+    /// burnt part stays in this contract, which has no way to send it.
+    function slashAnswerer(uint256 id, address caller, uint256 bounty) external {
         if (msg.sender != dispute) revert NotArbiter();
         Delegation storage d = delegations[id];
         uint256 amount = d.answererStake;
         d.answererStake = 0;
-        burnt += amount;
+        uint256 paid = bounty < amount ? bounty : amount;
+        burnt += amount - paid;
         emit AnswererSlashed(id, amount);
+        if (paid != 0) {
+            (bool ok, ) = payable(caller).call{value: paid}("");
+            require(ok, "bounty");
+        }
     }
 
     /// Pulled rather than paid at close, so an answerer cannot block a close.

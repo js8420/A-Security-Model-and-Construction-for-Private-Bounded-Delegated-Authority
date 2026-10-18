@@ -147,9 +147,27 @@ def censorship():
         print(f"  {alpha:>16.3f} {p:>27.2e} {k:>17} {12 * k / 60:>9.1f}")
     print()
 
+# Targeted exclusion. An adversary pays each block's builder to leave one
+# transaction out. A builder that is offered the forcing party's tip T for
+# including it leaves it out only for more than T, so keeping it out for k
+# blocks costs the adversary more than k T, while the forcing party pays T
+# once. Excluding it pays only if k T stays below what the adversary gains.
+def bribery():
+    k = int(2 * 3600 / 12)
+    print("BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN")
+    print("=" * 78)
+    print(f"  blocks in the margin: {k}")
+    print(f"  {'adversary gains, USD':>22} {'tip that makes it unprofitable, USD':>38}")
+    for gain in (43.20, 432.00, 4320.00, 43200.00):
+        print(f"  {gain:>22,.2f} {gain / k:>38,.4f}")
+    print("  A block built by anyone the bribe does not reach includes it at once,")
+    print("  so every such block only shortens the delay.")
+    print()
+
 if __name__ == "__main__":
     k_w = windows()
     profiles(k_w)
     trade_off(k_w)
     contention()
     censorship()
+    bribery()

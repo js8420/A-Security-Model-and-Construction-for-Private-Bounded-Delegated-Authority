@@ -596,8 +596,8 @@ contract ValidityDisputeScaleTest is Test {
     }
 
     /// The answerer acknowledged the batch and stayed silent: the principal
-    /// still gets the agent's bond, and the answerer's stake is burnt, paid to
-    /// nobody, so neither the principal nor the agent profits from silencing it.
+    /// still gets the agent's bond, whoever brings the receipt is paid one
+    /// challenger's bond, and the rest of the stake is burnt.
     function testSilentAnswererLosesItsStake() public {
         (uint256 r, address ans) = _registerWithAnswerer();
         _settle(AGENT_PK, r, 5);
@@ -612,19 +612,22 @@ contract ValidityDisputeScaleTest is Test {
         address agent = vm.addr(AGENT_PK);
         uint256 a0 = agent.balance;
         uint256 p1 = principal.balance;
+        uint256 c0 = challenger.balance;
+        vm.prank(challenger);
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
         assertEq(agent.balance, a0);
         assertEq(principal.balance, p1);
+        assertEq(challenger.balance, c0 + BOND);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
-        assertEq(acc.burnt(), AGENT_BOND);
+        assertEq(acc.burnt(), AGENT_BOND - BOND);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         acc.close(r);
         uint256 b0 = ans.balance;
         vm.prank(ans);
         acc.unstakeAnswerer(r);
         assertEq(ans.balance, b0);
-        assertEq(address(acc).balance >= AGENT_BOND, true);
+        assertGe(address(acc).balance, acc.burnt());
     }
 
     function testSlashBeforeExpiryRefused() public {
@@ -736,6 +739,7 @@ contract ValidityDisputeScaleTest is Test {
         _openBy(principal, r, 5);
         vm.warp(_deadline(r, 5) + 1);
         vd.expire(r, 5);
+        vm.prank(challenger);
         g0 = gasleft();
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
         console.log("slash answerer, batch of one", g0 - gasleft());
