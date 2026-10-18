@@ -11,7 +11,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)' || { echo "node 20 or later needed, found $(node --version)"; exit 1; }
 
-(cd "$here/../Reserve" && forge build >/dev/null)
+log=$(mktemp)
+(cd "$here/../Reserve" && forge build > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
 cd "$here"
 npm ci --no-audit --no-fund >/dev/null
 npx tsc --noEmit

@@ -115,7 +115,7 @@ abstract contract Groth16Result is Test {
     /// and the hash of exactly the shares Statement.sol lists, and reaches the
     /// root the proof commits. Reads the cache `_cache` fills.
     function _checkStatement() internal view {
-        require(publicValues.length == 32 && bytes32(publicValues) == Statement.ROOT, "root");
+        require(keccak256(publicValues) == keccak256(abi.encodePacked(Statement.ROOT)), "root");
         bytes32 com = _com();
         bytes32 root0 = _root0();
         for (uint256 i = 0; i < Statement.PAYMENTS; ++i) {

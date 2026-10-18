@@ -39,7 +39,7 @@ contract ValidityDisputeOnChain is Script {
         vkey = vm.parseBytes32(_field("vkey"));
         publicValues = vm.parseBytes(_field("public_values"));
         proof = vm.parseBytes(_field("proof"));
-        require(bytes32(publicValues) == Statement.ROOT, "proof is not of the exported batch");
+        require(keccak256(publicValues) == keccak256(abi.encodePacked(Statement.ROOT)), "proof is not of the exported batch");
         Statement.Data memory d = Statement.load();
         digest = Statement.digest(d, 0);
         uint256 pk = vm.envUint("LOCAL_PK");
