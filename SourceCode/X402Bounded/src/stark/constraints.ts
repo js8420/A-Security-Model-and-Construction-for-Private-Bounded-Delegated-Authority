@@ -1,0 +1,155 @@
+import { P, add, eadd, emul, eneg, escale, esub, lift, mul, neg, sub, type E } from "./field.js";
+
+const MAGIC = "PBDAG001";
+
+/** The AIR's constraints as an expression graph, children before parents. */
+export interface Constraints {
+  width: number;
+  globals: number;
+  rowWidth: number;
+  ops: Uint8Array;
+  a: Uint32Array;
+  b: Uint32Array;
+  constants: Map<number, bigint>;
+  roots: Uint32Array;
+}
+
+const enum Op {
+  MainLocal = 0,
+  MainNext = 1,
+  Periodic = 2,
+  Public = 3,
+  FirstRow = 4,
+  LastRow = 5,
+  Transition = 6,
+  Constant = 7,
+  Add = 8,
+  Sub = 9,
+  Neg = 10,
+  Mul = 11,
+}
+
+export function loadConstraints(bytes: Uint8Array): Constraints {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (new TextDecoder().decode(bytes.subarray(0, 8)) !== MAGIC) throw new Error("not a constraint graph");
+  let at = 8;
+  const u32 = () => {
+    const v = view.getUint32(at, true);
+    at += 4;
+    return v;
+  };
+  const width = u32();
+  const globals = u32();
+  const rowWidth = u32();
+  const nodes = u32();
+  const count = u32();
+  const ops = new Uint8Array(nodes);
+  const a = new Uint32Array(nodes);
+  const b = new Uint32Array(nodes);
+  const constants = new Map<number, bigint>();
+  for (let i = 0; i < nodes; i++) {
+    const op = bytes[at++];
+    if (op > Op.Mul) throw new Error("unknown node");
+    ops[i] = op;
+    if (op === Op.Constant) {
+      const v = view.getBigUint64(at, true);
+      if (v >= P) throw new Error("non-canonical constant");
+      constants.set(i, v);
+      at += 8;
+    } else if (op <= Op.Public || op === Op.Neg) {
+      a[i] = u32();
+    } else if (op >= Op.Add) {
+      a[i] = u32();
+      b[i] = u32();
+    }
+    if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");
+  }
+  const roots = new Uint32Array(count);
+  for (let i = 0; i < count; i++) roots[i] = u32();
+  if (at !== bytes.length) throw new Error("trailing bytes in constraint graph");
+  return { width, globals, rowWidth, ops, a, b, constants, roots };
+}
+
+/**
+ * The degree of every constraint as a polynomial in the trace, counting the
+ * first- and last-row selectors as one and the transition selector, constants
+ * and public values as none. The quotient's chunk count follows from the largest.
+ */
+export function maxDegree(c: Constraints): number {
+  const deg = new Uint16Array(c.ops.length);
+  for (let i = 0; i < c.ops.length; i++) {
+    switch (c.ops[i]) {
+      case Op.MainLocal: case Op.MainNext: case Op.Periodic: case Op.FirstRow: case Op.LastRow:
+        deg[i] = 1; break;
+      case Op.Add: case Op.Sub:
+        deg[i] = Math.max(deg[c.a[i]], deg[c.b[i]]); break;
+      case Op.Neg:
+        deg[i] = deg[c.a[i]]; break;
+      case Op.Mul:
+        deg[i] = deg[c.a[i]] + deg[c.b[i]]; break;
+      default:
+        deg[i] = 0;
+    }
+  }
+  let m = 0;
+  for (const r of c.roots) m = Math.max(m, deg[r]);
+  return m;
+}
+
+export interface Point {
+  local: readonly E[];
+  next: readonly E[];
+  periodic: readonly E[];
+  publics: readonly bigint[];
+  firstRow: E;
+  lastRow: E;
+  transition: E;
+}
+
+/**
+ * Evaluates every constraint at the out-of-domain point and folds them in the
+ * order the AIR asserts them: acc = acc * alpha + c. Values known to lie in the
+ * base field are kept there, which is most of the graph's constants.
+ */
+export function fold(c: Constraints, at: Point, alpha: E): E {
+  const n = c.ops.length;
+  const base: (bigint | undefined)[] = new Array(n);
+  const ext: (E | undefined)[] = new Array(n);
+  const get = (i: number): E => ext[i] ?? lift(base[i] as bigint);
+  for (let i = 0; i < n; i++) {
+    const op = c.ops[i];
+    const x = c.a[i];
+    const y = c.b[i];
+    switch (op) {
+      case Op.MainLocal: ext[i] = at.local[x]; break;
+      case Op.MainNext: ext[i] = at.next[x]; break;
+      case Op.Periodic: ext[i] = at.periodic[x]; break;
+      case Op.Public: base[i] = at.publics[x]; break;
+      case Op.FirstRow: ext[i] = at.firstRow; break;
+      case Op.LastRow: ext[i] = at.lastRow; break;
+      case Op.Transition: ext[i] = at.transition; break;
+      case Op.Constant: base[i] = c.constants.get(i) as bigint; break;
+      case Op.Neg:
+        if (ext[x] === undefined) base[i] = neg(base[x] as bigint);
+        else ext[i] = eneg(ext[x] as E);
+        break;
+      case Op.Add:
+        if (ext[x] === undefined && ext[y] === undefined) base[i] = add(base[x] as bigint, base[y] as bigint);
+        else ext[i] = eadd(get(x), get(y));
+        break;
+      case Op.Sub:
+        if (ext[x] === undefined && ext[y] === undefined) base[i] = sub(base[x] as bigint, base[y] as bigint);
+        else ext[i] = esub(get(x), get(y));
+        break;
+      case Op.Mul:
+        if (ext[x] === undefined && ext[y] === undefined) base[i] = mul(base[x] as bigint, base[y] as bigint);
+        else if (ext[x] === undefined) ext[i] = escale(ext[y] as E, base[x] as bigint);
+        else if (ext[y] === undefined) ext[i] = escale(ext[x] as E, base[y] as bigint);
+        else ext[i] = emul(ext[x] as E, ext[y] as E);
+        break;
+    }
+  }
+  let acc: E = [0n, 0n];
+  for (const r of c.roots) acc = eadd(emul(acc, alpha), get(r));
+  return acc;
+}

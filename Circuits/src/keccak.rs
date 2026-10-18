@@ -29,6 +29,53 @@ pub fn export(path: &str, k: usize) -> (usize, bool, f64) {
     (bytes.len(), ok, secs)
 }
 
+/// Proofs of statements with no valid witness, made by running the prover on
+/// traces that break one constraint each, so that the transcript, every
+/// commitment and the grinding are honest and only the constraint fails.
+/// Each file goes to `dir`; returns each break's name and whether the
+/// deployed verifier accepts it.
+pub fn export_broken(dir: &str) -> Vec<(&'static str, bool)> {
+    use crate::trace::ComposedBreak as B;
+    let cases = [
+        ("cap_above_budget", B::CapAboveBudget),
+        ("run_start_mismatch", B::RunStartMismatch),
+        ("root_key_free", B::RootKeyFree),
+        ("amount_raised", B::AmountRaised),
+        ("share_domain", B::ShareDomain),
+    ];
+    let cfg = config();
+    cases
+        .into_iter()
+        .map(|(name, how)| {
+            let (t, pv) = composed_case::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(ROWS, Some(how));
+            let air = Air::from_public_values(&pv);
+            let proof: Proof<KConfig> = prove(&cfg, &air, t, &pv);
+            let ok = verify(&config(), &air, &proof, &pv).is_ok();
+            let bytes = bincode::serialize(&(&proof, &pv)).expect("serialise");
+            std::fs::write(format!("{dir}/broken_{name}.bin"), &bytes).expect("write proof");
+            (name, ok)
+        })
+        .collect()
+}
+
+/// Verifies an exported file with the deployed verifier, as the monitor's
+/// first check. Returns the milliseconds verification took, or why the file
+/// was refused: unreadable, trailing bytes, or rejected.
+pub fn verify_file(path: &str) -> Result<f64, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("unreadable: {e}"))?;
+    let mut cursor = std::io::Cursor::new(&bytes[..]);
+    let (proof, pv): (Proof<KConfig>, Vec<p3_goldilocks::Goldilocks>) =
+        bincode::deserialize_from(&mut cursor).map_err(|e| format!("malformed: {e}"))?;
+    if cursor.position() as usize != bytes.len() {
+        return Err("malformed: trailing bytes".into());
+    }
+    let air = std::panic::catch_unwind(|| Air::from_public_values(&pv)).map_err(|_| "malformed: public values".to_string())?;
+    let start = Instant::now();
+    let r = verify(&config(), &air, &proof, &pv);
+    let ms = start.elapsed().as_secs_f64() * 1000.0;
+    r.map(|_| ms).map_err(|e| format!("rejected: {e:?}"))
+}
+
 /// Where the reserve's tests read the exported batch's statements: what each
 /// settlement pays, to whom, when, the shares it publishes, its leaf and its
 /// path to the root the answer commits.

@@ -57,6 +57,7 @@ mod leaf;
 mod keccak;
 mod degree;
 mod statement;
+mod dag;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -551,6 +552,30 @@ fn main() {
         let path = "target/proof_128_keccak.bin";
         let (bytes, ok, secs) = keccak::export(path, k);
         println!("  Keccak proof of {k} payments and public values written to {path}: {bytes} bytes, verifies natively {ok}, proved in {secs:.2} s");
+        return;
+    }
+    if let Some(at) = std::env::args().position(|a| a == "verify-file") {
+        let path = std::env::args().nth(at + 1).expect("verify-file needs a path");
+        match keccak::verify_file(&path) {
+            Ok(ms) => println!("accept {ms:.3}"),
+            Err(why) => {
+                println!("reject {}", why.replace('\n', " "));
+                std::process::exit(3);
+            }
+        }
+        return;
+    }
+    if let Some(at) = std::env::args().position(|a| a == "export-broken") {
+        let dir = std::env::args().nth(at + 1).expect("export-broken needs a directory");
+        for (name, ok) in keccak::export_broken(&dir) {
+            println!("  broken_{name}.bin written, verifies natively {ok}");
+        }
+        return;
+    }
+    if std::env::args().any(|a| a == "export-constraints") {
+        let path = "target/constraints.dag";
+        let (bytes, nodes, constraints) = dag::export(path);
+        println!("  constraint graph written to {path}: {bytes} bytes, {nodes} nodes, {constraints} constraints");
         return;
     }
     if std::env::args().any(|a| a == "degree") {

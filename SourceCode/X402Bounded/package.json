@@ -6,9 +6,11 @@
   "description": "The bounded-reserve payment scheme for x402: client, resource-server and facilitator mechanisms, and an end-to-end run on a local chain",
   "scripts": {
     "check": "tsc --noEmit",
-    "e2e": "tsx e2e/run.ts"
+    "e2e": "tsx e2e/run.ts",
+    "stark": "tsx e2e/stark.ts"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "@x402/core": "2.28.0",
     "@x402/express": "2.28.0",
     "@x402/fetch": "2.28.0",
