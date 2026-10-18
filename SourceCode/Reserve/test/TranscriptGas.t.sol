@@ -5,6 +5,7 @@ import {console} from "forge-std/Test.sol";
 import {Reserve} from "../src/Reserve.sol";
 import {Statement} from "./Statement.sol";
 import {Fixture} from "./Fixture.sol";
+import {TermsOf} from "./TermsOf.sol";
 
 /// What a settlement costs, now that it moves the payment as well as
 /// publishing its evidence. Every figure is the settle call alone, warmed by
@@ -162,6 +163,17 @@ contract TranscriptGas is Fixture {
         bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
         vm.expectRevert(Reserve.BadSignature.selector);
         acc.settleLogged(id, payee, _amount(e), 1, _now(), e, keccak256("other fields"), sg);
+    }
+
+    /// The opening mode is the principal's choice and is recorded as made.
+    function testOpeningModeIsRecorded() public {
+        uint256 open = _reg(Reserve.Funding.Deposit);
+        assertFalse(acc.openOnRequestOf(open));
+        Reserve.Terms memory t = TermsOf.make(agent, CAP, VELOCITY, WINDOW, Reserve.Funding.Deposit, BUDGET, COM, ROOT0, uint64(block.timestamp) + LIFE);
+        t.openOnRequest = true;
+        vm.prank(principal);
+        uint256 asked = acc.register{value: 1 ether}(t);
+        assertTrue(acc.openOnRequestOf(asked));
     }
 
     /// The record the monitor reads carries the signed time and the opening.

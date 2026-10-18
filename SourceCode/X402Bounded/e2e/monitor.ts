@@ -52,6 +52,7 @@ interface Terms {
   commitment: Hex;
   revocationRoot: Hex;
   secretHash: Hex;
+  openOnRequest?: boolean;
 }
 
 /** A reserve on one local chain, with a dispute contract whose answer system accepts anything when `dispute` is set. */
@@ -93,6 +94,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
       agent: agent.address, cap: t.cap, velocityN: 20n, windowW: 86_400n, secretHash: t.secretHash, funding: 0,
       deposit: 10n ** 12n, commitment: t.commitment, revocationRoot: t.revocationRoot, expiry: now + 30n * 86_400n,
       unitSize: t.unitSize, rangeBase: t.rangeBase, rangeLen: t.rangeLen, monitor: ZERO, answerer: ZERO,
+      openOnRequest: t.openOnRequest ?? false,
     };
     await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms], value: parseEther("0.1") }));
     return { name, chain: pub, wallet: principal, reserve, delegation: id, dispute: vd };
@@ -130,7 +132,12 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     return { frozen, holds };
   };
   const now = async () => (await pub.getBlock({ blockTag: "latest" })).timestamp;
-  return { delegate, settle, forgeAnswer, state, now };
+  /** Moves the chain's clock forward and mines a block. */
+  const advance = async (seconds: number) => {
+    await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
+    await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
+  };
+  return { delegate, settle, forgeAnswer, state, now, advance };
 }
 
 const lines: string[] = [];
@@ -326,6 +333,45 @@ async function main() {
   check("no backing proof arrives, so the monitor freezes the delegation", rY.froze && endY.frozen && rY.reasons.some((r) => r.includes("answered")), rY.reasons[0] ?? "");
   const endX = await A.state(dX);
   check("the honest delegation is neither held nor frozen", !endX.frozen && endX.holds === 0);
+
+  section("opening on request, on domain A");
+  const WAIT = 600n;
+  const asked: Terms = { ...proven, openOnRequest: true };
+  const gateBoth = () => new ProofGate([{ name: "deployed", check: deployed }, { name: "independent", check: independent }], air.globals, air.rowWidth);
+  {
+    const dW = await A.delegate(asked);
+    const mW = new Monitor([dW], provenPolicy, gateBoth(), WAIT);
+    const w = await settleProven(dW);
+    await mW.deliverProof(honest);
+    const r0 = await mW.poll();
+    const c0 = await mW.challengeUnbacked();
+    check("payments under a delegation that opens on request, delivered with the honest proof alone: nothing challenged, and the principal holds no payment's fields", w.results.every((r) => r === "settled") && !r0.froze && c0.length === 0 && mW.openedCount() === 0, w.results.join(", "));
+    const req = await mW.requestOpenings();
+    for (const o of w.os.slice(0, w.os.length - 1)) mW.deliverOpening(o);
+    const c1 = await mW.challengeUnbacked();
+    check(`the principal asks for all ${payments.length} openings; within the delivery wait nothing is challenged`, req.length === payments.length && c1.length === 0);
+    await A.advance(Number(WAIT) + 1);
+    const r2 = await mW.poll();
+    const c2 = await mW.challengeUnbacked();
+    const held = await A.state(dW);
+    check("the agent opens all but one; after the wait the one it withheld is challenged on chain and the delegation held", !r2.froze && c2.length === 1 && c2[0].digest === payments[payments.length - 1].digest && held.holds === 1, `challenged ${c2.length}, holds ${held.holds}`);
+  }
+  {
+    const dV = await A.delegate(asked);
+    const mV = new Monitor([dV], provenPolicy, gateBoth(), WAIT);
+    const os = openingsOf(payments).map((o, i) => (i === 0 ? { ...o, category: 9n } : o));
+    const sent: string[] = [];
+    for (let i = 0; i < payments.length; i++) {
+      const s = payments[i];
+      sent.push(await A.settle(dV, { digest: s.digest, amount: s.amount, payee: s.payee, time: s.time, elems: s.elems, opening: commitOpening(os[i]) }));
+    }
+    await mV.deliverProof(honest);
+    const quiet = await mV.poll();
+    await mV.requestOpenings();
+    for (const o of os) mV.deliverOpening(o);
+    const r = await mV.poll();
+    check("a delegation that opens on request, with the honest proof delivered: one payment, opened on request, names a category the policy does not allow, and the monitor freezes the delegation", sent.every((x) => x === "settled") && !quiet.froze && r.froze && r.reasons.some((x) => x.includes("category")), r.reasons.join("; "));
+  }
 
   console.log("THE MONITOR ON TWO LOCAL CHAINS: BUDGET, OPENINGS, PROOFS AND CHALLENGES");
   console.log("=".repeat(78));

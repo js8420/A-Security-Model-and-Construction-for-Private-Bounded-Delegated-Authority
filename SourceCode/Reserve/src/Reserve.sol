@@ -59,6 +59,9 @@ contract Reserve {
         Funding funding;
         bool bondPaid;
         bool closed;
+        /// The principal's choice at issuance: the agent opens each payment's
+        /// fields only when the principal asks, not with every proof.
+        bool openOnRequest;
         uint64 epoch;
         /// No settlement after this; the bond is released a delay later.
         uint64 expiry;
@@ -132,6 +135,9 @@ contract Reserve {
         /// The agent's answerer, if it has one. An answer credits the
         /// challenger's bond to it rather than to the agent.
         address answerer;
+        /// Whether the agent opens payments only on the principal's request.
+        /// The reserve records the choice and never acts on it.
+        bool openOnRequest;
     }
 
     /// The contract allowed to forfeit a bond on an unanswered challenge. Set
@@ -231,6 +237,7 @@ contract Reserve {
             funding: t.funding,
             bondPaid: false,
             closed: false,
+            openOnRequest: t.openOnRequest,
             epoch: 0,
             expiry: t.expiry,
             frozenAt: 0,
@@ -572,6 +579,10 @@ contract Reserve {
     function termsOf(uint256 id) external view returns (uint64, uint64, uint64, bytes32) {
         Delegation storage d = delegations[id];
         return (d.unitSize, d.rangeBase, d.rangeLen, d.secretHash);
+    }
+
+    function openOnRequestOf(uint256 id) external view returns (bool) {
+        return delegations[id].openOnRequest;
     }
 
     function epochOf(uint256 id) external view returns (uint64) {

@@ -119,6 +119,7 @@ async function main() {
     commitment: keccak256("0x02"), revocationRoot: keccak256("0x03"), expiry: now + 30n * 86_400n,
     unitSize: UNIT, rangeBase: 0n, rangeLen: 1024n,
     monitor: "0x0000000000000000000000000000000000000000", answerer: "0x0000000000000000000000000000000000000000",
+    openOnRequest: false,
   };
   const id = 0n;
   await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms], value: parseEther("0.1") }));

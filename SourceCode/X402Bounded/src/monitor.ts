@@ -44,6 +44,7 @@ interface Chained {
   domain: bigint;
   terms: Terms;
   roots: Map<bigint, Hex>;
+  onRequest: boolean;
 }
 
 const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`;
@@ -53,10 +54,16 @@ const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`
  * the openings and proofs the agent delivers, and acts on four rules.
  * The total settled past the budget freezes the delegation everywhere. An
  * opening that breaks the policy, or that disagrees with its own record,
- * freezes it everywhere too; neither rule reads a proof. A settlement with no
- * opening, or with no proof that every verifier accepts, is challenged on its
- * domain. And a challenge answered without a backing opening and proof
- * arriving within the delivery wait freezes the delegation everywhere.
+ * freezes it everywhere too; neither rule reads a proof. A settlement that
+ * nothing delivered backs is challenged on its domain. And a challenge
+ * answered without anything backing the settlement arriving within the
+ * delivery wait freezes the delegation everywhere.
+ *
+ * What backs a settlement depends on the mode the principal chose at
+ * issuance. Opening every payment, it is the opening and a proof every
+ * verifier accepts. Opening on request, it is the proof alone until the
+ * monitor asks for the opening, and the opening as well once the delivery
+ * wait after the request has passed.
  */
 export class Monitor {
   private readonly from = new Map<string, bigint>();
@@ -66,6 +73,7 @@ export class Monitor {
   private readonly chained = new Map<string, Chained>();
   private readonly challenged = new Set<string>();
   private readonly answered = new Map<string, bigint>();
+  private readonly requested = new Map<string, bigint>();
   private frozen = false;
   readonly reasons: string[] = [];
 
@@ -115,7 +123,8 @@ export class Monitor {
     const domain = await read<bigint>("domain");
     const commitment = await read<Hex>("commitmentOf", [d.delegation]);
     const [unitSize, rangeBase, rangeLen, secretHash] = await read<[bigint, bigint, bigint, Hex]>("termsOf", [d.delegation]);
-    const c = { domain, terms: { commitment, unitSize, rangeBase, rangeLen, secretHash }, roots: new Map<bigint, Hex>() };
+    const onRequest = await read<boolean>("openOnRequestOf", [d.delegation]);
+    const c = { domain, terms: { commitment, unitSize, rangeBase, rangeLen, secretHash }, roots: new Map<bigint, Hex>(), onRequest };
     this.chained.set(d.name, c);
     return c;
   }
@@ -129,12 +138,20 @@ export class Monitor {
     return r;
   }
 
-  /** Whether a delivered opening and a delivered, accepted proof both back this record. */
+  /** Whether what the agent delivered backs this record, under the delegation's opening mode. */
   async backed(r: Record): Promise<boolean> {
     const d = this.domains.find((x) => x.name === r.domain);
-    if (!d || !this.openings.has(r.opening)) return false;
-    if (!this.gate) return true;
+    if (!d) return false;
     const c = await this.context(d);
+    if (!this.openings.has(r.opening)) {
+      if (!c.onRequest) return false;
+      const asked = this.requested.get(key(r));
+      if (asked !== undefined) {
+        const now = (await d.chain.getBlock({ blockTag: "latest" })).timestamp;
+        if (now >= asked + this.deliveryWait) return false;
+      }
+    }
+    if (!this.gate) return true;
     const root = await this.root(d, r.epoch);
     const elemsHash = keccak256(encodePacked(["uint64[]"], [r.elems]));
     return (this.backing.get(r.digest) ?? []).some(({ terms: t, s }) =>
@@ -226,6 +243,29 @@ export class Monitor {
     this.frozen = true;
     this.reasons.push(...reasons);
     return { total, froze: true, reasons };
+  }
+
+  /**
+   * Asks the agent for the openings of every record it has not opened, as a
+   * principal does on hearing of a bug in the proof system. The agent must
+   * deliver them within the delivery wait. Returns the records asked for.
+   */
+  async requestOpenings(): Promise<Record[]> {
+    const asked: Record[] = [];
+    for (const r of this.records.values()) {
+      if (this.openings.has(r.opening) || this.requested.has(key(r))) continue;
+      const d = this.domains.find((x) => x.name === r.domain) as Domain;
+      this.requested.set(key(r), (await d.chain.getBlock({ blockTag: "latest" })).timestamp);
+      asked.push(r);
+    }
+    return asked;
+  }
+
+  /** How many payments' fields the principal holds in the clear. */
+  openedCount(): number {
+    let n = 0;
+    for (const r of this.records.values()) if (this.openings.has(r.opening)) n += 1;
+    return n;
   }
 
   /** Challenges, on its own domain, every record that nothing delivered backs. Returns the records challenged. */

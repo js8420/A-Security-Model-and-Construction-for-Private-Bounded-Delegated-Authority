@@ -9,6 +9,7 @@ export const reserveAbi = parseAbi([
   "function domain() view returns (uint64)",
   "function frozenOf(uint256 id) view returns (bool frozen, uint32 holds)",
   "function epochOf(uint256 id) view returns (uint64)",
+  "function openOnRequestOf(uint256 id) view returns (bool)",
   "function rootAt(uint256 id, uint64 epoch) view returns (bytes32)",
   "function commitmentOf(uint256 id) view returns (bytes32)",
   "function termsOf(uint256 id) view returns (uint64 unitSize, uint64 rangeBase, uint64 rangeLen, bytes32 secretHash)",
