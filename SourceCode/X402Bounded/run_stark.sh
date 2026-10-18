@@ -1,7 +1,8 @@
 #!/bin/bash
 # The independent STARK verifier against the deployed Plonky3 one: honest
 # proofs, altered proofs, proofs of statements with no witness, and the
-# monitor's gate under a simulated verifier bug. Usage: run_stark.sh TAG
+# monitor's gate under a simulated verifier bug, then the timing study of
+# both verifiers. Usage: run_stark.sh TAG
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
@@ -42,3 +43,5 @@ npx tsc --noEmit
 CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" PROOF_SMALL="$work/small.bin" \
     BROKEN_DIR="$work/broken" CIRCUIT_BIN="$bin" REPS=11 \
     npx tsx e2e/stark.ts | tee "$hist/run_${tag}_stark.txt"
+CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" CIRCUIT_BIN="$bin" \
+    npx tsx e2e/stark_time.ts | tee "$hist/run_${tag}_stark_time.txt"

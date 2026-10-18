@@ -59,9 +59,10 @@ pub fn export_broken(dir: &str) -> Vec<(&'static str, bool)> {
 }
 
 /// Verifies an exported file with the deployed verifier, as the monitor's
-/// first check. Returns the milliseconds verification took, or why the file
-/// was refused: unreadable, trailing bytes, or rejected.
-pub fn verify_file(path: &str) -> Result<f64, String> {
+/// first check, `reps` times over one parse. Returns the milliseconds each
+/// verification took, or why the file was refused: unreadable, trailing
+/// bytes, or rejected.
+pub fn verify_file(path: &str, reps: usize) -> Result<Vec<f64>, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("unreadable: {e}"))?;
     let mut cursor = std::io::Cursor::new(&bytes[..]);
     let (proof, pv): (Proof<KConfig>, Vec<p3_goldilocks::Goldilocks>) =
@@ -70,10 +71,15 @@ pub fn verify_file(path: &str) -> Result<f64, String> {
         return Err("malformed: trailing bytes".into());
     }
     let air = std::panic::catch_unwind(|| Air::from_public_values(&pv)).map_err(|_| "malformed: public values".to_string())?;
-    let start = Instant::now();
-    let r = verify(&config(), &air, &proof, &pv);
-    let ms = start.elapsed().as_secs_f64() * 1000.0;
-    r.map(|_| ms).map_err(|e| format!("rejected: {e:?}"))
+    let cfg = config();
+    let mut times = Vec::with_capacity(reps);
+    for _ in 0..reps.max(1) {
+        let start = Instant::now();
+        let r = verify(&cfg, &air, &proof, &pv);
+        times.push(start.elapsed().as_secs_f64() * 1000.0);
+        r.map_err(|e| format!("rejected: {e:?}"))?;
+    }
+    Ok(times)
 }
 
 /// Where the reserve's tests read the exported batch's statements: what each

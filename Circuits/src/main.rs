@@ -556,8 +556,9 @@ fn main() {
     }
     if let Some(at) = std::env::args().position(|a| a == "verify-file") {
         let path = std::env::args().nth(at + 1).expect("verify-file needs a path");
-        match keccak::verify_file(&path) {
-            Ok(ms) => println!("accept {ms:.3}"),
+        let reps: usize = std::env::args().nth(at + 2).and_then(|a| a.parse().ok()).unwrap_or(1);
+        match keccak::verify_file(&path, reps) {
+            Ok(ms) => println!("accept {}", ms.iter().map(|m| format!("{m:.3}")).collect::<Vec<_>>().join(" ")),
             Err(why) => {
                 println!("reject {}", why.replace('\n', " "));
                 std::process::exit(3);
