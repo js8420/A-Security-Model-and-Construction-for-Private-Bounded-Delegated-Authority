@@ -528,6 +528,43 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(agent.balance, bond + AGENT_BOND);
     }
 
+    /// A principal that is a contract wallet monitors from an EOA: that
+    /// address's challenges hold settlement and it may freeze, and nobody
+    /// else's do.
+    function testMonitorAddressHoldsAndFreezes() public {
+        address mon = address(0xA11CE);
+        vm.deal(mon, 10 ether);
+        Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
+        t.monitor = mon;
+        vm.prank(principal);
+        uint256 r = acc.register{value: AGENT_BOND}(t);
+        assertEq(acc.monitorOf(r), mon);
+        _settle(AGENT_PK, r, 5);
+        _openBy(mon, r, 5);
+        (, uint32 holds) = acc.frozenOf(r);
+        assertEq(holds, 1);
+        vm.expectRevert(Reserve.Held.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        _answerAlone(r, 5);
+        _settle(AGENT_PK, r, 6);
+        vm.expectRevert(Reserve.NotPrincipal.selector);
+        vm.prank(challenger);
+        acc.freeze(r);
+        vm.prank(mon);
+        acc.freeze(r);
+        vm.expectRevert(Reserve.Frozen.selector);
+        this.settleAgain(AGENT_PK, r, 7);
+    }
+
+    /// With no monitor recorded, the zero address cannot freeze.
+    function testNoMonitorMeansOnlyThePrincipal() public {
+        uint256 r = _register(AGENT_PK, 10);
+        assertEq(acc.monitorOf(r), address(0));
+        vm.expectRevert(Reserve.NotPrincipal.selector);
+        vm.prank(address(0));
+        acc.freeze(r);
+    }
+
     function testReclaimNeedsAFreeze() public {
         uint256 r = _register(AGENT_PK, 10);
         vm.prank(principal);

@@ -431,6 +431,8 @@ fn controls() {
     ] {
         check(label, prover::roundtrip_batch::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, k, b), want);
     }
+    check("COMPOSED BATCH, 10 payments padded to 16 by repetition",
+          prover::roundtrip_padded::<{ prover::REGISTERS }, 8, 8, 16, 14>(prover::ROWS, 10), true);
     {
         use p3_field::PrimeField64;
         let values = |k: usize, b: Option<trace::ComposedBreak>| -> Vec<u64> {
@@ -477,6 +479,44 @@ fn controls() {
     println!();
     println!("  {} controls, every one rejected; {} positive checks, every one holding.",
              CONTROLS.load(Ordering::Relaxed), POSITIVES.load(Ordering::Relaxed));
+}
+
+fn batch_cost() {
+    println!("PROOF COST BY BATCH SIZE, COMPOSED CIRCUIT AT {} ROWS, GRINDING OFF", prover::ROWS);
+    println!("{}", "=".repeat(78));
+    let rows = prover::batch_cost(COST_BATCHES, COST_PER_BATCH, 10);
+    let g = prover::grinding_cost(200);
+    println!("  {:>5} {:>9} {:>9} {:>9} {:>9} {:>9} {:>11} {:>8} {:>10} {:>9}",
+             "k", "min", "q1", "median", "q3", "verify", "proof bytes", "pv bytes", "prove/pmt", "bytes/pmt");
+    for r in &rows {
+        let per = (r.prove.median + g.mean) / r.k as f64;
+        let bpp = (r.bytes + r.public_bytes) / r.k;
+        println!("  {:>5} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.2} {:>11} {:>8} {:>8.1}ms {:>9}",
+                 r.k, r.prove.min, r.prove.q1, r.prove.median, r.prove.q3, r.verify.median,
+                 r.bytes, r.public_bytes, per, bpp);
+    }
+    println!();
+    println!("  Milliseconds per proof, {} iterations in {} batches, sizes rotated", COST_BATCHES * COST_PER_BATCH, COST_BATCHES);
+    println!("  inside each batch. prove/pmt adds the grinding mean, {:.2} ms over 200", g.mean);
+    println!("  fresh transcripts, and divides by k; bytes/pmt is proof plus public values over k.");
+    println!();
+    println!("  PER-BATCH MEDIANS, ms per proof.");
+    print!("  {:>5}", "k");
+    for i in 0..COST_BATCHES { print!(" {:>8}", i + 1); }
+    println!();
+    for r in &rows {
+        print!("  {:>5}", r.k);
+        for v in &r.prove_batches { print!(" {:>8.1}", v); }
+        println!();
+    }
+    println!();
+    for w in rows.windows(2) {
+        let (x, y) = (&w[0], &w[1]);
+        let separate = x.prove.q3 < y.prove.q1 || y.prove.q3 < x.prove.q1;
+        println!("  k {:>3} against {:>3}: {:>8.1}-{:<8.1} vs {:>8.1}-{:<8.1} {}",
+                 x.k, y.k, x.prove.q1, x.prove.q3, y.prove.q1, y.prove.q3,
+                 if separate { "separate" } else { "overlap" });
+    }
 }
 
 fn main() {
@@ -549,6 +589,10 @@ fn main() {
     }
     // Every positive check and negative control, in minutes rather than the
     // hours the full run takes.
+    if std::env::args().any(|a| a == "batch-cost") {
+        batch_cost();
+        return;
+    }
     if std::env::args().any(|a| a == "controls") {
         controls();
         return;

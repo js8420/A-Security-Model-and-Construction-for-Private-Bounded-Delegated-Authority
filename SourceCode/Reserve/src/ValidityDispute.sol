@@ -8,6 +8,7 @@ interface IReserveV {
     function settled(uint256 id, uint64 digest) external view returns (bytes32);
     function agentOf(uint256 id) external view returns (address);
     function principalOf(uint256 id) external view returns (address);
+    function monitorOf(uint256 id) external view returns (address);
     function forfeit(uint256 id) external;
     function hold(uint256 id) external;
     function release(uint256 id) external;
@@ -144,7 +145,7 @@ contract ValidityDispute {
         if (challenges[k].status != Status.None) revert AlreadyChallenged();
         _record(id, digest, s);
         if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
-        bool principal = msg.sender == reserve.principalOf(id);
+        bool principal = msg.sender == reserve.principalOf(id) || msg.sender == reserve.monitorOf(id);
         uint64 deadline = _queue(reserve.agentOf(id), principal);
         challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open, byPrincipal: principal});
         openCount[id] += 1;

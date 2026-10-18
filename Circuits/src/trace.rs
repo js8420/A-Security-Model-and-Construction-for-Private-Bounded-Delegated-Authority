@@ -845,6 +845,28 @@ pub fn composed_batch<
     build_batch::<R, MD, RD, DEPTH, COVER>(rows, &batch_payments(k), how)
 }
 
+/// k payments proved as a batch of the next power of two, the extra rows
+/// repeating the first payments. A batch holds a power of two, so an agent
+/// with k payments lists some twice; a repeated payment is the same
+/// settlement, so its leaf appears twice and either one answers.
+pub fn composed_batch_padded<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    k: usize,
+) -> (RowMajorMatrix<F>, Vec<F>) {
+    let mut pays = batch_payments(k);
+    let n = k.next_power_of_two();
+    for i in 0..n - k {
+        pays.push(pays[i % k]);
+    }
+    build_batch::<R, MD, RD, DEPTH, COVER>(rows, &pays, None)
+}
+
 /// The harness's k payments. The first is the single payment every other
 /// measurement proves.
 pub fn batch_payments(k: usize) -> Vec<(Pay, [u8; 20])> {

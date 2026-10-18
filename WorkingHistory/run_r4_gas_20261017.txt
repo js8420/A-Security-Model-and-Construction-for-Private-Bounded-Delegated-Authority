@@ -1,0 +1,70 @@
+﻿No files changed, compilation skipped
+
+Ran 15 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1569802)
+Logs:
+  Open, deposit 328300
+  Open, permit2 240310
+  Settle logged, 64 units 179586
+  Revoke, first range 74098
+  Revoke, later range 52766
+  Claim 292066
+
+[PASS] testChallengeCallDataBudget() (gas: 4932)
+Logs:
+  challenge call data alone, gas 86051792
+  proof bytes 5378237
+  over the 2^24 per-transaction cap x100 512
+
+[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 587172)
+[PASS] testCloseReturnsDepositAndBond() (gas: 706989)
+[PASS] testDepositAgainstPermit2() (gas: 1768074)
+Logs:
+  settle logged, 64 units, deposit 179574
+  settle logged, 64 units, permit2 181447
+    permit2 minus deposit 1873
+
+[PASS] testDigestSettlesOnce() (gas: 500079)
+[PASS] testLoggedAgainstPreventive() (gas: 1160449)
+Logs:
+  accountable, logged, 64 units 179562
+  preventive 32606
+  ratio x100 550
+
+[PASS] testNoSettlementAfterExpiry() (gas: 376617)
+[PASS] testPayeeIsBound() (gas: 374867)
+[PASS] testRevokeIsThePrincipals() (gas: 331479)
+[PASS] testRevokeRangeRules() (gas: 544480)
+[PASS] testSlotCountFollowsTheAmount() (gas: 509288)
+[PASS] testStaleOrFutureTimeRefused() (gas: 511702)
+[PASS] testStoredAgainstLogged() (gas: 10709672)
+Logs:
+  units 1
+    stored 64885
+    logged 43569
+    ratio x100 148
+  units 3
+    stored 114739
+    logged 47871
+    ratio x100 239
+  units 8
+    stored 194017
+    logged 58644
+    ratio x100 330
+  units 14
+    stored 320972
+    logged 71649
+    ratio x100 447
+  units 30
+    stored 629373
+    logged 106495
+    ratio x100 590
+  units 64
+    stored 1274154
+    logged 181642
+    ratio x100 701
+
+[PASS] testWrongSecretCannotClaim() (gas: 609371)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 15.66ms (60.39ms CPU time)
+
+Ran 1 test suite in 17.22ms (15.66ms CPU time): 15 tests passed, 0 failed, 0 skipped (15 total tests)

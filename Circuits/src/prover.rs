@@ -925,6 +925,92 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
 }
 
 
+/// One batch size, timed as a whole proof.
+pub struct BatchRow {
+    pub k: usize,
+    pub bytes: usize,
+    pub public_bytes: usize,
+    pub prove: Stats,
+    pub verify: Stats,
+    pub prove_batches: Vec<f64>,
+}
+
+/// What a proof costs at each batch size from one payment to the trace height,
+/// grinding off. The trace is the same height at every size, so the question is
+/// how much the statement and its periodic columns add, and the answer sets
+/// the cost per payment of a batch that does not fill.
+pub fn batch_cost(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<BatchRow> {
+    let zk = config_with(NUM_QUERIES, LOG_BLOWUP, 0);
+    let cfg = &zk;
+    let sizes: Vec<usize> = (0..=ROWS.trailing_zeros()).map(|e| 1usize << e).collect();
+    let mut cases = Vec::new();
+    for &k in &sizes {
+        let (tr, pv) = crate::trace::composed_batch::<{ REGISTERS }, 16, 32, 16, 64>(ROWS, k, None);
+        let air = crate::degree::Stated::new(ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::from_public_values(&pv));
+        let proof = prove(cfg, &air, tr.clone(), &pv);
+        assert!(verify(cfg, &air, &proof, &pv).is_ok(), "a batch proof built during setup must verify");
+        let bytes = bincode::serialize(&proof).expect("proof serialises").len();
+        cases.push((k, air, tr, pv, proof, bytes));
+    }
+    let n = cases.len();
+    for c in &cases {
+        let _ = prove(cfg, &c.1, c.2.clone(), &c.3);
+    }
+    let mut ps: Vec<Vec<u128>> = vec![Vec::new(); n];
+    let mut vs: Vec<Vec<u128>> = vec![Vec::new(); n];
+    let mut pb: Vec<Vec<f64>> = vec![Vec::new(); n];
+    for batch in 0..batches {
+        if batch > 0 {
+            sleep(Duration::from_secs(pause_secs));
+        }
+        for j in 0..n {
+            let i = (j + batch) % n;
+            let c = &cases[i];
+            let mut this = Vec::with_capacity(per_batch);
+            for _ in 0..per_batch {
+                let ready = c.2.clone();
+                let t = Instant::now();
+                let _ = prove(cfg, &c.1, ready, &c.3);
+                this.push(t.elapsed().as_micros());
+                let t = Instant::now();
+                let ok = verify(cfg, &c.1, &c.4, &c.3).is_ok();
+                vs[i].push(t.elapsed().as_micros());
+                assert!(ok, "a batch proof must verify when timed");
+            }
+            pb[i].push(summarise(this.clone(), 1).median);
+            ps[i].extend(this);
+        }
+    }
+    (0..n)
+        .map(|i| BatchRow {
+            k: cases[i].0,
+            bytes: cases[i].5,
+            public_bytes: cases[i].3.len() * 8,
+            prove: summarise(ps[i].clone(), 1),
+            verify: summarise(vs[i].clone(), 1),
+            prove_batches: pb[i].clone(),
+        })
+        .collect()
+}
+
+/// k payments proved as a padded batch of the next power of two.
+pub fn roundtrip_padded<
+    const R: usize,
+    const MD: usize,
+    const RD: usize,
+    const DEPTH: usize,
+    const COVER: usize,
+>(
+    rows: usize,
+    k: usize,
+) -> bool {
+    let (t, pv) = crate::trace::composed_batch_padded::<R, MD, RD, DEPTH, COVER>(rows, k);
+    let air = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(&pv);
+    let cfg = config();
+    let proof = prove(&cfg, &air, t, &pv);
+    verify(&cfg, &air, &proof, &pv).is_ok()
+}
+
 /// One composed proof at a chosen FRI setting, with the size broken into the
 /// parts a wrapper would have to replace. Deterministic at fixed parameters.
 pub fn composed_proof_at<

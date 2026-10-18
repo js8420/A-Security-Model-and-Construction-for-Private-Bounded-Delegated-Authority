@@ -77,6 +77,7 @@ contract Reserve {
         /// The delegation commitment D.com, four Goldilocks lanes packed low
         /// lane first. A proof's public values must carry it.
         bytes32 commitment;
+        address monitor;
     }
 
     struct Window {
@@ -118,6 +119,11 @@ contract Reserve {
         uint64 unitSize;
         uint64 rangeBase;
         uint64 rangeLen;
+        /// An address the principal's monitor sends from, if not the principal
+        /// itself. Its challenges hold settlement and it may freeze. A principal
+        /// that is a contract wallet needs one: a transaction forced in through
+        /// L1 arrives from the sender's own address only when that is an EOA.
+        address monitor;
     }
 
     /// The contract allowed to forfeit a bond on an unanswered challenge. Set
@@ -218,7 +224,8 @@ contract Reserve {
             bond: msg.value,
             unitSize: t.unitSize,
             secretHash: t.secretHash,
-            commitment: t.commitment
+            commitment: t.commitment,
+            monitor: t.monitor
         });
         rootAt[id][0] = t.revocationRoot;
         if (t.funding == Funding.Deposit && t.deposit != 0) {
@@ -407,7 +414,8 @@ contract Reserve {
 
     /// The principal stops the delegation at once, on every unit.
     function freeze(uint256 id) external {
-        if (msg.sender != delegations[id].principal) revert NotPrincipal();
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.principal && (d.monitor == address(0) || msg.sender != d.monitor)) revert NotPrincipal();
         _freeze(id);
     }
 
@@ -507,6 +515,10 @@ contract Reserve {
 
     function frozenOf(uint256 id) external view returns (bool frozen, uint32 holds) {
         return (delegations[id].frozen, delegations[id].holds);
+    }
+
+    function monitorOf(uint256 id) external view returns (address) {
+        return delegations[id].monitor;
     }
 
     function principalOf(uint256 id) external view returns (address) {
