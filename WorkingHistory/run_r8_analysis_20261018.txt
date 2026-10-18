@@ -11,15 +11,15 @@ WINDOWS ON BASE, HOURS
 
 BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY
 ==============================================================================
-                                                          bonds  with answerer
+                                                          bonds   answerer, >=
   steady, one price, 30-day delegation                    10.0%          20.0%
   bursty, peak 5x the mean rate, 30 days                  50.0%         100.0%
   three prices 0.001/0.01/0.05, cap 2.5x mean, 30 days    25.0%          50.0%
   one-day task, one price, steady                        300.0%         600.0%
   one-day task, bursty 5x, three prices                 3750.0%        7500.0%
   the same task under a standing 30-day delegation       125.0%         250.0%
-  A staked answerer stakes at least the bond on each domain, so it doubles
-  the capital the agent's side holds.
+  A staked answerer stakes at least the bond plus the bounty on each domain,
+  so it more than doubles the capital the agent's side holds.
   A declared expiry longer than the task changes none of these: the bond
   follows the rate the task needs and the life it actually spends.
 
@@ -27,12 +27,13 @@ HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD
 FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
 ==============================================================================
   declared expiry       f   bonds   stake  funding fB     total  total/B
-  1 x the task       1.00   43.20   43.20      432.00    518.40     1.20
-  2 x the task       1.97   43.20   43.20      850.06    936.46     2.17
-  5 x the task       4.87   43.20   43.20     2104.26   2190.66     5.07
-  10 x the task      9.71   43.20   43.20     4194.58   4280.98     9.91
-  Without an answerer the total is less by the stake, 43.20.
-  Carrying the stake for the task costs 0.0355 USD per percentage
+  1 x the task       1.00   43.20   46.39      432.00    521.59     1.21
+  2 x the task       1.97   43.20   46.39      850.06    939.66     2.18
+  5 x the task       4.87   43.20   46.39     2104.26   2193.85     5.08
+  10 x the task      9.71   43.20   46.39     4194.58   4284.17     9.92
+  The stake is the bond plus the bounty, 3.19; without an answerer the total
+  is less by the stake, 46.39.
+  Carrying the stake for the task costs 0.0381 USD per percentage
   point of annual interest on it.
   The same f reached by a short declared life instead needs bonds of
     f =  1.00: about   10.0% of B in bonds, plus funding fB

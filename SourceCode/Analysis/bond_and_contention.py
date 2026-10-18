@@ -18,6 +18,9 @@ SIGMA_X = 12.0 + 0.5
 THETA = 1.0
 C_ANS = 82.0 / 60.0
 W_RATE = DAY
+# The challenger's bond, which is also the bounty a slash pays: set at the
+# computed price of one answer, 64 vCPU at 3.616 USD an hour for 3,179.2 s.
+BETA = 3.616 * 3179.2 / 3600
 
 def windows():
     w = W_D + DELTA_F + SIGMA_X + THETA
@@ -51,12 +54,12 @@ def profiles(k_w):
     ]
     print("BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY")
     print("=" * 78)
-    print(f"  {'':<52} {'bonds':>8} {'with answerer':>14}")
+    print(f"  {'':<52} {'bonds':>8} {'answerer, >=':>14}")
     for name, T, ca, pm in rows:
         r = bond_ratio(k_w, W, T, ca, pm)
         print(f"  {name:<52} {100 * r:7.1f}% {200 * r:13.1f}%")
-    print("  A staked answerer stakes at least the bond on each domain, so it doubles")
-    print("  the capital the agent's side holds.")
+    print("  A staked answerer stakes at least the bond plus the bounty on each domain,")
+    print("  so it more than doubles the capital the agent's side holds.")
     print("  A declared expiry longer than the task changes none of these: the bond")
     print("  follows the rate the task needs and the life it actually spends.")
     print()
@@ -75,10 +78,12 @@ def trade_off(k_w):
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
         R = f * B
-        tot = R + 2 * bonds
-        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {bonds:>7.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
-    print(f"  Without an answerer the total is less by the stake, {bonds:.2f}.")
-    print(f"  Carrying the stake for the task costs {bonds * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
+        stake = bonds + BETA
+        tot = R + bonds + stake
+        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {stake:>7.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
+    print(f"  The stake is the bond plus the bounty, {BETA:.2f}; without an answerer the total")
+    print(f"  is less by the stake, {bonds + BETA:.2f}.")
+    print(f"  Carrying the stake for the task costs {(bonds + BETA) * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
     print("  point of annual interest on it.")
     print("  The same f reached by a short declared life instead needs bonds of")
     for mult in (1, 2, 5, 10):
