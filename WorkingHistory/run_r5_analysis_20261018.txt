@@ -1,0 +1,43 @@
+BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY
+==============================================================================
+  steady, one price, 30-day delegation                          6.7%
+  bursty, peak 5x the mean rate, 30 days                       33.3%
+  three prices 0.001/0.01/0.05, cap 2.5x mean, 30 days         16.7%
+  one-day task, one price, steady                             200.0%
+  one-day task, bursty 5x, three prices                      2500.0%
+  the same task under a standing 30-day delegation             83.3%
+
+HIDING FACTOR AGAINST BOND, TASK OF 30 DAYS, CAP AT THE PRICE
+==============================================================================
+  declared expiry         hiding factor U/B    bonds / B    bonds / U
+  1 x the task                         1.00         6.5%        6.45%
+  2 x the task                         1.97         6.5%        3.28%
+  5 x the task                         4.87         6.5%        1.32%
+  10 x the task                        9.71         6.5%        0.66%
+
+CAPITAL FOR ONE DEPLOYMENT: ONE PAYMENT A MINUTE AT 0.01 USD FOR 30 DAYS
+==============================================================================
+  budget B                                       432.00 USD
+  principal's funding R = Lu, hiding factor 2    864.00 USD
+  agent's bonds, 2 r C                            28.80 USD
+  together                                       892.80 USD
+
+ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
+==============================================================================
+   budget, ETH  L1 base fee, gwei  by filling L1  by filling deposits  minutes, worse
+            10                  1             26                    8             5.2
+            10                 10              9                    8             1.8
+            10                 50              2                    8             1.6
+           100                  1             45                   11             9.0
+           100                 10             26                   11             5.2
+           100                 50             13                   11             2.6
+          1000                  1             64                   14            12.8
+          1000                 10             45                   14             9.0
+          1000                 50             31                   14             6.2
+         10000                  1             84                   17            16.8
+         10000                 10             64                   17            12.8
+         10000                 50             51                   17            10.2
+
+  The monitor tips nothing here; any priority fee it pays makes the adversary
+  outbid it on every slot of every block, so the delay only shrinks. The last
+  column is the longer of the two routes.
