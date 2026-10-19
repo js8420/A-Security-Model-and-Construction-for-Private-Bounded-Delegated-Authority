@@ -21,8 +21,7 @@
       "StringLiteral"
     ]
   },
-  "incremental": true,
-  "incrementalFile": "reports/stryker-incremental-base.json",
+  "incremental": false,
   "reporters": [
     "clear-text",
     "progress-append-only",

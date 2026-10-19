@@ -9,18 +9,39 @@
     "src/stark/verify.ts"
   ],
   "testRunner": "command",
-  "commandRunner": { "command": "npx tsx e2e/stark_control.ts" },
-  "checkers": ["typescript"],
+  "commandRunner": {
+    "command": "npx tsx e2e/stark_control.ts"
+  },
+  "checkers": [
+    "typescript"
+  ],
   "tsconfigFile": "tsconfig.json",
-  "mutator": { "excludedMutations": ["StringLiteral"] },
-  "incremental": true,
-  "incrementalFile": "reports/stryker-incremental.json",
-  "reporters": ["clear-text", "progress-append-only", "json"],
-  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
-  "clearTextReporter": { "allowColor": false, "logTests": false, "maxTestsToLog": 0, "reportMutants": true },
+  "mutator": {
+    "excludedMutations": [
+      "StringLiteral"
+    ]
+  },
+  "incremental": false,
+  "reporters": [
+    "clear-text",
+    "progress-append-only",
+    "json"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "clearTextReporter": {
+    "allowColor": false,
+    "logTests": false,
+    "maxTestsToLog": 0,
+    "reportMutants": true
+  },
   "timeoutMS": 60000,
   "timeoutFactor": 2,
   "tempDirName": ".stryker-tmp",
   "cleanTempDir": "always",
-  "ignorePatterns": ["reports", ".stryker-tmp"]
+  "ignorePatterns": [
+    "reports",
+    ".stryker-tmp"
+  ]
 }
