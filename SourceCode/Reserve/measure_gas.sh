@@ -14,7 +14,7 @@ forge test -vv > "$hist/run_${tag}_forge.txt" 2>&1 || true
 grep -E "Suite result|^Ran |FAIL|rror" "$hist/run_${tag}_forge.txt" || { echo "forge test printed no results:"; tail -20 "$hist/run_${tag}_forge.txt"; exit 1; }
 
 key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-for s in ValidityDisputeOnChain ValidityDisputeBatchOnChain; do
+for s in ValidityDisputeOnChain ValidityDisputeBatchOnChain RevealDisputeOnChain; do
     # The expiry needs blocks a second apart; auto-mining puts several in one second.
     if [ $s = ValidityDisputeOnChain ]; then pace="--block-time 1"; else pace=""; fi
     anvil --timestamp 5000 $pace --silent &
@@ -32,7 +32,7 @@ done
 python3 - "$hist" "$tag" <<'PY' | tee "$hist/run_${tag}_gas.txt"
 import json, sys
 hist, tag = sys.argv[1], sys.argv[2]
-for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain"):
+for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisputeOnChain"):
     j = json.load(open(f"{hist}/receipts_{tag}_{s}.json"))
     print(s)
     for t, r in zip(j["transactions"], j["receipts"]):

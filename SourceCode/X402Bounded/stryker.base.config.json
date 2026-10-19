@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "mutate": [
+    "src/stark/constraints.ts",
+    "src/stark/field.ts",
+    "src/stark/merkle.ts",
+    "src/stark/proof.ts",
+    "src/stark/transcript.ts",
+    "src/stark/verify.ts"
+  ],
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "npx tsx e2e/stark_base.ts"
+  },
+  "checkers": [
+    "typescript"
+  ],
+  "tsconfigFile": "tsconfig.json",
+  "mutator": {
+    "excludedMutations": [
+      "StringLiteral"
+    ]
+  },
+  "incremental": true,
+  "incrementalFile": "reports/stryker-incremental-base.json",
+  "reporters": [
+    "clear-text",
+    "progress-append-only",
+    "json"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation-base.json"
+  },
+  "clearTextReporter": {
+    "allowColor": false,
+    "logTests": false,
+    "maxTestsToLog": 0,
+    "reportMutants": true
+  },
+  "timeoutMS": 60000,
+  "timeoutFactor": 2,
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": "always",
+  "ignorePatterns": [
+    "reports",
+    ".stryker-tmp"
+  ]
+}

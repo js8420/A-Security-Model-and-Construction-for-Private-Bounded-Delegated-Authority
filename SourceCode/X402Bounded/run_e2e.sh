@@ -1,7 +1,9 @@
 #!/bin/bash
 # The bounded scheme through the x402 SDK on a local chain, and the principal's
-# monitor across two local chains: the budget tripwire, openings checked in
-# the clear, proofs through both verifiers, and challenges on chain.
+# monitor across two local chains: every settlement decided at one time and
+# challenged on chain when not in order, proofs through both verifiers,
+# openings checked in the clear, the answerer's sealed openings, and the same
+# actions whatever the cause.
 # Usage: run_e2e.sh TAG
 set -euo pipefail
 export PATH="$HOME/.foundry/bin:$HOME/.cargo/bin:$PATH"

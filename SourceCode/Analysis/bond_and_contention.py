@@ -43,26 +43,39 @@ def bond_ratio(k_w, W, T, c_over_a, peak_over_mean):
     return k_w * (W / T) * c_over_a * peak_over_mean
 
 def profiles(k_w):
+    """Each profile at one payment a minute on average, on one domain. The
+    bonds' share of the budget is the ratio of the paper; the stake adds the
+    bond again and the fixed bounty, so its share depends on the budget, which
+    the rate, the mean price and the life give."""
     W = W_RATE
+    rate = 1440.0
+    one = (0.01, 0.01)
+    three = (0.05 / 2.5, 0.05)
     rows = [
-        ("steady, one price, 30-day delegation", 30 * DAY, 1.0, 1.0),
-        ("bursty, peak 5x the mean rate, 30 days", 30 * DAY, 1.0, 5.0),
-        ("three prices 0.001/0.01/0.05, cap 2.5x mean, 30 days", 30 * DAY, 2.5, 1.0),
-        ("one-day task, one price, steady", 1 * DAY, 1.0, 1.0),
-        ("one-day task, bursty 5x, three prices", 1 * DAY, 2.5, 5.0),
-        ("the same task under a standing 30-day delegation", 30 * DAY, 2.5, 5.0),
+        ("Steady, one price, 30 days", 30 * DAY, one, 1.0),
+        ("Peak 5x mean, 30 days", 30 * DAY, one, 5.0),
+        ("Three prices, 30 days", 30 * DAY, three, 1.0),
+        ("One day, one price", 1 * DAY, one, 1.0),
+        ("One day, expiry 300 days", 1 * DAY, one, 1.0),
+        ("One day, 5x peak, 3 prices", 1 * DAY, three, 5.0),
+        ("That task, 30-day delegation", 30 * DAY, three, 5.0),
     ]
-    print("BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY")
+    print("BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY, ONE PAYMENT A MINUTE")
     print("=" * 78)
-    print(f"  {'':<52} {'bonds':>8} {'answerer, >=':>14}")
-    for name, T, ca, pm in rows:
-        r = bond_ratio(k_w, W, T, ca, pm)
-        print(f"  {name:<52} {100 * r:7.1f}% {200 * r:13.1f}%")
-    print("  A staked answerer stakes at least the bond plus the bounty on each domain,")
-    print("  so it more than doubles the capital the agent's side holds.")
+    print(f"  {'':<34} {'B, USD':>9} {'bonds':>8} {'with stake':>11} {'stake adds':>11}")
+    for name, T, (mean, cap), pm in rows:
+        r = bond_ratio(k_w, W, T, cap / mean, pm)
+        budget = rate * mean * T / W
+        bonds = k_w * rate * pm * cap
+        assert abs(bonds / budget - r) < 1e-9
+        both = (2 * bonds + BETA) / budget
+        print(f"  {name:<34} {budget:>9.2f} {100 * r:7.1f}% {100 * both:10.1f}% {100 * (both - r):10.1f}")
+    print(f"  The stake is the bond plus the bounty, {BETA:.2f} USD, on each domain; the")
+    print("  bounty is fixed in dollars, so it weighs more as the budget falls.")
     print("  A declared expiry longer than the task changes none of these: the bond")
     print("  follows the rate the task needs and the life it actually spends.")
     print()
+
 
 def hiding_factor(T_d, T_a, W=W_RATE):
     return (math.ceil(T_d / W) + 1) / (math.ceil(T_a / W) + 1)

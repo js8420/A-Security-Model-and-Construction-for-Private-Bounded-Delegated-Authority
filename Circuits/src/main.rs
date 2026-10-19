@@ -58,6 +58,7 @@ mod keccak;
 mod degree;
 mod statement;
 mod dag;
+mod vectors;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -571,6 +572,12 @@ fn main() {
         for (name, ok) in keccak::export_broken(&dir) {
             println!("  broken_{name}.bin written, verifies natively {ok}");
         }
+        return;
+    }
+    if let Some(at) = std::env::args().position(|a| a == "export-vectors") {
+        let path = std::env::args().nth(at + 1).expect("export-vectors needs a path");
+        vectors::export(&path);
+        println!("wrote {path}");
         return;
     }
     if std::env::args().any(|a| a == "export-constraints") {
