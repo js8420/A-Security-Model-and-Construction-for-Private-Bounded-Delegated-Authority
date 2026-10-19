@@ -71,6 +71,9 @@ the same at verify.ts 203 and 236.
 The vectors file the circuit binary writes with `export-vectors` holds the
 outputs of Plonky3's own challenger for a fixed run of observations, samples,
 bit samples and grinding checks. `e2e/stark_control.ts` replays that run
-through the independent transcript and requires every output to match. The
+through the independent transcript and requires every output to match. It
+also holds one observed value after which the first 64-bit draw is at or
+above p, found by search, so the rejection step of a sample is tested
+against Plonky3 as well. The
 order of rows 1 to 21 is tested by the honest proofs: any step out of place
 changes every later challenge, and the proof is refused.

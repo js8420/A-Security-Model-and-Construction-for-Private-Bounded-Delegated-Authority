@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PARAMS, loadConstraints, maxDegree, verifyStark } from "../src/index.js";
-import { parse } from "../src/stark/proof.js";
+import { offsets } from "./stark_kit.js";
 
 /**
  * The smaller test set, kept so that its mutation score can be measured beside
@@ -46,7 +46,7 @@ const bump = (b: Uint8Array, at: number) => withWord(b, at, (word(b, at) + 1n) %
 
 need("degree", maxDegree(air) === PARAMS.statedDegree);
 need("honest 4", verifyStark(small, air).ok);
-const o = parse(full).offsets;
+const o = offsets(full);
 const COL_CID = 2;
 const R_AMOUNT = 6;
 const tampered: [string, Uint8Array][] = [

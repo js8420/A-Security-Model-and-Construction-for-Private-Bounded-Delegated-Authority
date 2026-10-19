@@ -20,6 +20,7 @@ import {
   type Check, type Domain, type Opening, type Policy, type Record, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
+import { offsets } from "./stark_kit.js";
 
 const OUT = fileURLToPath(new URL("../../Reserve/out/", import.meta.url));
 const KEYS = {
@@ -202,13 +203,13 @@ async function main() {
 
   const air = loadConstraints(readFileSync(env("CONSTRAINTS")));
   const honest = new Uint8Array(readFileSync(env("PROOF_SMALL")));
-  const { offsets } = parse(honest);
+  const at = offsets(honest);
   const forged = honest.slice();
   {
     let v = 0n;
-    for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(forged[offsets.foldSibling + i]);
+    for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(forged[at.foldSibling + i]);
     v = (v + 1n) % P;
-    for (let i = 0; i < 8; i++) forged[offsets.foldSibling + i] = Number((v >> BigInt(8 * i)) & 0xffn);
+    for (let i = 0; i < 8; i++) forged[at.foldSibling + i] = Number((v >> BigInt(8 * i)) & 0xffn);
   }
   const deployed = deployedVerifier(env("CIRCUIT_BIN"));
   const independent = independentVerifier(air);

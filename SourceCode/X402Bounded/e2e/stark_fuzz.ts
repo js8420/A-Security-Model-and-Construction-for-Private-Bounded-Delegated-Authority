@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConstraints, verifyStark } from "../src/index.js";
-import { parse } from "../src/stark/proof.js";
+import { offsets } from "./stark_kit.js";
 
 /**
  * Differential testing of the two verifiers on randomly altered copies of the
@@ -26,7 +26,7 @@ const count = Number(env("COUNT"));
 const bin = env("CIRCUIT_BIN");
 const air = loadConstraints(readFileSync(env("CONSTRAINTS")));
 const honest = new Uint8Array(readFileSync(env("PROOF_FULL")));
-const o = parse(honest).offsets;
+const o = offsets(honest);
 
 let state = BigInt(seed) * 0x9e3779b97f4a7c15n + 1n;
 const next = () => {

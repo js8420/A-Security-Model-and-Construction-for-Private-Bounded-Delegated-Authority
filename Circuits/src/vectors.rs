@@ -10,6 +10,10 @@ use p3_symmetric::{CryptographicHasher, PseudoCompressionFunction};
 
 use crate::prover::{challenger, Challenge, KCompress, KU64Hash, Val};
 
+/// An observed value after which a fresh transcript's first 64-bit draw is at
+/// or above p, found by `find-rejection`.
+const REJECTED: u64 = 11_872_327_201;
+
 /// A fixed stream of 64-bit words, not all canonical field elements.
 fn words(seed: u64, n: usize) -> Vec<u64> {
     let mut x = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
@@ -118,5 +122,53 @@ pub fn export(path: &str) {
     steps.push(format!("{{\"op\":\"sampleAfterWitness\",\"value\":\"{}\"}}", after.as_canonical_u64()));
     out.push(format!("\"transcript\":[{}]", steps.join(",")));
 
+    let mut first = [0u8; 8];
+    let digest: [u8; 32] = p3_keccak::Keccak256Hash {}.hash_iter(REJECTED.to_le_bytes());
+    for (i, b) in first.iter_mut().enumerate() {
+        *b = digest[31 - i];
+    }
+    assert!(u64::from_le_bytes(first) >= Val::ORDER_U64, "the first draw must be rejected");
+    let mut t = challenger();
+    t.observe(val(REJECTED));
+    let s: Val = t.sample();
+    out.push(format!("\"rejection\":{{\"observed\":\"{REJECTED}\",\"sample\":\"{}\"}}", s.as_canonical_u64()));
+
     std::fs::write(path, format!("{{{}}}\n", out.join(","))).expect("write vectors");
+}
+
+/// Searches for a field element whose observation, on a fresh transcript,
+/// makes the first 64-bit draw land at or above p, so that the sample must
+/// reject it. Prints the first one found.
+pub fn find_rejection(threads: u64) {
+    use p3_keccak::Keccak256Hash;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let done = Arc::new(AtomicBool::new(false));
+    let handles: Vec<_> = (0..threads)
+        .map(|t| {
+            let done = done.clone();
+            std::thread::spawn(move || {
+                let h = Keccak256Hash {};
+                let mut w = t;
+                while !done.load(Ordering::Relaxed) {
+                    let out: [u8; 32] = h.hash_iter(w.to_le_bytes());
+                    if out[24] == 0xff && out[25] == 0xff && out[26] == 0xff && out[27] == 0xff {
+                        let mut a = [0u8; 8];
+                        for (i, b) in a.iter_mut().enumerate() {
+                            *b = out[31 - i];
+                        }
+                        if u64::from_le_bytes(a) >= Val::ORDER_U64 {
+                            done.store(true, Ordering::Relaxed);
+                            println!("{w}");
+                            return;
+                        }
+                    }
+                    w += threads;
+                }
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().expect("search thread");
+    }
 }

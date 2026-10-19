@@ -3,7 +3,7 @@ import { join } from "node:path";
 import {
   PARAMS, ProofGate, deployedVerifier, independentVerifier, loadConstraints, maxDegree, verifyStark, type Check,
 } from "../src/index.js";
-import { parse } from "../src/stark/proof.js";
+import { offsets } from "./stark_kit.js";
 
 const P = 0xffffffff00000001n;
 const env = (k: string) => {
@@ -44,7 +44,7 @@ const bump = (b: Uint8Array, at: number) => withWord(b, at, (word(b, at) + 1n) %
 
 const COL_CID = 2;
 const R_AMOUNT = 6;
-const o = parse(full).offsets;
+const o = offsets(full);
 const powWitness = word(full, o.queryPow);
 const tampered: [string, Uint8Array][] = [
   ["the category id opened at the out-of-domain point", bump(full, o.traceLocal + 16 * COL_CID)],

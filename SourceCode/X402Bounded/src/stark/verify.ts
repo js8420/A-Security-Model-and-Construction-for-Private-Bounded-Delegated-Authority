@@ -57,7 +57,7 @@ function interpolateSubgroup(values: readonly bigint[], weights: readonly E[]): 
  * If z is a point of the subgroup the interpolant is that point's value, which a
  * single weight of one at its position expresses.
  */
-function subgroupWeights(m: number, z: E): E[] {
+export function subgroupWeights(m: number, z: E): E[] {
   const g = twoAdic(log2(m));
   const pts: bigint[] = [];
   let p = 1n;
@@ -74,7 +74,7 @@ function subgroupWeights(m: number, z: E): E[] {
 }
 
 /** Lagrange interpolation through (xs[i], ys[i]) at z, from the definition. */
-function lagrange(xs: readonly bigint[], ys: readonly E[], z: E): E {
+export function lagrange(xs: readonly bigint[], ys: readonly E[], z: E): E {
   const k = xs.length;
   for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];
   let out = E0;

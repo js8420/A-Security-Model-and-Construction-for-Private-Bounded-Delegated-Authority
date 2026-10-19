@@ -574,6 +574,11 @@ fn main() {
         }
         return;
     }
+    if let Some(at) = std::env::args().position(|a| a == "find-rejection") {
+        let threads: u64 = std::env::args().nth(at + 1).and_then(|a| a.parse().ok()).unwrap_or(2);
+        vectors::find_rejection(threads);
+        return;
+    }
     if let Some(at) = std::env::args().position(|a| a == "export-vectors") {
         let path = std::env::args().nth(at + 1).expect("export-vectors needs a path");
         vectors::export(&path);

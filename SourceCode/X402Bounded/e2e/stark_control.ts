@@ -1,13 +1,15 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PARAMS, loadConstraints, maxDegree, verifyStark } from "../src/index.js";
+import { fold, type Constraints } from "../src/stark/constraints.js";
+import { lagrange, subgroupWeights } from "../src/stark/verify.js";
 import {
-  add, bitrev, ebatchInv, eeq, einv, emul, eneg, epow, escale, esquarings, esub, ezero, inv, mul, neg, pow, sub, twoAdic, type E,
+  add, bitrev, eadd, ebatchInv, eeq, einv, emul, eneg, epow, escale, esquarings, esub, ezero, inv, lift, mul, neg, pow, sub, twoAdic, type E,
 } from "../src/stark/field.js";
 import { compress, sponge, verifyOpening } from "../src/stark/merkle.js";
 import { parse, type Digest } from "../src/stark/proof.js";
 import { Transcript } from "../src/stark/transcript.js";
-import { copy, encode } from "./stark_kit.js";
+import { copy, encode, offsets } from "./stark_kit.js";
 
 /**
  * The independent verifier's own test set, run alone. Its hash, field and
@@ -69,6 +71,7 @@ type Vectors = {
   field: { a: string; b: string; add: string; sub: string; mul: string; inv: string; ea: string[]; eb: string[]; emul: string[]; einv: string[]; epow: string[] }[];
   twoAdic: string[];
   transcript: { op: string; value: string | string[]; bits?: number; holds?: boolean }[];
+  rejection: { observed: string; sample: string };
 };
 const vectors = JSON.parse(readFileSync(env("VECTORS"), "utf8")) as Vectors;
 
@@ -183,9 +186,150 @@ need("bit reversal", bitrev(1, 3) === 4 && bitrev(6, 3) === 3 && bitrev(5, 4) ==
   need("one row and no salts refused", !ok([t8.root], 8, 3, t8.rows[3], [], t8.path(3)));
 }
 
+need("extension equality reads both coordinates", !eeq([1n, 2n], [3n, 2n]) && !eeq([1n, 2n], [1n, 3n]) && eeq([4n, 5n], [4n, 5n]));
+need("extension zero reads both coordinates", !ezero([0n, 5n]) && !ezero([5n, 0n]) && ezero([0n, 0n]));
+need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 && new Transcript().sampleBits(52) >= 0);
+{
+  const r = vectors.rejection;
+  const t = new Transcript();
+  t.observe(big(r.observed));
+  need("a draw at or above p is rejected and the next one taken", t.sample() === big(r.sample));
+}
+
+{
+  const word = (k: number, i: number) => BigInt(k * 1000 + i);
+  const rows = Array.from({ length: 8 }, (_, k) => [[word(k, 0), word(k, 1)], [word(k, 2)]]);
+  const salts = Array.from({ length: 8 }, (_, k) => [[word(k, 10), word(k, 11)], [word(k, 12), word(k, 13), word(k, 14)]]);
+  let level: Digest[] = rows.map((r, k) => sponge([...r[0], ...salts[k][0], ...r[1], ...salts[k][1]]));
+  const levels: Digest[][] = [level];
+  while (level.length > 1) {
+    const up: Digest[] = [];
+    for (let i = 0; i < level.length; i += 2) up.push(compress(level[i], level[i + 1]));
+    level = up;
+    levels.push(level);
+  }
+  const path = levels.slice(0, -1).map((l, j) => l[(5 >> j) ^ 1]);
+  let opened = true;
+  try {
+    opened = verifyOpening([level[0]], 8, 5, rows[5], salts[5], path, 2);
+  } catch {
+    opened = false;
+  }
+  need("one matrix's salt of the wrong length refused, the other's right", !opened);
+}
+
+{
+  const g = twoAdic(2);
+  const pts = [1n, g, mul(g, g), mul(mul(g, g), g)];
+  const ys: E[] = [[3n, 1n], [5n, 9n], [7n, 2n], [11n, 4n]];
+  const z: E = [123456789n, 987654321n];
+  const w = subgroupWeights(4, z);
+  need("subgroup weights, one per point", w.length === 4);
+  const viaWeights = w.reduce((acc, wi, i) => eadd(acc, emul(wi, ys[i])), [0n, 0n] as E);
+  need("subgroup interpolation agrees with Lagrange's formula", eeq(viaWeights, lagrange(pts, ys, z)));
+  for (let i = 0; i < 4; i++) {
+    const at = subgroupWeights(4, lift(pts[i]));
+    need(`subgroup weights at point ${i} pick that point alone`, at.every((x, j) => eeq(x, j === i ? [1n, 0n] : [0n, 0n])));
+    need(`Lagrange interpolation at node ${i} is its value`, eeq(lagrange(pts, ys, lift(pts[i])), ys[i]));
+  }
+}
+
+{
+  const MAGIC = new TextEncoder().encode("PBDAG001");
+  type Node = { op: number; a?: number; b?: number; c?: bigint };
+  const bytesOf = (nodes: Node[], roots: number[], tail: number[] = []) => {
+    const out: number[] = [...MAGIC];
+    const u32 = (v: number) => out.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
+    const u64 = (v: bigint) => {
+      for (let i = 0; i < 8; i++) out.push(Number((v >> BigInt(8 * i)) & 0xffn));
+    };
+    u32(2); u32(1); u32(1); u32(nodes.length); u32(roots.length);
+    for (const n of nodes) {
+      out.push(n.op);
+      if (n.op === 7) u64(n.c as bigint);
+      else if (n.op <= 3 || n.op === 10) u32(n.a as number);
+      else if (n.op >= 8) { u32(n.a as number); u32(n.b as number); }
+    }
+    for (const r of roots) u32(r);
+    out.push(...tail);
+    return Uint8Array.from(out);
+  };
+  const nodes: Node[] = [
+    { op: 0, a: 0 }, { op: 1, a: 1 }, { op: 2, a: 0 }, { op: 3, a: 0 }, { op: 4 }, { op: 5 }, { op: 6 },
+    { op: 7, c: 5n }, { op: 7, c: P - 3n },
+    { op: 10, a: 7 }, { op: 10, a: 0 },
+    { op: 8, a: 7, b: 8 }, { op: 8, a: 0, b: 7 }, { op: 8, a: 4, b: 3 },
+    { op: 9, a: 8, b: 7 }, { op: 9, a: 1, b: 2 }, { op: 9, a: 3, b: 5 },
+    { op: 11, a: 7, b: 8 }, { op: 11, a: 7, b: 0 }, { op: 11, a: 1, b: 3 }, { op: 11, a: 0, b: 2 }, { op: 11, a: 20, b: 6 },
+  ];
+  const roots = Array.from({ length: nodes.length }, (_, i) => i);
+  const good = bytesOf(nodes, roots);
+  const g = loadConstraints(good);
+  need("a constraint graph of every node kind loads as written",
+    g.ops.length === nodes.length && nodes.every((n, i) => g.ops[i] === n.op && (n.a === undefined || g.a[i] === n.a) && (n.b === undefined || g.b[i] === n.b)) && g.constants.get(8) === P - 3n && g.roots.length === roots.length);
+  const refused = (name: string, b: Uint8Array) => {
+    let ok = false;
+    try {
+      loadConstraints(b);
+    } catch {
+      ok = true;
+    }
+    need(name, ok);
+  };
+  const bad = good.slice();
+  bad[0] = 0x51;
+  refused("a constraint graph with the wrong magic refused", bad);
+  refused("an unknown node kind refused", bytesOf([...nodes, { op: 12 }], roots));
+  refused("a constant equal to p refused", bytesOf([...nodes, { op: 7, c: P }], roots));
+  refused("an addition reading a later node refused", bytesOf([...nodes, { op: 8, a: nodes.length, b: 0 }], roots));
+  refused("a subtraction whose second child is later refused", bytesOf([...nodes, { op: 9, a: 0, b: nodes.length + 1 }], roots));
+  refused("a negation of itself refused", bytesOf([...nodes, { op: 10, a: nodes.length }], roots));
+  refused("a product whose second child is itself refused", bytesOf([...nodes, { op: 11, a: 0, b: nodes.length }], roots));
+  refused("trailing bytes after a constraint graph refused", bytesOf(nodes, roots, [0]));
+
+  const one = (r: number): Constraints => ({ ...g, roots: Uint32Array.from([r]) });
+  const degrees = [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 2, 2];
+  need("the degree of every node kind", degrees.every((d, r) => maxDegree(one(r)) === d));
+
+  const at = {
+    local: [[11n, 12n], [13n, 14n]] as E[], next: [[21n, 22n], [23n, 24n]] as E[], periodic: [[31n, 32n]] as E[], publics: [41n],
+    firstRow: [51n, 52n] as E, lastRow: [61n, 62n] as E, transition: [71n, 72n] as E,
+  };
+  const v: E[] = [];
+  const val = (n: Node): E => {
+    switch (n.op) {
+      case 0: return at.local[n.a as number];
+      case 1: return at.next[n.a as number];
+      case 2: return at.periodic[n.a as number];
+      case 3: return [at.publics[n.a as number], 0n];
+      case 4: return at.firstRow;
+      case 5: return at.lastRow;
+      case 6: return at.transition;
+      case 7: return [n.c as bigint, 0n];
+      case 8: return eadd(v[n.a as number], v[n.b as number]);
+      case 9: return esub(v[n.a as number], v[n.b as number]);
+      case 10: return eneg(v[n.a as number]);
+      default: return emul(v[n.a as number], v[n.b as number]);
+    }
+  };
+  nodes.forEach((n) => v.push(val(n)));
+  const alpha: E = [7n, 3n];
+  const expect = v.reduce((acc, x) => eadd(emul(acc, alpha), x), [0n, 0n] as E);
+  need("folding every node kind, base and extension values mixed", eeq(fold(g, at, alpha), expect));
+  for (let r = 0; r < nodes.length; r++) need(`node ${r} alone folds to its value`, eeq(fold(one(r), at, alpha), v[r]));
+
+  const n0 = air.ops.length;
+  const ops = Uint8Array.from([...air.ops, 0, 9, ...Array(7).fill(11)]);
+  const a = Uint32Array.from([...air.a, 0, n0, ...Array.from({ length: 7 }, (_, k) => n0 + 1 + k)]);
+  const b = Uint32Array.from([...air.b, 0, n0, ...Array(7).fill(n0)]);
+  const deg8: Constraints = { ...air, ops, a, b, roots: Uint32Array.from([n0 + 8, ...air.roots]) };
+  need("a degree-8 constraint that vanishes, prepended to the AIR, makes the graph of degree 8", maxDegree(deg8) === 8);
+  need("the honest proof against an AIR of degree 8 is refused, though the extra constraint vanishes", !verifyStark(small, deg8).ok);
+}
+
 need("degree", maxDegree(air) === PARAMS.statedDegree);
 need("honest 4", verifyStark(small, air).ok);
-const o = parse(full).offsets;
+const o = offsets(full);
 const COL_CID = 2;
 const R_AMOUNT = 6;
 const tampered: [string, Uint8Array][] = [

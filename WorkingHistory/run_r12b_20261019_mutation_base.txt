@@ -1,0 +1,223 @@
+file                          mutants  killed  survived   score      errors
+src/stark/constraints.ts          122      87        35   71.3%          12
+src/stark/field.ts                120      92        28   76.7%          30
+src/stark/merkle.ts                92      54        38   58.7%           6
+src/stark/proof.ts                 42      30        12   71.4%          53
+src/stark/transcript.ts            49      41         8   83.7%          10
+src/stark/verify.ts               295     203        92   68.8%         104
+all                               720     507       213   70.4%         215
+timeouts counted as killed: 17
+surviving mutants:
+  src/stark/constraints.ts:34 ConditionalExpression: if (new TextDecoder().decode(bytes.subarray(0, 8)) !== MAGIC) throw new Error("not a constraint graph");  ->  false
+  src/stark/constraints.ts:52 ConditionalExpression: if (op > Op.Mul) throw new Error("unknown node");  ->  false
+  src/stark/constraints.ts:56 ConditionalExpression: if (v >= P) throw new Error("non-canonical constant");  ->  false
+  src/stark/constraints.ts:56 EqualityOperator: if (v >= P) throw new Error("non-canonical constant");  ->  v > P
+  src/stark/constraints.ts:59 ConditionalExpression: } else if (op <= Op.Public || op === Op.Neg) {  ->  false
+  src/stark/constraints.ts:61 ConditionalExpression: } else if (op >= Op.Add) {  ->  true
+  src/stark/constraints.ts:65 ConditionalExpression: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  false
+  src/stark/constraints.ts:65 EqualityOperator: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  op > Op.Add
+  src/stark/constraints.ts:65 LogicalOperator: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  a[i] >= i && op !== Op.Neg && b[i] >= i
+  src/stark/constraints.ts:65 ConditionalExpression: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  false
+  src/stark/constraints.ts:65 EqualityOperator: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  a[i] > i
+  src/stark/constraints.ts:65 ConditionalExpression: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  false
+  src/stark/constraints.ts:65 ConditionalExpression: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  true
+  src/stark/constraints.ts:65 EqualityOperator: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  op === Op.Neg
+  src/stark/constraints.ts:65 EqualityOperator: if (op >= Op.Add && (a[i] >= i || (op !== Op.Neg && b[i] >= i))) throw new Error("child after parent");  ->  b[i] > i
+  src/stark/constraints.ts:69 ConditionalExpression: if (at !== bytes.length) throw new Error("trailing bytes in constraint graph");  ->  false
+  src/stark/constraints.ts:80 EqualityOperator: for (let i = 0; i < c.ops.length; i++) {  ->  i <= c.ops.length
+  src/stark/constraints.ts:84 ConditionalExpression: case Op.Add: case Op.Sub:  ->  case Op.Sub:
+  src/stark/constraints.ts:86 ConditionalExpression: case Op.Neg:  ->  case Op.Neg:
+  src/stark/constraints.ts:90 ConditionalExpression: default:  ->  default:
+  src/stark/constraints.ts:116 ArrayDeclaration: const base: (bigint | undefined)[] = new Array(n);  ->  new Array()
+  src/stark/constraints.ts:117 ArrayDeclaration: const ext: (E | undefined)[] = new Array(n);  ->  new Array()
+  src/stark/constraints.ts:119 EqualityOperator: for (let i = 0; i < n; i++) {  ->  i <= n
+  src/stark/constraints.ts:125 ConditionalExpression: case Op.MainNext: ext[i] = at.next[x]; break;  ->  case Op.MainNext:
+  src/stark/constraints.ts:128 ConditionalExpression: case Op.FirstRow: ext[i] = at.firstRow; break;  ->  case Op.FirstRow:
+  src/stark/constraints.ts:129 ConditionalExpression: case Op.LastRow: ext[i] = at.lastRow; break;  ->  case Op.LastRow:
+  src/stark/constraints.ts:130 ConditionalExpression: case Op.Transition: ext[i] = at.transition; break;  ->  case Op.Transition:
+  src/stark/constraints.ts:132 ConditionalExpression: case Op.Neg:  ->  case Op.Neg:
+  src/stark/constraints.ts:133 ConditionalExpression: if (ext[x] === undefined) base[i] = neg(base[x] as bigint);  ->  true
+  src/stark/constraints.ts:133 ConditionalExpression: if (ext[x] === undefined) base[i] = neg(base[x] as bigint);  ->  false
+  src/stark/constraints.ts:137 ConditionalExpression: if (ext[x] === undefined && ext[y] === undefined) base[i] = add(base[x] as bigint, base[y] as bigint);  ->  false
+  src/stark/constraints.ts:137 ConditionalExpression: if (ext[x] === undefined && ext[y] === undefined) base[i] = add(base[x] as bigint, base[y] as bigint);  ->  true
+  src/stark/constraints.ts:137 EqualityOperator: if (ext[x] === undefined && ext[y] === undefined) base[i] = add(base[x] as bigint, base[y] as bigint);  ->  ext[y] !== undefined
+  src/stark/constraints.ts:141 ConditionalExpression: if (ext[x] === undefined && ext[y] === undefined) base[i] = sub(base[x] as bigint, base[y] as bigint);  ->  false
+  src/stark/constraints.ts:145 ConditionalExpression: if (ext[x] === undefined && ext[y] === undefined) base[i] = mul(base[x] as bigint, base[y] as bigint);  ->  false
+  src/stark/field.ts:18 EqualityOperator: return s >= P ? s - P : s;  ->  s > P
+  src/stark/field.ts:20 EqualityOperator: export const sub = (a: bigint, b: bigint): bigint => (a >= b ? a - b : a + P - b);  ->  a > b
+  src/stark/field.ts:22 ConditionalExpression: export const neg = (a: bigint): bigint => (a === 0n ? 0n : P - a);  ->  false
+  src/stark/field.ts:36 ConditionalExpression: if (a === 0n) throw new Error("inverse of zero");  ->  false
+  src/stark/field.ts:42 ConditionalExpression: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  false
+  src/stark/field.ts:42 LogicalOperator: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  bits < 0 && bits > 32
+  src/stark/field.ts:42 ConditionalExpression: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  false
+  src/stark/field.ts:42 EqualityOperator: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  bits <= 0
+  src/stark/field.ts:42 ConditionalExpression: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  false
+  src/stark/field.ts:42 EqualityOperator: if (bits < 0 || bits > 32) throw new Error("two-adic order out of range");  ->  bits >= 32
+  src/stark/field.ts:57 LogicalOperator: export const eeq = (a: E, b: E): boolean => a[0] === b[0] && a[1] === b[1];  ->  a[0] === b[0] || a[1] === b[1]
+  src/stark/field.ts:57 ConditionalExpression: export const eeq = (a: E, b: E): boolean => a[0] === b[0] && a[1] === b[1];  ->  true
+  src/stark/field.ts:57 ConditionalExpression: export const eeq = (a: E, b: E): boolean => a[0] === b[0] && a[1] === b[1];  ->  true
+  src/stark/field.ts:58 ConditionalExpression: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  false
+  src/stark/field.ts:58 LogicalOperator: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  a[0] === 0n || a[1] === 0n
+  src/stark/field.ts:58 ConditionalExpression: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  true
+  src/stark/field.ts:58 EqualityOperator: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  a[0] !== 0n
+  src/stark/field.ts:58 ConditionalExpression: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  true
+  src/stark/field.ts:58 EqualityOperator: export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;  ->  a[1] !== 0n
+  src/stark/field.ts:69 ConditionalExpression: while (e > 0n) {  ->  false
+  src/stark/field.ts:69 EqualityOperator: while (e > 0n) {  ->  e >= 0n
+  src/stark/field.ts:69 EqualityOperator: while (e > 0n) {  ->  e <= 0n
+  src/stark/field.ts:69 BlockStatement: while (e > 0n) {  ->  {}
+  src/stark/field.ts:70 ConditionalExpression: if (e & 1n) r = emul(r, b);  ->  true
+  src/stark/field.ts:70 ConditionalExpression: if (e & 1n) r = emul(r, b);  ->  false
+  src/stark/field.ts:72 AssignmentOperator: e >>= 1n;  ->  e <<= 1n
+  src/stark/field.ts:86 ArrayDeclaration: const pre: E[] = new Array(xs.length);  ->  new Array()
+  src/stark/field.ts:93 ArrayDeclaration: const out: E[] = new Array(xs.length);  ->  new Array()
+  src/stark/merkle.ts:24 ConditionalExpression: if (i !== 0) keccakP(s);  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] && a[1] === b[1] && a[2] === b[2] || a[3] === b[3]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] && a[1] === b[1] || a[2] === b[2]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] || a[1] === b[1]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:50 ConditionalExpression: if (cap.length !== 1) return false;  ->  false
+  src/stark/merkle.ts:50 BooleanLiteral: if (cap.length !== 1) return false;  ->  true
+  src/stark/merkle.ts:51 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  false
+  src/stark/merkle.ts:51 LogicalOperator: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  height < 1 && (height & height - 1) !== 0
+  src/stark/merkle.ts:51 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  false
+  src/stark/merkle.ts:51 EqualityOperator: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  height <= 1
+  src/stark/merkle.ts:51 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  false
+  src/stark/merkle.ts:51 BooleanLiteral: if (height < 1 || (height & (height - 1)) !== 0) return false;  ->  true
+  src/stark/merkle.ts:52 ConditionalExpression: if (index < 0 || index >= height) return false;  ->  false
+  src/stark/merkle.ts:52 LogicalOperator: if (index < 0 || index >= height) return false;  ->  index < 0 && index >= height
+  src/stark/merkle.ts:52 ConditionalExpression: if (index < 0 || index >= height) return false;  ->  false
+  src/stark/merkle.ts:52 EqualityOperator: if (index < 0 || index >= height) return false;  ->  index <= 0
+  src/stark/merkle.ts:52 ConditionalExpression: if (index < 0 || index >= height) return false;  ->  false
+  src/stark/merkle.ts:52 EqualityOperator: if (index < 0 || index >= height) return false;  ->  index > height
+  src/stark/merkle.ts:52 BooleanLiteral: if (index < 0 || index >= height) return false;  ->  true
+  src/stark/merkle.ts:53 ConditionalExpression: if (rows.length === 0 || rows.length !== salts.length) return false;  ->  false
+  src/stark/merkle.ts:53 LogicalOperator: if (rows.length === 0 || rows.length !== salts.length) return false;  ->  rows.length === 0 && rows.length !== salts.length
+  src/stark/merkle.ts:53 ConditionalExpression: if (rows.length === 0 || rows.length !== salts.length) return false;  ->  false
+  src/stark/merkle.ts:53 ConditionalExpression: if (rows.length === 0 || rows.length !== salts.length) return false;  ->  false
+  src/stark/merkle.ts:53 BooleanLiteral: if (rows.length === 0 || rows.length !== salts.length) return false;  ->  true
+  src/stark/merkle.ts:54 ConditionalExpression: if (salts.some((s) => s.length !== saltElems)) return false;  ->  false
+  src/stark/merkle.ts:54 MethodExpression: if (salts.some((s) => s.length !== saltElems)) return false;  ->  salts.every(s => s.length !== saltElems)
+  src/stark/merkle.ts:54 ArrowFunction: if (salts.some((s) => s.length !== saltElems)) return false;  ->  () => undefined
+  src/stark/merkle.ts:54 ConditionalExpression: if (salts.some((s) => s.length !== saltElems)) return false;  ->  false
+  src/stark/merkle.ts:54 BooleanLiteral: if (salts.some((s) => s.length !== saltElems)) return false;  ->  true
+  src/stark/merkle.ts:56 ConditionalExpression: if (siblings.length !== levels) return false;  ->  false
+  src/stark/merkle.ts:56 BooleanLiteral: if (siblings.length !== levels) return false;  ->  true
+  src/stark/merkle.ts:69 ConditionalExpression: return at === 0 && same(d, cap[0]);  ->  true
+  src/stark/proof.ts:48 BlockStatement: private need(n: number) {  ->  {}
+  src/stark/proof.ts:49 ConditionalExpression: if (this.at + n > this.b.length) throw new Error("malformed: truncated");  ->  false
+  src/stark/proof.ts:49 ArithmeticOperator: if (this.at + n > this.b.length) throw new Error("malformed: truncated");  ->  this.at - n
+  src/stark/proof.ts:67 ConditionalExpression: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  false
+  src/stark/proof.ts:67 EqualityOperator: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  n >= BigInt(this.b.length - this.at)
+  src/stark/proof.ts:67 ArithmeticOperator: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  this.b.length + this.at
+  src/stark/proof.ts:73 ConditionalExpression: if (v >= P) throw new Error("malformed: non-canonical field element");  ->  false
+  src/stark/proof.ts:73 EqualityOperator: if (v >= P) throw new Error("malformed: non-canonical field element");  ->  v > P
+  src/stark/proof.ts:83 ArrayDeclaration: const out: T[] = new Array(n);  ->  new Array()
+  src/stark/proof.ts:91 ConditionalExpression: if (tag === 1) return item();  ->  true
+  src/stark/proof.ts:142 ConditionalExpression: if (degreeBits > 32n) throw new Error("malformed: degree");  ->  false
+  src/stark/proof.ts:142 EqualityOperator: if (degreeBits > 32n) throw new Error("malformed: degree");  ->  degreeBits >= 32n
+  src/stark/transcript.ts:67 ConditionalExpression: if (v < P) return v;  ->  true
+  src/stark/transcript.ts:67 EqualityOperator: if (v < P) return v;  ->  v <= P
+  src/stark/transcript.ts:78 ConditionalExpression: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  false
+  src/stark/transcript.ts:78 LogicalOperator: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  bits < 0 && bits > 52
+  src/stark/transcript.ts:78 ConditionalExpression: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  false
+  src/stark/transcript.ts:78 EqualityOperator: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  bits <= 0
+  src/stark/transcript.ts:78 ConditionalExpression: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  false
+  src/stark/transcript.ts:78 EqualityOperator: if (bits < 0 || bits > 52) throw new Error("bit count out of range");  ->  bits >= 52
+  src/stark/verify.ts:64 EqualityOperator: for (let i = 0; i < m; i++) {  ->  i <= m
+  src/stark/verify.ts:68 ArrowFunction: const hit = pts.findIndex((x) => eeq(z, lift(x)));  ->  () => undefined
+  src/stark/verify.ts:69 ConditionalExpression: if (hit >= 0) return pts.map((_, i) => (i === hit ? E1 : E0));  ->  false
+  src/stark/verify.ts:69 EqualityOperator: if (hit >= 0) return pts.map((_, i) => (i === hit ? E1 : E0));  ->  hit > 0
+  src/stark/verify.ts:69 ConditionalExpression: if (hit >= 0) return pts.map((_, i) => (i === hit ? E1 : E0));  ->  true
+  src/stark/verify.ts:69 ConditionalExpression: if (hit >= 0) return pts.map((_, i) => (i === hit ? E1 : E0));  ->  false
+  src/stark/verify.ts:69 EqualityOperator: if (hit >= 0) return pts.map((_, i) => (i === hit ? E1 : E0));  ->  i !== hit
+  src/stark/verify.ts:79 ConditionalExpression: for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];  ->  false
+  src/stark/verify.ts:79 EqualityOperator: for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];  ->  i <= k
+  src/stark/verify.ts:79 EqualityOperator: for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];  ->  i >= k
+  src/stark/verify.ts:79 ConditionalExpression: for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];  ->  false
+  src/stark/verify.ts:99 ConditionalExpression: need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");  ->  true
+  src/stark/verify.ts:99 LogicalOperator: need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");  ->  pv.length > globals || (pv.length - globals) % rowWidth === 0
+  src/stark/verify.ts:99 ConditionalExpression: need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");  ->  true
+  src/stark/verify.ts:99 EqualityOperator: need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");  ->  pv.length >= globals
+  src/stark/verify.ts:99 ConditionalExpression: need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");  ->  true
+  src/stark/verify.ts:101 ConditionalExpression: need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");  ->  true
+  src/stark/verify.ts:101 LogicalOperator: need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");  ->  rows >= 1 || (rows & rows - 1) === 0
+  src/stark/verify.ts:101 ConditionalExpression: need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");  ->  true
+  src/stark/verify.ts:101 EqualityOperator: need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");  ->  rows > 1
+  src/stark/verify.ts:101 ConditionalExpression: need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");  ->  true
+  src/stark/verify.ts:136 ConditionalExpression: need(maxDegree(air) === prm.statedDegree, "constraint degree differs from the stated one");  ->  true
+  src/stark/verify.ts:138 ConditionalExpression: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  true
+  src/stark/verify.ts:138 LogicalOperator: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  D >= 2 || D + prm.logBlowup <= 32
+  src/stark/verify.ts:138 ConditionalExpression: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  true
+  src/stark/verify.ts:138 EqualityOperator: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  D > 2
+  src/stark/verify.ts:138 ConditionalExpression: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  true
+  src/stark/verify.ts:138 EqualityOperator: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  D + prm.logBlowup < 32
+  src/stark/verify.ts:138 ArithmeticOperator: need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");  ->  D - prm.logBlowup
+  src/stark/verify.ts:140 ArithmeticOperator: const logQuotientDegree = Math.ceil(Math.log2(Math.max(prm.statedDegree + 1, 2) - 1));  ->  prm.statedDegree - 1
+  src/stark/verify.ts:146 EqualityOperator: for (let i = 0; i < chunks; i++) chunkDomains.push({ shift: mul(GENERATOR, pow(gq, BigInt(i))), logSize: chunkLog });  ->  i <= chunks
+  src/stark/verify.ts:149 ConditionalExpression: need(proof.traceLocal.length === W, "trace opening width");  ->  true
+  src/stark/verify.ts:150 ConditionalExpression: need(proof.traceNext !== null && proof.traceNext.length === W, "next-row opening width");  ->  true
+  src/stark/verify.ts:151 ConditionalExpression: need(proof.preprocessedLocal === null && proof.preprocessedNext === null, "unexpected preprocessed trace");  ->  true
+  src/stark/verify.ts:151 LogicalOperator: need(proof.preprocessedLocal === null && proof.preprocessedNext === null, "unexpected preprocessed trace");  ->  proof.preprocessedLocal === null || proof.preprocessedNext === null
+  src/stark/verify.ts:151 ConditionalExpression: need(proof.preprocessedLocal === null && proof.preprocessedNext === null, "unexpected preprocessed trace");  ->  true
+  src/stark/verify.ts:151 ConditionalExpression: need(proof.preprocessedLocal === null && proof.preprocessedNext === null, "unexpected preprocessed trace");  ->  true
+  src/stark/verify.ts:152 ConditionalExpression: need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");  ->  true
+  src/stark/verify.ts:152 LogicalOperator: need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");  ->  proof.quotientChunks.length === chunks || proof.quotientChunks.every(c => c.length === 2)
+  src/stark/verify.ts:152 ConditionalExpression: need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");  ->  true
+  src/stark/verify.ts:152 MethodExpression: need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");  ->  proof.quotientChunks.some(c => c.length === 2)
+  src/stark/verify.ts:152 ConditionalExpression: need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");  ->  true
+  src/stark/verify.ts:153 ConditionalExpression: need(proof.random !== null && proof.random.length === 2, "random opening shape");  ->  true
+  src/stark/verify.ts:157 ConditionalExpression: need(log2(period) <= initLog, "batch larger than the trace");  ->  true
+  src/stark/verify.ts:191 ConditionalExpression: need(proof.randomOpenings.length === rounds.length, "hidden openings: round count");  ->  true
+  src/stark/verify.ts:194 ConditionalExpression: need(hidden.length === r.mats.length, "hidden openings: matrix count");  ->  true
+  src/stark/verify.ts:196 ConditionalExpression: need(hidden[mi].length === m.points.length, "hidden openings: point count");  ->  true
+  src/stark/verify.ts:198 ConditionalExpression: need(hidden[mi][pi].length === prm.randomCodewords, "hidden openings: value count");  ->  true
+  src/stark/verify.ts:238 ConditionalExpression: need(proof.queries.length === prm.queries, "query count");  ->  true
+  src/stark/verify.ts:240 ConditionalExpression: need(arities.length === nRounds, "fold count");  ->  true
+  src/stark/verify.ts:241 BlockStatement: for (const q of proof.queries) {  ->  {}
+  src/stark/verify.ts:242 ConditionalExpression: need(q.steps.length === nRounds, "fold count");  ->  true
+  src/stark/verify.ts:243 ArrowFunction: q.steps.forEach((s, i) => need(s.logArity === arities[i], "arity schedule differs between queries"));  ->  () => undefined
+  src/stark/verify.ts:243 ConditionalExpression: q.steps.forEach((s, i) => need(s.logArity === arities[i], "arity schedule differs between queries"));  ->  true
+  src/stark/verify.ts:245 MethodExpression: need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");  ->  arities.some(a => a >= 1 && a <= prm.maxLogArity)
+  src/stark/verify.ts:245 ConditionalExpression: need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");  ->  true
+  src/stark/verify.ts:245 LogicalOperator: need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");  ->  a >= 1 || a <= prm.maxLogArity
+  src/stark/verify.ts:245 ConditionalExpression: need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");  ->  true
+  src/stark/verify.ts:245 ConditionalExpression: need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");  ->  true
+  src/stark/verify.ts:247 MethodExpression: const tallest = Math.max(...rounds.flatMap((r) => r.mats.map((m) => m.logHeight)));  ->  Math.min(...rounds.flatMap(r => r.mats.map(m => m.logHeight)))
+  src/stark/verify.ts:248 ConditionalExpression: need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");  ->  true
+  src/stark/verify.ts:248 LogicalOperator: need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");  ->  logGlobal === tallest || logGlobal <= 32
+  src/stark/verify.ts:248 ConditionalExpression: need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");  ->  true
+  src/stark/verify.ts:248 ConditionalExpression: need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");  ->  true
+  src/stark/verify.ts:248 EqualityOperator: need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");  ->  logGlobal < 32
+  src/stark/verify.ts:249 ConditionalExpression: need(proof.commitPow.length === nRounds, "commit grinding count");  ->  true
+  src/stark/verify.ts:256 ConditionalExpression: need(proof.finalPoly.length === 2 ** prm.logFinalPolyLen, "final polynomial length");  ->  true
+  src/stark/verify.ts:266 ConditionalExpression: need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");  ->  true
+  src/stark/verify.ts:266 LogicalOperator: need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");  ->  reduced.length > 0 || reduced[0][0] === logGlobal
+  src/stark/verify.ts:266 ConditionalExpression: need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");  ->  true
+  src/stark/verify.ts:266 EqualityOperator: need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");  ->  reduced.length >= 0
+  src/stark/verify.ts:266 ConditionalExpression: need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");  ->  true
+  src/stark/verify.ts:272 ConditionalExpression: need(s.logArity <= logH, "arity above height");  ->  true
+  src/stark/verify.ts:272 EqualityOperator: need(s.logArity <= logH, "arity above height");  ->  s.logArity < logH
+  src/stark/verify.ts:273 ConditionalExpression: need(s.siblings.length === arity - 1, "sibling count");  ->  true
+  src/stark/verify.ts:296 ConditionalExpression: if (next < reduced.length && reduced[next][0] === logH) {  ->  false
+  src/stark/verify.ts:296 ConditionalExpression: if (next < reduced.length && reduced[next][0] === logH) {  ->  true
+  src/stark/verify.ts:296 EqualityOperator: if (next < reduced.length && reduced[next][0] === logH) {  ->  reduced[next][0] !== logH
+  src/stark/verify.ts:296 BlockStatement: if (next < reduced.length && reduced[next][0] === logH) {  ->  {}
+  src/stark/verify.ts:298 AssignmentOperator: next += 1;  ->  next -= 1
+  src/stark/verify.ts:301 ConditionalExpression: need(logH === logFinal, "fold did not end at the final height");  ->  true
+  src/stark/verify.ts:302 ConditionalExpression: need(next === reduced.length, "openings left unfolded");  ->  true
+  src/stark/verify.ts:354 ConditionalExpression: need(inputs.length === rounds.length, "input opening count");  ->  true
+  src/stark/verify.ts:358 ConditionalExpression: need(op.rows.length === r.mats.length, "opened matrix count");  ->  true
+  src/stark/verify.ts:360 MethodExpression: need(heights.every((h) => h === heights[0]), "mixed heights in one commitment");  ->  heights.some(h => h === heights[0])
+  src/stark/verify.ts:360 ConditionalExpression: need(heights.every((h) => h === heights[0]), "mixed heights in one commitment");  ->  true
+  src/stark/verify.ts:362 ArithmeticOperator: const reducedIndex = Math.floor(index / 2 ** (logGlobal - logH));  ->  index * 2 ** (logGlobal - logH)
+  src/stark/verify.ts:365 ArithmeticOperator: const x = mul(GENERATOR, pow(twoAdic(m.logHeight), BigInt(bitrev(Math.floor(index / 2 ** (logGlobal - m.logHeight)), m.logHeight))));  ->  index * 2 ** (logGlobal - m.logHeight)
+  src/stark/verify.ts:372 ConditionalExpression: need(row.length === p.values.length, "claimed value count");  ->  true
+  src/stark/verify.ts:381 ConditionalExpression: need(low === undefined || ezero(low.sum), "constant-height opening not zero");  ->  true
+  src/stark/verify.ts:382 MethodExpression: return [...acc.entries()].sort((a, b) => b[0] - a[0]).map(([h, v]) => [h, v.sum]);  ->  [...acc.entries()]
+  src/stark/verify.ts:382 ArithmeticOperator: return [...acc.entries()].sort((a, b) => b[0] - a[0]).map(([h, v]) => [h, v.sum]);  ->  b[0] + a[0]

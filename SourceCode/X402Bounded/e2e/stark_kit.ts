@@ -63,3 +63,80 @@ export function encode(p: StarkProof, pv: readonly bigint[]): Uint8Array {
 
 /** A deep copy, so that a test can change one field and leave the original whole. */
 export const copy = (p: StarkProof): StarkProof => structuredClone(p) as StarkProof;
+
+/** Where some fields sit in the encoding, so that a test can change one byte range and nothing else. */
+export interface Offsets {
+  degreeBits: number;
+  traceLocal: number;
+  quotientChunk: number;
+  queryPow: number;
+  finalPoly: number;
+  inputRow: number;
+  inputSalt: number;
+  inputSibling: number;
+  foldSibling: number;
+  publicValue: number;
+}
+
+/** Walks the encoding as the parser does, without checking it, and records the offsets of the first of each field. */
+export function offsets(b: Uint8Array): Offsets {
+  let at = 0;
+  const u64 = () => {
+    let v = 0n;
+    for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(b[at + i]);
+    at += 8;
+    return v;
+  };
+  const vec = (item: () => void) => {
+    const n = Number(u64());
+    for (let i = 0; i < n; i++) item();
+  };
+  const option = (item: () => void) => {
+    if (b[at++] === 1) item();
+  };
+  const skip = (n: number) => () => {
+    at += n;
+  };
+  const cap = () => vec(skip(32));
+  const o: Partial<Offsets> = {};
+  cap();
+  cap();
+  option(cap);
+  o.traceLocal = at + 8;
+  vec(skip(16));
+  option(() => vec(skip(16)));
+  option(() => vec(skip(16)));
+  option(() => vec(skip(16)));
+  o.quotientChunk = at + 16;
+  vec(() => vec(skip(16)));
+  option(() => vec(skip(16)));
+  vec(() => vec(() => vec(() => vec(skip(16)))));
+  vec(cap);
+  vec(skip(8));
+  vec(() => {
+    const first = o.inputRow === undefined;
+    vec(() => {
+      if (first && o.inputRow === undefined) o.inputRow = at + 16;
+      vec(() => vec(skip(8)));
+      if (first && o.inputSalt === undefined) o.inputSalt = at + 16;
+      vec(() => vec(skip(8)));
+      if (first && o.inputSibling === undefined) o.inputSibling = at + 8;
+      vec(skip(32));
+    });
+    vec(() => {
+      at += 1;
+      if (first && o.foldSibling === undefined) o.foldSibling = at + 8;
+      vec(skip(16));
+      vec(() => vec(skip(8)));
+      vec(skip(32));
+    });
+  });
+  o.finalPoly = at + 8;
+  vec(skip(16));
+  o.queryPow = at;
+  at += 8;
+  o.degreeBits = at;
+  at += 8;
+  o.publicValue = at + 8;
+  return o as Offsets;
+}

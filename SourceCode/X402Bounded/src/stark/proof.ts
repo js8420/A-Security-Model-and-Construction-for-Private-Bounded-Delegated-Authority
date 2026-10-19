@@ -41,20 +41,6 @@ export interface StarkProof {
   degreeBits: number;
 }
 
-/** Where some fields sit in the encoding, so that tests can change one byte range and nothing else. */
-export interface Offsets {
-  degreeBits: number;
-  traceLocal: number;
-  quotientChunk: number;
-  queryPow: number;
-  finalPoly: number;
-  inputRow: number;
-  inputSalt: number;
-  inputSibling: number;
-  foldSibling: number;
-  publicValue: number;
-}
-
 class Reader {
   at = 0;
   constructor(private readonly b: Uint8Array) {}
@@ -120,37 +106,29 @@ class Reader {
 }
 
 /** Reads the exported file, which is bincode of (proof, public values), and refuses anything else. */
-export function parse(bytes: Uint8Array): { proof: StarkProof; pv: bigint[]; offsets: Offsets } {
+export function parse(bytes: Uint8Array): { proof: StarkProof; pv: bigint[] } {
   const r = new Reader(bytes);
-  const o: Partial<Offsets> = {};
   const traceCap = r.cap();
   const quotientCap = r.cap();
   const randomCap = r.option(() => r.cap());
-  o.traceLocal = r.at + 8;
   const traceLocal = r.vec(() => r.e());
   const traceNext = r.option(() => r.vec(() => r.e()));
   const preprocessedLocal = r.option(() => r.vec(() => r.e()));
   const preprocessedNext = r.option(() => r.vec(() => r.e()));
-  o.quotientChunk = r.at + 16;
   const quotientChunks = r.vec(() => r.vec(() => r.e()));
   const random = r.option(() => r.vec(() => r.e()));
   const randomOpenings = r.vec(() => r.vec(() => r.vec(() => r.vec(() => r.e()))));
   const friCaps = r.vec(() => r.cap());
   const commitPow = r.vec(() => r.f());
   const queries = r.vec((): Query => {
-    const first = o.inputRow === undefined;
     const inputs = r.vec((): Opening<bigint> => {
-      if (first && o.inputRow === undefined) o.inputRow = r.at + 16;
       const rows = r.vec(() => r.vec(() => r.f()));
-      if (first && o.inputSalt === undefined) o.inputSalt = r.at + 16;
       const salts = r.vec(() => r.vec(() => r.f()));
-      if (first && o.inputSibling === undefined) o.inputSibling = r.at + 8;
       const siblings = r.vec(() => r.digest());
       return { rows, salts, siblings };
     });
     const steps = r.vec((): FoldStep => {
       const logArity = r.u8();
-      if (first && o.foldSibling === undefined) o.foldSibling = r.at + 8;
       const siblings = r.vec(() => r.e());
       const salts = r.vec(() => r.vec(() => r.f()));
       const sibs = r.vec(() => r.digest());
@@ -158,14 +136,10 @@ export function parse(bytes: Uint8Array): { proof: StarkProof; pv: bigint[]; off
     });
     return { inputs, steps };
   });
-  o.finalPoly = r.at + 8;
   const finalPoly = r.vec(() => r.e());
-  o.queryPow = r.at;
   const queryPow = r.f();
-  o.degreeBits = r.at;
   const degreeBits = r.u64();
   if (degreeBits > 32n) throw new Error("malformed: degree");
-  o.publicValue = r.at + 8;
   const pv = r.vec(() => r.f());
   if (!r.done()) throw new Error("malformed: trailing bytes");
   const proof: StarkProof = {
@@ -173,5 +147,5 @@ export function parse(bytes: Uint8Array): { proof: StarkProof; pv: bigint[]; off
     quotientChunks, random, randomOpenings, friCaps, commitPow, queries, finalPoly, queryPow,
     degreeBits: Number(degreeBits),
   };
-  return { proof, pv, offsets: o as Offsets };
+  return { proof, pv };
 }
