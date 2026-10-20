@@ -83,19 +83,19 @@ export function esquarings(a: E, k: number): E {
 
 /** Inverts many elements with one field inversion. */
 export function ebatchInv(xs: readonly E[]): E[] {
-  const pre: E[] = new Array(xs.length);
+  const pre: E[] = [];
   let acc: E = E1;
-  for (let i = 0; i < xs.length; i++) {
-    pre[i] = acc;
-    acc = emul(acc, xs[i]);
+  for (const x of xs) {
+    pre.push(acc);
+    acc = emul(acc, x);
   }
   let t = einv(acc);
-  const out: E[] = new Array(xs.length);
+  const out: E[] = [];
   for (let i = xs.length - 1; i >= 0; i--) {
-    out[i] = emul(t, pre[i]);
+    out.push(emul(t, pre[i]));
     t = emul(t, xs[i]);
   }
-  return out;
+  return out.reverse();
 }
 
 /** The index i read with its low `bits` bits in reverse order. */

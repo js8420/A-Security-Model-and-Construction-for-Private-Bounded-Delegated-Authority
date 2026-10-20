@@ -1,6 +1,6 @@
 import { fold, maxDegree, type Constraints } from "./constraints.js";
 import {
-  E0, E1, GENERATOR, X, bitrev, eadd, ebatchInv, eeq, einv, emul, epow, escale, esquarings, esub, ezero,
+  E0, E1, GENERATOR, X, bitrev, eadd, ebatchInv, eeq, einv, emul, escale, esquarings, esub, ezero,
   inv, lift, mul, pow, sub, twoAdic, type E,
 } from "./field.js";
 import { verifyOpening } from "./merkle.js";
@@ -23,6 +23,9 @@ export const PARAMS = {
 export type Verdict = { ok: true } | { ok: false; reason: string };
 
 class Reject extends Error {}
+
+/** log2 of the quotient's degree over the trace's for constraint degree d under a hiding commitment, as p3-uni-stark 0.6.3 sets it. */
+export const logQuotientDegree = (d: number): number => Math.ceil(Math.log2(Math.max(d + 1, 2) - 1));
 
 function need(cond: boolean, reason: string): asserts cond {
   if (!cond) throw new Reject(reason);
@@ -73,10 +76,9 @@ export function subgroupWeights(m: number, z: E): E[] {
   return pts.map((x, i) => escale(emul(scale, invs[i]), x));
 }
 
-/** Lagrange interpolation through (xs[i], ys[i]) at z, from the definition. */
+/** Lagrange interpolation through (xs[i], ys[i]) at z, from the definition, which holds at a node as well. */
 export function lagrange(xs: readonly bigint[], ys: readonly E[], z: E): E {
   const k = xs.length;
-  for (let i = 0; i < k; i++) if (eeq(z, lift(xs[i]))) return ys[i];
   let out = E0;
   for (let i = 0; i < k; i++) {
     let num = E1;
@@ -108,12 +110,11 @@ function periodicColumns(pv: readonly bigint[], globals: number, rowWidth: numbe
   return cols;
 }
 
-interface Matrix {
-  logHeight: number;
+export interface Matrix {
   points: { z: E; values: E[] }[];
 }
 
-interface Round {
+export interface Round {
   cap: readonly Digest[];
   mats: Matrix[];
 }
@@ -137,13 +138,12 @@ export function check(proof: StarkProof, pv: readonly bigint[], air: Constraints
   const D = proof.degreeBits;
   need(D >= 2 && D + prm.logBlowup <= 32, "degree out of range");
   const initLog = D - 1;
-  const logQuotientDegree = Math.ceil(Math.log2(Math.max(prm.statedDegree + 1, 2) - 1));
-  const chunks = 2 ** (logQuotientDegree + 1);
-  const quotientDomain: Coset = { shift: GENERATOR, logSize: D + logQuotientDegree };
+  const lq = logQuotientDegree(prm.statedDegree);
+  const chunks = 2 ** (lq + 1);
+  const quotientDomain: Coset = { shift: GENERATOR, logSize: D + lq };
   const chunkLog = quotientDomain.logSize - log2(chunks);
   const gq = twoAdic(quotientDomain.logSize);
-  const chunkDomains: Coset[] = [];
-  for (let i = 0; i < chunks; i++) chunkDomains.push({ shift: mul(GENERATOR, pow(gq, BigInt(i))), logSize: chunkLog });
+  const chunkDomains: Coset[] = Array.from({ length: chunks }, (_, i) => ({ shift: mul(GENERATOR, pow(gq, BigInt(i))), logSize: chunkLog }));
 
   const W = air.width;
   need(proof.traceLocal.length === W, "trace opening width");
@@ -175,17 +175,13 @@ export function check(proof: StarkProof, pv: readonly bigint[], air: Constraints
   const periodicAtZeta = periodic.map((col) => interpolateSubgroup(col, weights));
   const zetaNext = escale(zeta, twoAdic(initLog));
 
+  // Every matrix is opened over the extended trace domain: the quotient's chunks
+  // have height 2^(chunkLog + 1), which is the trace's, before the blowup.
   const logLde = D + prm.logBlowup;
   const rounds: Round[] = [
-    { cap: proof.randomCap, mats: [{ logHeight: logLde, points: [{ z: zeta, values: [...proof.random] }] }] },
-    {
-      cap: proof.traceCap,
-      mats: [{ logHeight: logLde, points: [{ z: zeta, values: [...proof.traceLocal] }, { z: zetaNext, values: [...proof.traceNext] }] }],
-    },
-    {
-      cap: proof.quotientCap,
-      mats: proof.quotientChunks.map((c) => ({ logHeight: chunkLog + 1 + prm.logBlowup, points: [{ z: zeta, values: [...c] }] })),
-    },
+    { cap: proof.randomCap, mats: [{ points: [{ z: zeta, values: [...proof.random] }] }] },
+    { cap: proof.traceCap, mats: [{ points: [{ z: zeta, values: [...proof.traceLocal] }, { z: zetaNext, values: [...proof.traceNext] }] }] },
+    { cap: proof.quotientCap, mats: proof.quotientChunks.map((c) => ({ points: [{ z: zeta, values: [...c] }] })) },
   ];
 
   need(proof.randomOpenings.length === rounds.length, "hidden openings: round count");
@@ -202,7 +198,7 @@ export function check(proof: StarkProof, pv: readonly bigint[], air: Constraints
   });
   for (const r of rounds) for (const m of r.mats) for (const p of m.points) for (const v of p.values) t.observeExt(v);
 
-  fri(proof, rounds, t);
+  fri(proof, rounds, logLde, t);
 
   let quotient = E0;
   for (let i = 0; i < chunks; i++) {
@@ -231,7 +227,7 @@ export function check(proof: StarkProof, pv: readonly bigint[], air: Constraints
   need(eeq(emul(folded, einv(zH)), quotient), "constraints do not match the quotient at the out-of-domain point");
 }
 
-function fri(proof: StarkProof, rounds: Round[], t: Transcript): void {
+function fri(proof: StarkProof, rounds: Round[], logLde: number, t: Transcript): void {
   const prm = PARAMS;
   const alpha = t.sampleExt();
   const nRounds = proof.friCaps.length;
@@ -243,9 +239,10 @@ function fri(proof: StarkProof, rounds: Round[], t: Transcript): void {
     q.steps.forEach((s, i) => need(s.logArity === arities[i], "arity schedule differs between queries"));
   }
   need(arities.every((a) => a >= 1 && a <= prm.maxLogArity), "arity out of range");
-  const logGlobal = arities.reduce((a, b) => a + b, 0) + prm.logBlowup + prm.logFinalPolyLen;
-  const tallest = Math.max(...rounds.flatMap((r) => r.mats.map((m) => m.logHeight)));
-  need(logGlobal === tallest && logGlobal <= 32, "fold schedule does not reach the final polynomial");
+  // The folds must take the extended domain down to the final polynomial's; this
+  // also keeps every arity within the height it folds, and the last fold at it.
+  const logFinal = prm.logBlowup + prm.logFinalPolyLen;
+  need(arities.reduce((a, b) => a + b, 0) + logFinal === logLde, "fold schedule does not reach the final polynomial");
   need(proof.commitPow.length === nRounds, "commit grinding count");
   const betas: E[] = [];
   for (let i = 0; i < nRounds; i++) {
@@ -258,18 +255,13 @@ function fri(proof: StarkProof, rounds: Round[], t: Transcript): void {
   for (const a of arities) t.observe(BigInt(a));
   need(t.checkWitness(prm.queryPowBits, proof.queryPow), "query grinding");
 
-  const logFinal = prm.logBlowup + prm.logFinalPolyLen;
   const batching = new Batching(alpha);
   for (const q of proof.queries) {
-    let index = t.sampleBits(logGlobal);
-    const reduced = openInput(q.inputs, rounds, index, logGlobal, batching);
-    need(reduced.length > 0 && reduced[0][0] === logGlobal, "no opening at the tallest height");
-    let folded = reduced[0][1];
-    let next = 1;
-    let logH = logGlobal;
+    let index = t.sampleBits(logLde);
+    let folded = openInput(q.inputs, rounds, index, logLde, batching);
+    let logH = logLde;
     q.steps.forEach((s, ri) => {
       const arity = 2 ** s.logArity;
-      need(s.logArity <= logH, "arity above height");
       need(s.siblings.length === arity - 1, "sibling count");
       const pos = index % arity;
       const evals: E[] = [];
@@ -278,10 +270,8 @@ function fri(proof: StarkProof, rounds: Round[], t: Transcript): void {
       const logFolded = logH - s.logArity;
       index = Math.floor(index / arity);
       const row = evals.flatMap((e) => [e[0], e[1]]);
-      need(
-        verifyOpening(proof.friCaps[ri], 2 ** logFolded, index, [row], s.opening.salts, s.opening.siblings, prm.saltElems),
-        "fold commitment opening",
-      );
+      const why = verifyOpening(proof.friCaps[ri], 2 ** logFolded, index, [row], s.opening.salts, s.opening.siblings, prm.saltElems);
+      need(why === null, `fold commitment opening: ${why}`);
       const start = pow(twoAdic(logFolded + s.logArity), BigInt(bitrev(index, logFolded)));
       const ga = twoAdic(s.logArity);
       const natural: bigint[] = [];
@@ -293,27 +283,20 @@ function fri(proof: StarkProof, rounds: Round[], t: Transcript): void {
       const xs = natural.map((_, j) => natural[bitrev(j, s.logArity)]);
       folded = lagrange(xs, evals, betas[ri]);
       logH = logFolded;
-      if (next < reduced.length && reduced[next][0] === logH) {
-        folded = eadd(folded, emul(epow(betas[ri], BigInt(arity)), reduced[next][1]));
-        next += 1;
-      }
     });
-    need(logH === logFinal, "fold did not end at the final height");
-    need(next === reduced.length, "openings left unfolded");
-    const x = lift(pow(twoAdic(logGlobal), BigInt(bitrev(index, logGlobal))));
+    const x = lift(pow(twoAdic(logLde), BigInt(bitrev(index, logLde))));
     let acc = E0;
     for (let i = proof.finalPoly.length - 1; i >= 0; i--) acc = eadd(emul(acc, x), proof.finalPoly[i]);
     need(eeq(acc, folded), "final polynomial disagrees with the fold");
   }
 }
-
 /**
  * The powers of the batching challenge, and each claimed point's values summed
  * against them once, so that a query costs one pass over its opened row:
  * sum_c a^(o+c) (v_c - r_c) / (z - x) = a^o (V - R) / (z - x), with V and R
  * the claimed and the opened values weighted by a^c.
  */
-class Batching {
+export class Batching {
   readonly powers: E[] = [E1];
   private readonly claimed = new Map<object, E>();
 
@@ -342,42 +325,39 @@ class Batching {
   }
 }
 
-/** The batched quotient (p(z) - p(x)) / (z - x) of every opened column, per height, tallest first. */
-function openInput(
+/**
+ * The batched quotient (p(z) - p(x)) / (z - x) of every opened column at one
+ * query. Every matrix lies over the extended domain, so the query's index is
+ * every matrix's row and x is the same point for all of them.
+ */
+export function openInput(
   inputs: StarkProof["queries"][number]["inputs"],
   rounds: Round[],
   index: number,
-  logGlobal: number,
+  logLde: number,
   batching: Batching,
-): [number, E][] {
+): E {
   const prm = PARAMS;
   need(inputs.length === rounds.length, "input opening count");
-  const acc = new Map<number, { pow: E; sum: E }>();
+  const x = lift(mul(GENERATOR, pow(twoAdic(logLde), BigInt(bitrev(index, logLde)))));
+  let sum = E0;
+  let power = E1;
   rounds.forEach((r, bi) => {
     const op = inputs[bi];
     need(op.rows.length === r.mats.length, "opened matrix count");
-    const heights = r.mats.map((m) => m.logHeight);
-    need(heights.every((h) => h === heights[0]), "mixed heights in one commitment");
-    const logH = heights[0];
-    const reducedIndex = Math.floor(index / 2 ** (logGlobal - logH));
-    need(verifyOpening(r.cap, 2 ** logH, reducedIndex, op.rows, op.salts, op.siblings, prm.saltElems), "input commitment opening");
+    const why = verifyOpening(r.cap, 2 ** logLde, index, op.rows, op.salts, op.siblings, prm.saltElems);
+    need(why === null, `input commitment opening: ${why}`);
     r.mats.forEach((m, mi) => {
-      const x = mul(GENERATOR, pow(twoAdic(m.logHeight), BigInt(bitrev(Math.floor(index / 2 ** (logGlobal - m.logHeight)), m.logHeight))));
-      const entry = acc.get(m.logHeight) ?? { pow: E1, sum: E0 };
       const row = op.rows[mi];
       const opened = batching.weighOpened(row);
       for (const p of m.points) {
-        const den = esub(p.z, lift(x));
+        const den = esub(p.z, x);
         need(!ezero(den), "query point equals an opening point");
         need(row.length === p.values.length, "claimed value count");
-        const diff = esub(batching.weighClaimed(p), opened);
-        entry.sum = eadd(entry.sum, emul(entry.pow, emul(diff, einv(den))));
-        entry.pow = emul(entry.pow, batching.power(row.length));
+        sum = eadd(sum, emul(power, emul(esub(batching.weighClaimed(p), opened), einv(den))));
+        power = emul(power, batching.power(row.length));
       }
-      acc.set(m.logHeight, entry);
     });
   });
-  const low = acc.get(prm.logBlowup);
-  need(low === undefined || ezero(low.sum), "constant-height opening not zero");
-  return [...acc.entries()].sort((a, b) => b[0] - a[0]).map(([h, v]) => [h, v.sum]);
+  return sum;
 }

@@ -1,0 +1,7 @@
+file                          mutants  killed  survived   score      errors
+src/stark/merkle.ts                80      80         0  100.0%           6
+src/stark/proof.ts                 41      40         1   97.6%          54
+all                               121     120         1   99.2%          60
+timeouts counted as killed: 1
+surviving mutants:
+  src/stark/proof.ts:67 ArithmeticOperator: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  this.b.length + this.at

@@ -1,0 +1,46 @@
+file                          mutants  killed  survived   score      errors
+src/stark/merkle.ts                80      51        29   63.8%           6
+src/stark/proof.ts                 41      30        11   73.2%          54
+all                               121      81        40   66.9%          60
+timeouts counted as killed: 1
+surviving mutants:
+  src/stark/merkle.ts:24 ConditionalExpression: if (i !== 0) keccakP(s);  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] && a[1] === b[1] && a[2] === b[2] || a[3] === b[3]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] && a[1] === b[1] || a[2] === b[2]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 LogicalOperator: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  a[0] === b[0] || a[1] === b[1]
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:33 ConditionalExpression: const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];  ->  true
+  src/stark/merkle.ts:52 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";  ->  false
+  src/stark/merkle.ts:51 ConditionalExpression: if (cap.length !== 1) return "cap is not a single root";  ->  false
+  src/stark/merkle.ts:52 LogicalOperator: if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";  ->  height < 1 && (height & height - 1) !== 0
+  src/stark/merkle.ts:52 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";  ->  false
+  src/stark/merkle.ts:52 EqualityOperator: if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";  ->  height <= 1
+  src/stark/merkle.ts:52 ConditionalExpression: if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";  ->  false
+  src/stark/merkle.ts:53 ConditionalExpression: if (index < 0 || index >= height) return "index outside the tree";  ->  false
+  src/stark/merkle.ts:53 LogicalOperator: if (index < 0 || index >= height) return "index outside the tree";  ->  index < 0 && index >= height
+  src/stark/merkle.ts:53 EqualityOperator: if (index < 0 || index >= height) return "index outside the tree";  ->  index <= 0
+  src/stark/merkle.ts:53 EqualityOperator: if (index < 0 || index >= height) return "index outside the tree";  ->  index > height
+  src/stark/merkle.ts:53 ConditionalExpression: if (index < 0 || index >= height) return "index outside the tree";  ->  false
+  src/stark/merkle.ts:53 ConditionalExpression: if (index < 0 || index >= height) return "index outside the tree";  ->  false
+  src/stark/merkle.ts:54 ConditionalExpression: if (rows.length === 0) return "no matrix opened";  ->  false
+  src/stark/merkle.ts:55 ConditionalExpression: if (rows.length !== salts.length) return "one salt per matrix";  ->  false
+  src/stark/merkle.ts:56 ConditionalExpression: if (salts.some((s) => s.length !== saltElems)) return "salt length";  ->  false
+  src/stark/merkle.ts:56 MethodExpression: if (salts.some((s) => s.length !== saltElems)) return "salt length";  ->  salts.every(s => s.length !== saltElems)
+  src/stark/merkle.ts:56 ArrowFunction: if (salts.some((s) => s.length !== saltElems)) return "salt length";  ->  () => undefined
+  src/stark/merkle.ts:56 ConditionalExpression: if (salts.some((s) => s.length !== saltElems)) return "salt length";  ->  false
+  src/stark/merkle.ts:57 ConditionalExpression: if (siblings.length !== Math.log2(height)) return "path length";  ->  false
+  src/stark/proof.ts:48 BlockStatement: private need(n: number) {  ->  {}
+  src/stark/proof.ts:49 ConditionalExpression: if (this.at + n > this.b.length) throw new Error("malformed: truncated");  ->  false
+  src/stark/proof.ts:49 ArithmeticOperator: if (this.at + n > this.b.length) throw new Error("malformed: truncated");  ->  this.at - n
+  src/stark/proof.ts:67 ConditionalExpression: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  false
+  src/stark/proof.ts:67 EqualityOperator: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  n >= BigInt(this.b.length - this.at)
+  src/stark/proof.ts:67 ArithmeticOperator: if (n > BigInt(this.b.length - this.at)) throw new Error("malformed: length");  ->  this.b.length + this.at
+  src/stark/proof.ts:73 ConditionalExpression: if (v >= P) throw new Error("malformed: non-canonical field element");  ->  false
+  src/stark/proof.ts:73 EqualityOperator: if (v >= P) throw new Error("malformed: non-canonical field element");  ->  v > P
+  src/stark/proof.ts:91 ConditionalExpression: if (tag === 1) return item();  ->  true
+  src/stark/proof.ts:142 ConditionalExpression: if (degreeBits > 32n) throw new Error("malformed: degree");  ->  false
+  src/stark/proof.ts:142 EqualityOperator: if (degreeBits > 32n) throw new Error("malformed: degree");  ->  degreeBits >= 32n

@@ -1,0 +1,38 @@
+INDEPENDENT STARK VERIFIER AGAINST THE DEPLOYED ONE
+==============================================================================
+  PASS  constraint graph: 325405 nodes, 14302 constraints, width 14292
+  PASS  its degree equals the degree the AIR states: 7
+  PASS  honest proof of 128 payments: the deployed verifier accepts
+  PASS  honest proof of 128 payments: the independent verifier accepts
+  PASS  honest proof of 4 payments: the deployed verifier accepts
+  PASS  honest proof of 4 payments: the independent verifier accepts
+  PASS  the category id opened at the out-of-domain point: both refuse: independent: query grinding
+  PASS  a quotient chunk opened at the out-of-domain point: both refuse: independent: query grinding
+  PASS  a payment's amount in the public values: both refuse: independent: query grinding
+  PASS  a trace value opened at a query: both refuse: independent: input commitment opening: root differs
+  PASS  a salt of a trace leaf: both refuse: independent: input commitment opening: root differs
+  PASS  a sibling digest on a trace path: both refuse: independent: input commitment opening: root differs
+  PASS  a sibling value in a fold: both refuse: independent: fold commitment opening: root differs
+  PASS  a coefficient of the final polynomial: both refuse: independent: query grinding
+  PASS  the query grinding witness: both refuse: independent: query grinding
+  PASS  the degree: both refuse: independent: fold schedule does not reach the final polynomial
+  PASS  the grinding witness re-encoded as witness + p: both refuse: independent: malformed: non-canonical field element
+  PASS  the file truncated by one byte: both refuse: independent: malformed: truncated
+  PASS  the file with one byte appended: both refuse: independent: malformed: trailing bytes
+  PASS  five proofs of statements with no witness were exported: 5
+  PASS  no witness, amount raised: both refuse: independent: constraints do not match the quotient at the out-of-domain point
+  PASS  no witness, cap above budget: both refuse: independent: constraints do not match the quotient at the out-of-domain point
+  PASS  no witness, root key free: both refuse: independent: constraints do not match the quotient at the out-of-domain point
+  PASS  no witness, run start mismatch: both refuse: independent: constraints do not match the quotient at the out-of-domain point
+  PASS  no witness, share domain: both refuse: independent: constraints do not match the quotient at the out-of-domain point
+  PASS  honest proof against one constant of the constraint graph changed: refused: constraints do not match the quotient at the out-of-domain point
+  PASS  honest proof against the last constraint dropped: refused: constraints do not match the quotient at the out-of-domain point
+  PASS  honest proof against the first two constraints exchanged: refused: constraints do not match the quotient at the out-of-domain point
+  PASS  the gate accepts the honest batch and states its 128 payments
+  PASS  a verifier bug alone: the batch whose hidden cap exceeds the budget is accepted and states its payment
+  PASS  the same bug beside the independent verifier: the batch is refused
+  PASS  so it states nothing and backs no settlement
+  verification of the 128-payment proof, 11 interleaved runs each, ms (q1 / median / q3):
+    deployed Plonky3, in process   40.3 / 41.4 / 41.9
+    independent, TypeScript        1033.1 / 1045.7 / 1089.9
+  all checks pass

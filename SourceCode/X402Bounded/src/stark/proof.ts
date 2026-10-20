@@ -80,8 +80,8 @@ class Reader {
 
   vec<T>(item: () => T): T[] {
     const n = this.len();
-    const out: T[] = new Array(n);
-    for (let i = 0; i < n; i++) out[i] = item();
+    const out: T[] = [];
+    for (let i = 0; i < n; i++) out.push(item());
     return out;
   }
 

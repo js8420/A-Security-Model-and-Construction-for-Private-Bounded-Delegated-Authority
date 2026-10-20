@@ -36,7 +36,8 @@ const same = (a: Digest, b: Digest) => a[0] === b[0] && a[1] === b[1] && a[2] ==
  * Checks one salted opening against a commitment whose matrices all have the
  * same power-of-two height: the leaf hashes every matrix's row followed by its
  * salt, in matrix order, and the path climbs by pairs to a single root. Any
- * other shape is refused, since the deployed proofs have no other.
+ * other shape is refused, since the deployed proofs have no other. Returns
+ * null if the opening holds, and otherwise why it does not.
  */
 export function verifyOpening(
   cap: readonly Digest[],
@@ -46,14 +47,14 @@ export function verifyOpening(
   salts: readonly (readonly bigint[])[],
   siblings: readonly Digest[],
   saltElems: number,
-): boolean {
-  if (cap.length !== 1) return false;
-  if (height < 1 || (height & (height - 1)) !== 0) return false;
-  if (index < 0 || index >= height) return false;
-  if (rows.length === 0 || rows.length !== salts.length) return false;
-  if (salts.some((s) => s.length !== saltElems)) return false;
-  const levels = Math.log2(height);
-  if (siblings.length !== levels) return false;
+): string | null {
+  if (cap.length !== 1) return "cap is not a single root";
+  if (height < 1 || (height & (height - 1)) !== 0) return "height is not a power of two";
+  if (index < 0 || index >= height) return "index outside the tree";
+  if (rows.length === 0) return "no matrix opened";
+  if (rows.length !== salts.length) return "one salt per matrix";
+  if (salts.some((s) => s.length !== saltElems)) return "salt length";
+  if (siblings.length !== Math.log2(height)) return "path length";
   function* leaf() {
     for (let m = 0; m < rows.length; m++) {
       yield* rows[m];
@@ -66,5 +67,5 @@ export function verifyOpening(
     d = at % 2 === 0 ? compress(d, sib) : compress(sib, d);
     at = Math.floor(at / 2);
   }
-  return at === 0 && same(d, cap[0]);
+  return same(d, cap[0]) ? null : "root differs";
 }

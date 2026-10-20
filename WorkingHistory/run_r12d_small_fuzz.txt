@@ -1,0 +1,3 @@
+DIFFERENTIAL TESTING OF THE TWO VERIFIERS: 2 SEEDS, 50 ALTERATIONS EACH
+seed 1: 50 alterations; both refuse 50, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 2: 50 alterations; both refuse 50, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0

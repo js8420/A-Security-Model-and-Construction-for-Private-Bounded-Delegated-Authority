@@ -2,13 +2,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PARAMS, loadConstraints, maxDegree, verifyStark } from "../src/index.js";
 import { fold, type Constraints } from "../src/stark/constraints.js";
-import { lagrange, subgroupWeights } from "../src/stark/verify.js";
+import { Batching, lagrange, logQuotientDegree, openInput, subgroupWeights } from "../src/stark/verify.js";
 import {
   add, bitrev, eadd, ebatchInv, eeq, einv, emul, eneg, epow, escale, esquarings, esub, ezero, inv, lift, mul, neg, pow, sub, twoAdic, type E,
 } from "../src/stark/field.js";
 import { compress, sponge, verifyOpening } from "../src/stark/merkle.js";
 import { parse, type Digest } from "../src/stark/proof.js";
-import { Transcript } from "../src/stark/transcript.js";
+import { Transcript, canonical } from "../src/stark/transcript.js";
 import { copy, encode, offsets } from "./stark_kit.js";
 
 /**
@@ -30,6 +30,7 @@ const env = (k: string) => {
 const air = loadConstraints(readFileSync(env("CONSTRAINTS")));
 const full = new Uint8Array(readFileSync(env("PROOF_FULL")));
 const small = new Uint8Array(readFileSync(env("PROOF_SMALL")));
+const one1 = new Uint8Array(readFileSync(env("PROOF_ONE")));
 const brokenDir = env("BROKEN_DIR");
 const broken = readdirSync(brokenDir).filter((f) => f.startsWith("broken_") && f.endsWith(".bin")).sort()
   .map((f) => [f.slice(7, -4), new Uint8Array(readFileSync(join(brokenDir, f)))] as const);
@@ -149,45 +150,46 @@ need("bit reversal", bitrev(1, 3) === 4 && bitrev(6, 3) === 3 && bitrev(5, 4) ==
     return { rows, salts, root: level[0], path };
   };
   const t8 = build(8, 2, 2);
-  const ok = (cap: Digest[], h: number, i: number, rows: bigint[][], salts: bigint[][], sib: Digest[], se = 2) => {
+  const ok = (cap: Digest[], h: number, i: number, rows: bigint[][], salts: bigint[][], sib: Digest[], se = 2): string => {
     try {
-      return verifyOpening(cap, h, i, rows, salts, sib, se);
-    } catch {
-      return false;
+      return verifyOpening(cap, h, i, rows, salts, sib, se) ?? "holds";
+    } catch (e) {
+      return `threw ${String(e)}`;
     }
   };
-  for (let i = 0; i < 8; i++) need(`honest opening ${i}`, ok([t8.root], 8, i, t8.rows[i], t8.salts[i], t8.path(i)));
-  need("cap of two refused", !ok([t8.root, t8.root], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
-  need("empty cap refused", !ok([], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
+  for (let i = 0; i < 8; i++) need(`honest opening ${i}`, "holds" === ok([t8.root], 8, i, t8.rows[i], t8.salts[i], t8.path(i)));
+  need("cap of two refused", "cap is not a single root" === ok([t8.root, t8.root], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
+  need("empty cap refused", "cap is not a single root" === ok([], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
   for (let lane = 0; lane < 4; lane++) {
     const c = [...t8.root] as bigint[];
     c[lane] ^= 1n;
-    need(`root differing in lane ${lane} refused`, !ok([c as unknown as Digest], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
+    need(`root differing in lane ${lane} refused`, "root differs" === ok([c as unknown as Digest], 8, 3, t8.rows[3], t8.salts[3], t8.path(3)));
   }
-  need("wrong index refused", !ok([t8.root], 8, 2, t8.rows[3], t8.salts[3], t8.path(3)));
-  need("index at the height refused, though its low bits match", !ok([t8.root], 8, 8, t8.rows[0], t8.salts[0], t8.path(0)));
-  need("negative index refused", !ok([t8.root], 8, -8, t8.rows[0], t8.salts[0], t8.path(0)));
+  need("wrong index refused", "root differs" === ok([t8.root], 8, 2, t8.rows[3], t8.salts[3], t8.path(3)));
+  need("index at the height refused, though its low bits match", "index outside the tree" === ok([t8.root], 8, 8, t8.rows[0], t8.salts[0], t8.path(0)));
+  need("negative index refused", "index outside the tree" === ok([t8.root], 8, -8, t8.rows[0], t8.salts[0], t8.path(0)));
   const t1 = build(1, 2, 2);
-  need("a tree of one leaf opens with no siblings", ok([t1.root], 1, 0, t1.rows[0], t1.salts[0], []));
-  need("height zero refused", !ok([t1.root], 0, 0, t1.rows[0], t1.salts[0], []));
+  need("a tree of one leaf opens with no siblings", "holds" === ok([t1.root], 1, 0, t1.rows[0], t1.salts[0], []));
+  need("height zero refused", "height is not a power of two" === ok([t1.root], 0, 0, t1.rows[0], t1.salts[0], []));
   const t16 = build(16, 2, 2);
-  need("siblings of a taller tree refused", !ok([t16.root], 8, 3, t16.rows[3], t16.salts[3], t16.path(3)));
-  need("one sibling short refused", !ok([t8.root], 8, 3, t8.rows[3], t8.salts[3], t8.path(3).slice(0, 2)));
-  need("height not a power of two refused", !ok([t8.root], 6, 3, t8.rows[3], t8.salts[3], t8.path(3)));
+  need("siblings of a taller tree refused", "path length" === ok([t16.root], 8, 3, t16.rows[3], t16.salts[3], t16.path(3)));
+  need("one sibling short refused", "path length" === ok([t8.root], 8, 3, t8.rows[3], t8.salts[3], t8.path(3).slice(0, 2)));
+  need("height not a power of two refused", "height is not a power of two" === ok([t8.root], 6, 3, t8.rows[3], t8.salts[3], t8.path(3)));
   const one = build(8, 2, 1);
-  need("an extra salt beyond the matrices refused", !ok([one.root], 8, 3, one.rows[3], [one.salts[3][0], [5n, 6n]], one.path(3)));
+  need("an extra salt beyond the matrices refused", "one salt per matrix" === ok([one.root], 8, 3, one.rows[3], [one.salts[3][0], [5n, 6n]], one.path(3)));
   const t3 = build(8, 3, 2);
-  need("salts of the wrong length refused", !ok([t3.root], 8, 3, t3.rows[3], t3.salts[3], t3.path(3), 2));
+  need("salts of the wrong length refused", "salt length" === ok([t3.root], 8, 3, t3.rows[3], t3.salts[3], t3.path(3), 2));
   const emptyLeaf = sponge([]);
   const sib = t8.path(0);
   let r = emptyLeaf;
   for (let j = 0; j < 3; j++) r = compress(r, sib[j]);
-  need("an opening of no matrices refused", !ok([r], 8, 0, [], [], sib));
-  need("one row and no salts refused", !ok([t8.root], 8, 3, t8.rows[3], [], t8.path(3)));
+  need("an opening of no matrices refused", "no matrix opened" === ok([r], 8, 0, [], [], sib));
+  need("one row and no salts refused", "one salt per matrix" === ok([t8.root], 8, 3, t8.rows[3], [], t8.path(3)));
 }
 
 need("extension equality reads both coordinates", !eeq([1n, 2n], [3n, 2n]) && !eeq([1n, 2n], [1n, 3n]) && eeq([4n, 5n], [4n, 5n]));
 need("extension zero reads both coordinates", !ezero([0n, 5n]) && !ezero([5n, 0n]) && ezero([0n, 0n]));
+need("a draw of p - 1 is a field element and one of p is not", canonical(P - 1n) && !canonical(P) && !canonical(P + 1n));
 need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 && new Transcript().sampleBits(52) >= 0);
 {
   const r = vectors.rejection;
@@ -209,13 +211,7 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
     levels.push(level);
   }
   const path = levels.slice(0, -1).map((l, j) => l[(5 >> j) ^ 1]);
-  let opened = true;
-  try {
-    opened = verifyOpening([level[0]], 8, 5, rows[5], salts[5], path, 2);
-  } catch {
-    opened = false;
-  }
-  need("one matrix's salt of the wrong length refused, the other's right", !opened);
+  need("one matrix's salt of the wrong length refused, the other's right", verifyOpening([level[0]], 8, 5, rows[5], salts[5], path, 2) === "salt length");
 }
 
 {
@@ -258,9 +254,9 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
     { op: 0, a: 0 }, { op: 1, a: 1 }, { op: 2, a: 0 }, { op: 3, a: 0 }, { op: 4 }, { op: 5 }, { op: 6 },
     { op: 7, c: 5n }, { op: 7, c: P - 3n },
     { op: 10, a: 7 }, { op: 10, a: 0 },
-    { op: 8, a: 7, b: 8 }, { op: 8, a: 0, b: 7 }, { op: 8, a: 4, b: 3 },
+    { op: 8, a: 7, b: 8 }, { op: 8, a: 0, b: 7 }, { op: 8, a: 4, b: 3 }, { op: 8, a: 7, b: 0 },
     { op: 9, a: 8, b: 7 }, { op: 9, a: 1, b: 2 }, { op: 9, a: 3, b: 5 },
-    { op: 11, a: 7, b: 8 }, { op: 11, a: 7, b: 0 }, { op: 11, a: 1, b: 3 }, { op: 11, a: 0, b: 2 }, { op: 11, a: 20, b: 6 },
+    { op: 11, a: 7, b: 8 }, { op: 11, a: 7, b: 0 }, { op: 11, a: 1, b: 3 }, { op: 11, a: 0, b: 2 }, { op: 11, a: 21, b: 6 },
   ];
   const roots = Array.from({ length: nodes.length }, (_, i) => i);
   const good = bytesOf(nodes, roots);
@@ -288,7 +284,7 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
   refused("trailing bytes after a constraint graph refused", bytesOf(nodes, roots, [0]));
 
   const one = (r: number): Constraints => ({ ...g, roots: Uint32Array.from([r]) });
-  const degrees = [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 2, 2];
+  const degrees = [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 2, 2];
   need("the degree of every node kind", degrees.every((d, r) => maxDegree(one(r)) === d));
 
   const at = {
@@ -348,52 +344,113 @@ const tampered: [string, Uint8Array][] = [
   ["appended", Uint8Array.from([...full, 0])],
 ];
 for (const [name, b] of tampered) need(name, !verifyStark(b, air).ok);
+const reason = (b: Uint8Array, g = air) => {
+  const v = verifyStark(b, g);
+  return v.ok ? "accepted" : v.reason;
+};
+const refusedFor = (name: string, b: Uint8Array, why: string) => need(`${name}: refused for ${why}`, reason(b).startsWith(why));
+const passes = (name: string, b: Uint8Array, check: string) => need(`${name}: not refused by the ${check} check`, !reason(b).startsWith(check));
+refusedFor("the file less its last byte", full.slice(0, full.length - 1), "malformed: truncated");
+refusedFor("the file with a byte appended", Uint8Array.from([...full, 0]), "malformed: trailing bytes");
+refusedFor("a first length field of 2^40", withWord(full, 0, 1n << 40n), "malformed: length");
+refusedFor("a public-value count one above the bytes left", withWord(full, o.publicValue - 8, BigInt(full.length - o.publicValue + 1)), "malformed: length");
+refusedFor("a public-value count equal to the bytes left", withWord(full, o.publicValue - 8, BigInt(full.length - o.publicValue)), "malformed: truncated");
+{
+  const capLen = Number(word(full, 0));
+  const second = 8 + 32 * capLen;
+  const tag = second + 8 + 32 * Number(word(full, second));
+  const c = full.slice();
+  c[tag] = 2;
+  refusedFor("an option tag of 2", c, "malformed: option tag");
+}
+refusedFor("a public value equal to p", withWord(full, o.publicValue, P), "malformed: non-canonical field element");
+refusedFor("a public value above p", withWord(full, o.publicValue, P + 5n), "malformed: non-canonical field element");
+refusedFor("a degree of 33", withWord(full, o.degreeBits, 33n), "malformed: degree");
+refusedFor("a degree of 32", withWord(full, o.degreeBits, 32n), "degree out of range");
+
 const base = parse(full);
 need("the encoder writes back the file it read", Buffer.from(encode(base.proof, base.pv)).equals(Buffer.from(full)));
-const reshaped = (name: string, change: (p: ReturnType<typeof copy>, pv: bigint[]) => void) => {
+const shaped = (change: (p: ReturnType<typeof copy>, pv: bigint[]) => void) => {
   const p = copy(base.proof);
   const pv = [...base.pv];
   change(p, pv);
-  need(name, !verifyStark(encode(p, pv), air).ok);
+  return encode(p, pv);
 };
+const reshaped = (name: string, why: string, change: (p: ReturnType<typeof copy>, pv: bigint[]) => void) => refusedFor(name, shaped(change), why);
 const at = <T>(xs: T[] | null) => xs as T[];
-reshaped("trace opening one value short", (p) => at(p.traceLocal).pop());
-reshaped("trace opening one value long", (p) => at(p.traceLocal).push([1n, 2n]));
-reshaped("next-row opening missing", (p) => { p.traceNext = null; });
-reshaped("next-row opening one value short", (p) => at(p.traceNext).pop());
-reshaped("a preprocessed opening present", (p) => { p.preprocessedLocal = [[1n, 0n]]; });
-reshaped("a preprocessed next-row opening present", (p) => { p.preprocessedNext = [[1n, 0n]]; });
-reshaped("one quotient chunk missing", (p) => p.quotientChunks.pop());
-reshaped("a quotient chunk of three values", (p) => p.quotientChunks[0].push([0n, 0n]));
-reshaped("a quotient chunk of one value", (p) => p.quotientChunks[3].pop());
-reshaped("random opening missing", (p) => { p.random = null; });
-reshaped("random opening of one value", (p) => at(p.random).pop());
-reshaped("random commitment missing", (p) => { p.randomCap = null; });
-reshaped("hidden openings for two rounds", (p) => p.randomOpenings.pop());
-reshaped("hidden openings for an extra matrix", (p) => p.randomOpenings[0].push(p.randomOpenings[0][0]));
-reshaped("hidden openings for an extra point", (p) => p.randomOpenings[1][0].push(p.randomOpenings[1][0][0]));
-reshaped("one hidden codeword short", (p) => p.randomOpenings[2][0][0].pop());
-reshaped("one fold commitment missing", (p) => p.friCaps.pop());
-reshaped("one commit grinding witness missing", (p) => p.commitPow.pop());
-reshaped("one query missing", (p) => p.queries.pop());
-reshaped("one query repeated", (p) => p.queries.push(p.queries[0]));
-reshaped("one query's arity schedule different", (p) => { p.queries[5].steps[0].logArity = p.queries[5].steps[0].logArity === 1 ? 2 : 1; });
-reshaped("arity three in every query", (p) => p.queries.forEach((q) => { q.steps[0].logArity = 3; }));
-reshaped("arity zero in every query", (p) => p.queries.forEach((q) => { q.steps[0].logArity = 0; }));
-reshaped("one fold step missing in every query", (p) => p.queries.forEach((q) => q.steps.pop()));
-reshaped("one fold step missing in one query", (p) => p.queries[7].steps.pop());
-reshaped("one fold sibling missing", (p) => p.queries[0].steps[0].siblings.pop());
-reshaped("one input opening missing", (p) => p.queries[0].inputs.pop());
-reshaped("one input row missing", (p) => p.queries[0].inputs[2].rows.pop());
-reshaped("one opened value missing from a row", (p) => p.queries[0].inputs[1].rows[0].pop());
-reshaped("final polynomial one coefficient short", (p) => p.finalPoly.pop());
-reshaped("final polynomial one coefficient long", (p) => p.finalPoly.push([0n, 0n]));
-reshaped("degree one", (p) => { p.degreeBits = 1; });
-reshaped("degree twenty-nine", (p) => { p.degreeBits = 29; });
-reshaped("one public value missing", (_, pv) => pv.pop());
-reshaped("one payment missing from the public values", (_, pv) => pv.splice(pv.length - air.rowWidth, air.rowWidth));
-reshaped("public values holding the terms alone", (_, pv) => pv.splice(air.globals));
-reshaped("three payments in the public values", (_, pv) => pv.splice(air.globals + 3 * air.rowWidth));
+reshaped("trace opening one value short", "trace opening width", (p) => at(p.traceLocal).pop());
+reshaped("trace opening one value long", "trace opening width", (p) => at(p.traceLocal).push([1n, 2n]));
+reshaped("next-row opening missing", "next-row opening width", (p) => { p.traceNext = null; });
+reshaped("next-row opening one value short", "next-row opening width", (p) => at(p.traceNext).pop());
+reshaped("a preprocessed opening present", "unexpected preprocessed trace", (p) => { p.preprocessedLocal = [[1n, 0n]]; });
+reshaped("a preprocessed next-row opening present", "unexpected preprocessed trace", (p) => { p.preprocessedNext = [[1n, 0n]]; });
+reshaped("one quotient chunk missing", "quotient chunk shape", (p) => p.quotientChunks.pop());
+reshaped("a quotient chunk of three values", "quotient chunk shape", (p) => p.quotientChunks[0].push([0n, 0n]));
+reshaped("a quotient chunk of one value", "quotient chunk shape", (p) => p.quotientChunks[3].pop());
+reshaped("random opening missing", "random opening shape", (p) => { p.random = null; });
+reshaped("random opening of one value", "random opening shape", (p) => at(p.random).pop());
+reshaped("random commitment missing", "missing random commitment", (p) => { p.randomCap = null; });
+reshaped("hidden openings for two rounds", "hidden openings: round count", (p) => p.randomOpenings.pop());
+reshaped("hidden openings for an extra matrix", "hidden openings: matrix count", (p) => p.randomOpenings[0].push(p.randomOpenings[0][0]));
+reshaped("hidden openings for an extra point", "hidden openings: point count", (p) => p.randomOpenings[1][0].push(p.randomOpenings[1][0][0]));
+reshaped("one hidden codeword short", "hidden openings: value count", (p) => p.randomOpenings[2][0][0].pop());
+reshaped("one fold commitment missing", "fold count", (p) => p.friCaps.pop());
+reshaped("one commit grinding witness missing", "commit grinding count", (p) => p.commitPow.pop());
+reshaped("one query missing", "query count", (p) => p.queries.pop());
+reshaped("one query repeated", "query count", (p) => p.queries.push(p.queries[0]));
+reshaped("one query's arity schedule different", "arity schedule differs between queries", (p) => { p.queries[5].steps[0].logArity = p.queries[5].steps[0].logArity === 1 ? 2 : 1; });
+reshaped("arity three in every query", "arity out of range", (p) => p.queries.forEach((q) => { q.steps[0].logArity = 3; }));
+reshaped("arity zero in every query", "arity out of range", (p) => p.queries.forEach((q) => { q.steps[0].logArity = 0; }));
+reshaped("arity three in the second fold of every query", "arity out of range", (p) => p.queries.forEach((q) => { q.steps[1].logArity = 3; }));
+const arities = base.proof.queries[0].steps.map((x) => x.logArity);
+const one = arities.indexOf(1);
+need("the deployed fold schedule has a fold of arity two and one of arity one", arities.includes(2) && one >= 0);
+reshaped("a fold of arity one raised to two in every query", "fold schedule does not reach the final polynomial", (p) => p.queries.forEach((q) => { q.steps[one].logArity = 2; }));
+reshaped("one fold step missing in every query", "fold count", (p) => p.queries.forEach((q) => q.steps.pop()));
+reshaped("one fold step missing in one query", "fold count", (p) => p.queries[7].steps.pop());
+reshaped("one fold sibling missing", "sibling count", (p) => p.queries[0].steps[0].siblings.pop());
+reshaped("one input opening missing", "input opening count", (p) => p.queries[0].inputs.pop());
+reshaped("one input row missing", "opened matrix count", (p) => p.queries[0].inputs[2].rows.pop());
+reshaped("one opened value missing from a row", "input commitment opening: root differs", (p) => p.queries[0].inputs[1].rows[0].pop());
+reshaped("final polynomial one coefficient short", "final polynomial length", (p) => p.finalPoly.pop());
+reshaped("final polynomial one coefficient long", "final polynomial length", (p) => p.finalPoly.push([0n, 0n]));
+reshaped("degree one", "degree out of range", (p) => { p.degreeBits = 1; });
+reshaped("degree twenty-nine", "degree out of range", (p) => { p.degreeBits = 29; });
+passes("degree two", shaped((p) => { p.degreeBits = 2; }), "degree out of range");
+passes("degree twenty-eight", shaped((p) => { p.degreeBits = 28; }), "degree out of range");
+reshaped("one public value missing", "public values are not terms and whole payments", (_, pv) => pv.pop());
+reshaped("no public values", "public values are not terms and whole payments", (_, pv) => pv.splice(0));
+reshaped("public values holding the terms alone", "public values are not terms and whole payments", (_, pv) => pv.splice(air.globals));
+reshaped("one payment missing from the public values", "batch size not a power of two", (_, pv) => pv.splice(pv.length - air.rowWidth, air.rowWidth));
+reshaped("three payments in the public values", "batch size not a power of two", (_, pv) => pv.splice(air.globals + 3 * air.rowWidth));
+reshaped("256 payments in the public values", "batch larger than the trace", (_, pv) => pv.push(...pv.slice(air.globals)));
+need("the honest proof of one payment is accepted", verifyStark(one1, air).ok);
+{
+  const z: E = [5n, 6n];
+  const leafRows = Array.from({ length: 8 }, (_, k) => [BigInt(k), BigInt(k + 100), BigInt(k + 200)]);
+  const leafSalts = Array.from({ length: 8 }, (_, k) => [BigInt(k + 300), BigInt(k + 400)]);
+  let level: Digest[] = leafRows.map((r, k) => sponge([...r, ...leafSalts[k]]));
+  const levels: Digest[][] = [level];
+  while (level.length > 1) {
+    const up: Digest[] = [];
+    for (let i = 0; i < level.length; i += 2) up.push(compress(level[i], level[i + 1]));
+    level = up;
+    levels.push(level);
+  }
+  const path = levels.slice(0, -1).map((l, j) => l[(3 >> j) ^ 1]);
+  const input = [{ rows: [leafRows[3]], salts: [leafSalts[3]], siblings: path }];
+  const run = (values: E[]) => {
+    try {
+      openInput(input, [{ cap: [level[0]], mats: [{ points: [{ z, values }] }] }], 3, 3, new Batching([2n, 1n]));
+      return "accepted";
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+  need("an input row of three columns against three claimed values is accepted", run([[1n, 0n], [2n, 0n], [3n, 0n]]) === "accepted");
+  need("an input row of three columns against two claimed values is refused", run([[1n, 0n], [2n, 0n]]) === "claimed value count");
+}
+need("quotient degree as Plonky3 sets it", [1, 2, 3, 4, 5, 7, 8, 9, 16, 17].map(logQuotientDegree).join() === "0,1,2,2,3,3,3,4,4,5");
 need("five broken", broken.length === 5);
 for (const [name, b] of broken) need(name, !verifyStark(b, air).ok);
 const constant = [...air.constants.keys()].find((k) => air.constants.get(k) !== 0n) as number;

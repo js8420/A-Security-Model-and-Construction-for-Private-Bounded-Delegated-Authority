@@ -3,7 +3,8 @@
 # testing of both verifiers on randomly altered proofs, and mutation testing of
 # the independent verifier's code against the smaller first test set and
 # against the full one.
-# Usage: run_assurance.sh TAG [seeds] [per-seed]
+# Usage: run_assurance.sh TAG [seeds] [per-seed]. With MUTATE set to a
+# comma-separated list of files under src/stark, only those are mutated.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
@@ -37,6 +38,8 @@ cd "$circuits"
 cp target/proof_128_keccak.bin "$work/full.bin"
 "$bin" export-keccak 4 >/dev/null
 cp target/proof_128_keccak.bin "$work/small.bin"
+"$bin" export-keccak 1 >/dev/null
+cp target/proof_128_keccak.bin "$work/one.bin"
 mkdir "$work/broken"
 "$bin" export-broken "$work/broken" >/dev/null
 "$bin" export-vectors "$work/vectors.json" >/dev/null
@@ -45,7 +48,7 @@ cp "$work/Statement.sol" "$statement"
 cd "$here"
 npm ci --no-audit --no-fund >/dev/null
 npx tsc --noEmit
-export CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" PROOF_SMALL="$work/small.bin" \
+export CONSTRAINTS="$circuits/target/constraints.dag" PROOF_FULL="$work/full.bin" PROOF_SMALL="$work/small.bin" PROOF_ONE="$work/one.bin" \
     BROKEN_DIR="$work/broken" VECTORS="$work/vectors.json" CIRCUIT_BIN="$bin"
 
 out="$hist/run_${tag}_control.txt"
@@ -67,7 +70,9 @@ cores=$(nproc)
 workers=${STRYKER_CONCURRENCY:-$(( cores > 2 ? cores / 2 : 1 ))}
 for set in base full; do
     if [ $set = base ]; then cfg=stryker.base.config.json; json=reports/mutation/mutation-base.json; else cfg=stryker.config.json; json=reports/mutation/mutation.json; fi
-    npx stryker run "$cfg" --concurrency "$workers" > "$work/stryker_$set.txt" 2>&1 || { tail -30 "$work/stryker_$set.txt"; exit 1; }
+    only=()
+    if [ -n "${MUTATE:-}" ]; then only=(--mutate "$MUTATE"); fi
+    npx stryker run "$cfg" --concurrency "$workers" "${only[@]}" > "$work/stryker_$set.txt" 2>&1 || { tail -30 "$work/stryker_$set.txt"; exit 1; }
     cp "$json" "$hist/mutation_${tag}_$set.json"
     python3 "$here/../Analysis/mutation_summary.py" "$json" > "$hist/run_${tag}_mutation_$set.txt"
     echo "MUTATION SCORE, $set test set"

@@ -2,6 +2,9 @@ import { keccak_256 } from "@noble/hashes/sha3";
 import { P, type E } from "./field.js";
 import type { Digest } from "./proof.js";
 
+/** Whether a 64-bit draw is a field element as it stands. */
+export const canonical = (v: bigint): boolean => v < P;
+
 /**
  * The Fiat-Shamir transcript of the deployed configuration. Bytes absorbed
  * are buffered; a draw with no output pending hashes the whole buffer with
@@ -64,7 +67,7 @@ export class Transcript {
   sample(): bigint {
     for (;;) {
       const v = this.draw64();
-      if (v < P) return v;
+      if (canonical(v)) return v;
     }
   }
 
