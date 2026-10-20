@@ -20,16 +20,16 @@ The deployed challenger is `SerializingChallenger64<Goldilocks, HashChallenger<u
 
 | Step | Plonky3 0.6.3 | Independent verifier |
 |---|---|---|
-| A field element is absorbed as the 8 little-endian bytes of its canonical value | serializing_challenger.rs 264 to 267 | transcript.ts 25 to 31 |
-| A Merkle cap of `[u64; 4]` digests is absorbed lane by lane, 8 little-endian bytes a lane | serializing_challenger.rs 313 to 317 | transcript.ts 43 to 44 |
-| Absorbing clears any output not yet handed out | hash_challenger.rs 51 to 53 | transcript.ts 26 |
-| A draw with no output pending hashes the whole input with Keccak-256; the digest becomes both the new input and the output | hash_challenger.rs 36 to 43 | transcript.ts 48 to 52 |
-| Output bytes are handed out from the last one back | hash_challenger.rs 130 to 136 | transcript.ts 54 |
-| A base-field sample reads 8 bytes little-endian and rejects values at or above p | serializing_challenger.rs 343 to 352 | transcript.ts 57 to 68 |
-| An extension sample is two base samples, the constant coefficient first | serializing_challenger.rs 336 to 354 | transcript.ts 71 to 74 |
-| A bit sample masks the low bits of one 8-byte draw | serializing_challenger.rs 362 to 367 | transcript.ts 77 to 80 |
-| A grinding check with zero bits passes without absorbing anything | grinding_challenger.rs 43 to 45 | transcript.ts 84 |
-| Otherwise it absorbs the witness and requires the next bits drawn to be zero | grinding_challenger.rs 46 to 47 | transcript.ts 85 to 86 |
+| A field element is absorbed as the 8 little-endian bytes of its canonical value | serializing_challenger.rs 264 to 267 | transcript.ts 28 to 34 |
+| A Merkle cap of `[u64; 4]` digests is absorbed lane by lane, 8 little-endian bytes a lane | serializing_challenger.rs 313 to 317 | transcript.ts 46 to 47 |
+| Absorbing clears any output not yet handed out | hash_challenger.rs 51 to 53 | transcript.ts 29 |
+| A draw with no output pending hashes the whole input with Keccak-256; the digest becomes both the new input and the output | hash_challenger.rs 36 to 43 | transcript.ts 51 to 55 |
+| Output bytes are handed out from the last one back | hash_challenger.rs 130 to 136 | transcript.ts 57 |
+| A base-field sample reads 8 bytes little-endian and rejects values at or above p | serializing_challenger.rs 343 to 352 | transcript.ts 6 and 60 to 72 |
+| An extension sample is two base samples, the constant coefficient first | serializing_challenger.rs 336 to 354 | transcript.ts 74 to 78 |
+| A bit sample masks the low bits of one 8-byte draw | serializing_challenger.rs 362 to 367 | transcript.ts 80 to 83 |
+| A grinding check with zero bits passes without absorbing anything | grinding_challenger.rs 43 to 45 | transcript.ts 87 |
+| Otherwise it absorbs the witness and requires the next bits drawn to be zero | grinding_challenger.rs 46 to 47 | transcript.ts 88 to 89 |
 
 ## The order of absorption and challenges
 
@@ -46,16 +46,16 @@ The deployed challenger is `SerializingChallenger64<Goldilocks, HashChallenger<u
 | 9 | the random commitment of the hiding PCS | uni-stark verifier.rs 423 to 425 | verify.ts 167 |
 | 10 | challenge zeta, the out-of-domain point | uni-stark verifier.rs 430 | verify.ts 168 |
 | 11 | zeta on the trace domain is refused | uni-stark verifier.rs 435 to 437 | verify.ts 170 to 171 |
-| 12 | the rounds in order: random, trace (at zeta and at the next point), quotient chunks | uni-stark verifier.rs 453 to 510 | verify.ts 179 to 189 |
-| 13 | each point's hidden values appended to its public values, every level's count checked first | hiding_pcs.rs 397 to 433 | verify.ts 191 to 202 |
-| 14 | every opened value of every point of every matrix of every round, in that order | two_adic_pcs.rs 696 to 702 | verify.ts 203 |
-| 15 | challenge alpha of FRI, which batches the openings | fri verifier.rs 195 | verify.ts 236 |
-| 16 | for each fold round: its commitment, its grinding check, then challenge beta | fri verifier.rs 301 to 311 | verify.ts 251 to 255 |
-| 17 | the final polynomial's length checked, then its coefficients absorbed | fri verifier.rs 314 to 323 | verify.ts 256 to 257 |
-| 18 | the query count checked | fri verifier.rs 326 to 331 | verify.ts 238 |
-| 19 | every fold's log arity, in order | fri verifier.rs 333 to 336 | verify.ts 258 |
-| 20 | the query grinding check | fri verifier.rs 339 to 341 | verify.ts 259 |
-| 21 | for each query, its index: bits of the tallest height, with no extra bits for this folding | fri verifier.rs 352 to 353 | verify.ts 264 |
+| 12 | the rounds in order: random, trace (at zeta and at the next point), quotient chunks | uni-stark verifier.rs 453 to 510 | verify.ts 181 to 185 |
+| 13 | each point's hidden values appended to its public values, every level's count checked first | hiding_pcs.rs 397 to 433 | verify.ts 187 to 198 |
+| 14 | every opened value of every point of every matrix of every round, in that order | two_adic_pcs.rs 696 to 702 | verify.ts 199 |
+| 15 | challenge alpha of FRI, which batches the openings | fri verifier.rs 195 | verify.ts 232 |
+| 16 | for each fold round: its commitment, its grinding check, then challenge beta | fri verifier.rs 301 to 311 | verify.ts 247 to 251 |
+| 17 | the final polynomial's length checked, then its coefficients absorbed | fri verifier.rs 314 to 323 | verify.ts 252 to 253 |
+| 18 | the query count checked | fri verifier.rs 326 to 331 | verify.ts 234 |
+| 19 | every fold's log arity, in order | fri verifier.rs 333 to 336 | verify.ts 254 |
+| 20 | the query grinding check | fri verifier.rs 339 to 341 | verify.ts 255 |
+| 21 | for each query, its index: bits of the tallest height, with no extra bits for this folding | fri verifier.rs 352 to 353 | verify.ts 259 |
 
 ## The advisory this audit checks for
 
@@ -64,7 +64,7 @@ not absorb the opened values into the transcript before drawing the batching
 challenge. It was fixed by pull request 627, commit
 b5ec4d96bc752e78990db0707f6b60c4f3d9930a. In 0.6.3 the values are absorbed at
 row 14, before the batching challenge at row 15. The independent verifier does
-the same at verify.ts 203 and 236.
+the same at verify.ts 199 and 232.
 
 ## How each row is tested
 
