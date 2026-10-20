@@ -1,0 +1,7 @@
+surviving mutants: 111
+  no effect      11
+  same value     10
+  one height     12
+  redundant      77
+  1 in 2^64       1
+every survivor classified
