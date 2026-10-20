@@ -344,6 +344,15 @@ const tampered: [string, Uint8Array][] = [
   ["appended", Uint8Array.from([...full, 0])],
 ];
 for (const [name, b] of tampered) need(name, !verifyStark(b, air).ok);
+for (const [name, why] of [
+  ["trace value at a query", "input commitment opening: root differs"],
+  ["trace salt", "input commitment opening: root differs"],
+  ["trace sibling", "input commitment opening: root differs"],
+  ["fold sibling", "fold commitment opening: root differs"],
+] as const) need(`${name}: refused for ${why}`, (() => {
+  const v = verifyStark((tampered.find(([n]) => n === name) as [string, Uint8Array])[1], air);
+  return !v.ok && v.reason.startsWith(why);
+})());
 const reason = (b: Uint8Array, g = air) => {
   const v = verifyStark(b, g);
   return v.ok ? "accepted" : v.reason;

@@ -100,7 +100,7 @@ const fromBasis = (c: readonly E[]): E => eadd(c[0], emul(c[1], X));
 function periodicColumns(pv: readonly bigint[], globals: number, rowWidth: number): bigint[][] {
   need(pv.length > globals && (pv.length - globals) % rowWidth === 0, "public values are not terms and whole payments");
   const rows = (pv.length - globals) / rowWidth;
-  need(rows >= 1 && (rows & (rows - 1)) === 0, "batch size not a power of two");
+  need((rows & (rows - 1)) === 0, "batch size not a power of two");
   const cols: bigint[][] = [];
   for (let j = 0; j < rowWidth; j++) {
     const col: bigint[] = [];
@@ -233,7 +233,6 @@ function fri(proof: StarkProof, rounds: Round[], logLde: number, t: Transcript):
   const nRounds = proof.friCaps.length;
   need(proof.queries.length === prm.queries, "query count");
   const arities = proof.queries[0].steps.map((s) => s.logArity);
-  need(arities.length === nRounds, "fold count");
   for (const q of proof.queries) {
     need(q.steps.length === nRounds, "fold count");
     q.steps.forEach((s, i) => need(s.logArity === arities[i], "arity schedule differs between queries"));
