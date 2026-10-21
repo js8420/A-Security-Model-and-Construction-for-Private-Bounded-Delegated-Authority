@@ -594,8 +594,43 @@ contract ValidityDisputeScaleTest is Test {
         view
         returns (ValidityDispute.Receipt memory)
     {
-        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, sealedRoot, at));
-        return ValidityDispute.Receipt({sealedRoot: sealedRoot, receivedAt: at, signature: abi.encodePacked(rr, ss, v)});
+        bytes32 ph = _proofHash(_proof(100));
+        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, sealedRoot, ph, at));
+        return ValidityDispute.Receipt({sealedRoot: sealedRoot, proofHash: ph, receivedAt: at, signature: abi.encodePacked(rr, ss, v)});
+    }
+
+    /// Stands for a batch proof of `n` bytes.
+    function _proof(uint256 n) internal pure returns (bytes memory b) {
+        b = new bytes(n);
+        for (uint256 i = 0; i < n; i += 32) {
+            bytes32 w = keccak256(abi.encode("proof", i));
+            for (uint256 j = 0; j < 32 && i + j < n; ++j) b[i + j] = w[j];
+        }
+    }
+
+    function _slice(bytes memory b, uint256 from, uint256 to) internal pure returns (bytes memory c) {
+        c = new bytes(to - from);
+        for (uint256 i = from; i < to; ++i) c[i - from] = b[i];
+    }
+
+    /// The chained hash postProof checks: chunk by chunk from zero, then the length.
+    function _proofHash(bytes memory b) internal view returns (bytes32 h) {
+        uint256 size = vd.CHUNK();
+        for (uint256 at = 0; at < b.length; at += size) {
+            uint256 end = at + size < b.length ? at + size : b.length;
+            h = keccak256(abi.encodePacked(h, _slice(b, at, end)));
+        }
+        h = keccak256(abi.encodePacked(h, b.length));
+    }
+
+    function _post(uint256 r, bytes memory b) internal {
+        bytes32 h = _proofHash(b);
+        uint256 size = vd.CHUNK();
+        uint256 i;
+        for (uint256 at = 0; at < b.length; at += size) {
+            uint256 end = at + size < b.length ? at + size : b.length;
+            vd.postProof(r, h, i++, _slice(b, at, end), end == b.length);
+        }
     }
 
     /// An answer pays the registered answerer, whoever sends it.
@@ -749,8 +784,8 @@ contract ValidityDisputeScaleTest is Test {
         vd.deliver(r, 6, s6, 0, new bytes32[](0), rc6, _sealed(6), new bytes32[](0));
     }
 
-    /// The receipted opening, posted in time, is delivered once and the
-    /// receipt can no longer slash.
+    /// The receipted opening and proof, posted in time, end the duty: the
+    /// opening is delivered once and the receipt can no longer slash.
     function testDeliveredOpeningIsPostedAndEndsTheDuty() public {
         (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
         vm.expectEmit(true, false, false, true, address(vd));
@@ -759,9 +794,60 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Delivered));
         vm.expectRevert(ValidityDispute.NotDue.selector);
         vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        _post(r + 1, _proof(100));
+        assertEq(vd.postedAt(r, _proofHash(_proof(100))), 0);
+        _post(r, _proof(100));
         vm.warp(block.timestamp + DELIVERY + 1);
         vm.expectRevert(ValidityDispute.NotWithheld.selector);
         vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+    }
+
+    /// The opening was posted but the proof was not: the receipt slashes.
+    function testWithheldProofSlashesTheStake() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// A proof posted after the wait came too late, and the receipt slashes.
+    function testProofPostedLateSlashes() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        vm.warp(block.timestamp + DELIVERY + 1);
+        _post(r, _proof(100));
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// A proof of three chunks is accepted only in order, with full chunks
+    /// before the last, and only if its chained hash is the one named; a
+    /// second poster's wrong chunks spoil nothing for the first.
+    function testProofPostedInChunks() public {
+        bytes memory b = _proof(2 * vd.CHUNK() + 1000);
+        bytes32 h = _proofHash(b);
+        uint256 size = vd.CHUNK();
+        vm.expectRevert(ValidityDispute.BadChunk.selector);
+        vd.postProof(7, h, 1, _slice(b, size, 2 * size), false);
+        vm.expectRevert(ValidityDispute.BadChunk.selector);
+        vd.postProof(7, h, 0, _slice(b, 0, size - 1), false);
+        vm.prank(challenger);
+        vd.postProof(7, h, 0, _slice(b, size, 2 * size), false);
+        vd.postProof(7, h, 0, _slice(b, 0, size), false);
+        vd.postProof(7, h, 1, _slice(b, size, 2 * size), false);
+        vm.expectRevert(ValidityDispute.ProofMismatch.selector);
+        vd.postProof(7, h, 2, _slice(b, 2 * size, 2 * size + 999), true);
+        assertEq(vd.postedAt(7, h), 0);
+        vd.postProof(7, h, 2, _slice(b, 2 * size, 2 * size + 1000), true);
+        assertEq(vd.postedAt(7, h), uint64(block.timestamp));
+        assertEq(vd.postedAt(8, h), 0);
+        vm.expectRevert(ValidityDispute.BadChunk.selector);
+        vd.postProof(7, h, 3, _slice(b, 0, 10), true);
     }
 
     /// Only the opening the receipt names, at the settlement's own position,

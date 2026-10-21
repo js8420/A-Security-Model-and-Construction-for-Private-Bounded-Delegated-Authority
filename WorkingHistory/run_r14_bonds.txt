@@ -1,0 +1,98 @@
+THE BOUNTY, USD
+==============================================================================
+  proving one answer, computed                    3.19
+  posting the batch proof on Base, measured        2.73
+  sending the answer on Base, measured             0.00
+  bounty and challenger's bond beta                5.92
+
+WINDOWS ON BASE, HOURS
+==============================================================================
+  delivery w_d                                    8.0
+  forced inclusion Delta_f                       14.0
+  clock bound sigma_x                            12.5
+  signed-time tolerance theta                     1.0
+  monitor's margin m                              1.0
+  acceptance window w = w_d + theta + m + Delta_f + sigma_x  36.5
+  decision time after the signed time, w - Delta_f - sigma_x 10.0
+  rate window W                                  24.0
+  windows a bond covers, ceil((w+theta)/W)+1        3
+  answer window at least c + Delta_f + sigma_x   27.9, set to 30
+
+BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY, ONE PAYMENT A MINUTE
+==============================================================================
+                                        B, USD    bonds  with stake  stake adds
+  Steady, one price, 30 days            432.00    10.0%       21.4%       11.4
+  Peak 5x mean, 30 days                 432.00    50.0%      101.4%       51.4
+  Three prices, 30 days                 864.00    25.0%       50.7%       25.7
+  One day, one price                     14.40   300.0%      641.1%      341.1
+  One day, expiry 300 days               14.40   300.0%      641.1%      341.1
+  One day, 5x peak, 3 prices             28.80  3750.0%     7520.6%     3770.6
+  That task, 30-day delegation          864.00   125.0%      250.7%      125.7
+  The stake is the bond plus the bounty, 5.92 USD, on each domain; the
+  bounty is fixed in dollars, so it weighs more as the budget falls.
+  A declared expiry longer than the task changes none of these: the bond
+  follows the rate the task needs and the life it actually spends.
+
+HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD
+FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
+==============================================================================
+  declared expiry       f   bonds   stake  funding fB     total  total/B
+  1 x the task       1.00   43.20   49.12      432.00    524.32     1.21
+  2 x the task       1.97   43.20   49.12      850.06    942.39     2.18
+  5 x the task       4.87   43.20   49.12     2104.26   2196.58     5.08
+  10 x the task      9.71   43.20   49.12     4194.58   4286.90     9.92
+  The stake is the bond plus the bounty, 5.92; without an answerer the total
+  is less by the stake, 49.12.
+  Carrying the stake for the task costs 0.0404 USD per percentage
+  point of annual interest on it.
+  The same f reached by a short declared life instead needs bonds of
+    f =  1.00: about   10.0% of B in bonds, plus funding fB
+    f =  1.97: about   19.7% of B in bonds, plus funding fB
+    f =  4.87: about   48.7% of B in bonds, plus funding fB
+    f =  9.71: about   97.1% of B in bonds, plus funding fB
+
+ONE-DAY TASK, ONE PRICE, UNDER A LONG DECLARED EXPIRY
+==============================================================================
+  declared   1 days: f =    1.00, bonds / B = 300.0%, funding fB =     14.40 USD
+  declared  30 days: f =   15.50, bonds / B = 300.0%, funding fB =    223.20 USD
+  declared 300 days: f =  150.50, bonds / B = 300.0%, funding fB =   2167.20 USD
+
+ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
+==============================================================================
+   budget, ETH  L1 base fee, gwei  by filling L1  by filling deposits  minutes, worse
+            10                  1             26                    8             5.2
+            10                 10              9                    8             1.8
+            10                 50              2                    8             1.6
+           100                  1             45                   11             9.0
+           100                 10             26                   11             5.2
+           100                 50             13                   11             2.6
+          1000                  1             64                   14            12.8
+          1000                 10             45                   14             9.0
+          1000                 50             31                   14             6.2
+         10000                  1             84                   17            16.8
+         10000                 10             64                   17            12.8
+         10000                 50             51                   17            10.2
+
+  The monitor tips nothing here; any priority fee it pays makes the adversary
+  outbid it on every slot of every block, so the delay only shrinks. The last
+  column is the longer of the two routes.
+
+PROPOSERS THAT EXCLUDE A FORCED TRANSACTION
+==============================================================================
+   including share   P(out for 2 h, 600 slots)   slots for 2^-40   minutes
+             0.540                   4.52e-203                36       7.2
+             0.210                    3.77e-62               118      23.6
+             0.100                    3.51e-28               264      52.8
+             0.052                    1.22e-14               520     104.0
+
+BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN
+==============================================================================
+  blocks in the margin: 600
+    adversary gains, USD    tip that makes it unprofitable, USD
+                   43.20                                 0.0720
+                  432.00                                 0.7200
+                4,320.00                                 7.2000
+               43,200.00                                72.0000
+  A block built by anyone the bribe does not reach includes it at once,
+  so every such block only shortens the delay.
+

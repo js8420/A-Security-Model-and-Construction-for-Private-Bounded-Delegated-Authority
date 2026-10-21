@@ -1,11 +1,15 @@
 """Windows, bond ratios and capital for delegation profiles, and the delay an
 adversary or a censoring set of proposers can impose on a forced transaction
 on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
-protocol constants, so one run is the result.
+protocol constants, so one run is the result. The bounty adds to the price
+of proving an answer what posting the batch proof and sending the answer cost
+on Base, as posting_cost.py measured them.
 
-Run: python3 bond_and_contention.py
+Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt
 """
 import math
+import re
+import sys
 
 DAY = 24.0  # hours
 
@@ -22,9 +26,32 @@ THETA = 1.0
 MARGIN = 1.0
 C_ANS = 82.0 / 60.0
 W_RATE = DAY
-# The challenger's bond, which is also the bounty a slash pays: set at the
-# computed price of one answer, 64 vCPU at 3.616 USD an hour for 3,179.2 s.
-BETA = 3.616 * 3179.2 / 3600
+# The challenger's bond, which is also the bounty a slash pays: the computed
+# price of proving one answer, 64 vCPU at 3.616 USD an hour for 3,179.2 s,
+# plus the measured cost on Base of sending the answer and of posting the batch
+# proof, which an answer to the principal's challenge obliges.
+PROVING = 3.616 * 3179.2 / 3600
+
+
+def posted(path):
+    usd = {}
+    label = None
+    for line in open(path, encoding="utf8"):
+        m = re.match(r"\s+(proof, all chunks|one answer)\s", line)
+        if m:
+            label = m.group(1)
+            continue
+        m = re.search(r"= ([0-9.]+) USD", line)
+        if m and label:
+            usd[label] = float(m.group(1))
+            label = None
+    if set(usd) != {"proof, all chunks", "one answer"}:
+        raise SystemExit(f"no posting and answer cost in {path}")
+    return usd["proof, all chunks"], usd["one answer"]
+
+
+POSTING, SENDING = posted(sys.argv[1])
+BETA = PROVING + POSTING + SENDING
 
 def windows():
     w = W_D + THETA + MARGIN + DELTA_F + SIGMA_X
@@ -189,6 +216,13 @@ def bribery():
     print()
 
 if __name__ == "__main__":
+    print("THE BOUNTY, USD")
+    print("=" * 78)
+    print(f"  proving one answer, computed                {PROVING:8.2f}")
+    print(f"  posting the batch proof on Base, measured    {POSTING:8.2f}")
+    print(f"  sending the answer on Base, measured         {SENDING:8.2f}")
+    print(f"  bounty and challenger's bond beta            {BETA:8.2f}")
+    print()
     k_w = windows()
     profiles(k_w)
     trade_off(k_w)

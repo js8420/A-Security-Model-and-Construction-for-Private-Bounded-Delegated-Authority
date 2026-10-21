@@ -1,7 +1,8 @@
-import { encodePacked, getAddress, keccak256, parseEventLogs, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
+import { decodeFunctionData, encodePacked, getAddress, hexToBytes, keccak256, parseEventLogs, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
 import { disputeAbi, reserveAbi } from "./abi.js";
 import { commitOpening, unitsOf, type Opening } from "./opening.js";
 import { unseal } from "./seal.js";
+import { proofHash } from "./answerer.js";
 import type { ProofGate, Statement, Terms } from "./stark/gate.js";
 
 /** One domain the delegation spends on: its chain, its reserve, the delegation's id there, and the dispute contract if it has one. */
@@ -337,9 +338,41 @@ export class Monitor {
           const a = l.args as { digest: bigint; opening: Hex };
           await this.deliverSealed(a.opening, c.domain, a.digest);
         }
+        const proofs = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "ProofPosted", args: { id: d.delegation }, ...range });
+        for (const l of proofs) {
+          const a = l.args as { proofHash: Hex; poster: Address };
+          const bytes = await this.postedProof(d, a.proofHash, a.poster);
+          if (bytes) await this.deliverProof(bytes);
+        }
       }
       this.from.set(d.name, head + 1n);
     }
+  }
+
+  /**
+   * A proof posted in chunks: each chunk is read back from the call data of
+   * the transaction that posted it, and the whole is kept only if its chained
+   * hash is the one posted under.
+   */
+  private async postedProof(d: Domain, hash: Hex, poster: Address): Promise<Uint8Array | undefined> {
+    const logs = await d.chain.getContractEvents({ address: d.dispute as Address, abi: disputeAbi, eventName: "ProofChunk", args: { id: d.delegation, proofHash: hash, poster }, fromBlock: 0n });
+    const chunks = new Map<bigint, Uint8Array>();
+    for (const l of logs) {
+      const tx = await d.chain.getTransaction({ hash: l.transactionHash as Hex });
+      const call = decodeFunctionData({ abi: disputeAbi, data: tx.input });
+      if (call.functionName !== "postProof") continue;
+      const [, , index, chunk] = call.args as readonly [bigint, Hex, bigint, Hex, boolean];
+      chunks.set(index, hexToBytes(chunk));
+    }
+    const parts = [...chunks.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, c]) => c);
+    const total = parts.reduce((n, c) => n + c.length, 0);
+    const bytes = new Uint8Array(total);
+    let at = 0;
+    for (const c of parts) {
+      bytes.set(c, at);
+      at += c.length;
+    }
+    return proofHash(bytes).toLowerCase() === hash.toLowerCase() ? bytes : undefined;
   }
 
   private readonly windows = new Map<string, bigint>();

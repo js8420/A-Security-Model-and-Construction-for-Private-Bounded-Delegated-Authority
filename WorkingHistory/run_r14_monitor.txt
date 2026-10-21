@@ -1,0 +1,50 @@
+THE MONITOR ON TWO LOCAL CHAINS: BUDGET, OPENINGS, PROOFS, CHALLENGES AND THE ANSWERER
+==============================================================================
+  proofs, the gate and challenges on domain A, with the 4 payments the honest proof states
+  PASS  the 4 payments settle on domain A: settled, settled, settled, settled
+  PASS  before the decision time the monitor acts on nothing: no challenge and no freeze under any delegation
+  PASS  the honest batch passes both verifiers; the forged one is refused beside a deployed verifier that accepts anything
+  PASS  on request, the principal asks for all 4 openings of each delegation that opens on request
+  PASS  the agent is offline; its answerer, holding the proof and the openings sealed to the monitor, delivers both and every opening opens
+  PASS  an answerer holding the proof alone delivers it, but no opening
+  PASS  in the mode that opens every payment, an answerer with sealed openings backs an offline agent's batch
+  PASS  the answerer holds ciphertexts only: no opening's encoding appears in what it stores
+  PASS  every sealed opening has one length, so its size reveals no field: 349 bytes
+  PASS  a key other than the monitor's does not open a sealed opening, and an altered one is refused
+  PASS  a sealed opening is bound to its settlement: offered for another settlement of the batch, it does not open
+  PASS  the answerer takes a batch once: a second set of openings for a proof it holds is refused
+  PASS  at the decision time, the honest delegation with openings and proof delivered: nothing challenged
+  PASS  a settlement of one more unit of value than the honest proof states is challenged at its decision time: domain A/15375361056544014202: nothing delivered backs it
+  PASS  the batch with the forged proof: all 4 challenged and the delegation held: holds 4
+  PASS  a further payment on the held delegation is refused: Held
+  PASS  on request, the one opening the agent withheld past the delivery wait: that settlement alone is challenged: 4097368634310973098
+  PASS  on request, the opening that names a category the policy does not allow: that settlement alone is challenged: domain A/15375361056544014202: category not allowed
+  PASS  the offline agent whose answerer delivered sealed openings: nothing challenged
+  PASS  the offline agent whose answerer holds the proof alone: all 4 challenged: domain A/15375361056544014202: nothing delivered backs it
+  PASS  the offline agent opening every payment, with its answerer: nothing challenged
+  PASS  two offline agents whose staked answerers have delivered nothing yet: all 4 challenged under each
+  PASS  forged answers through an unsound answer system lift the hold: holds 0
+  PASS  no backing proof arrives within the delivery wait, so the monitor freezes the delegation: domain A/15375361056544014202: answered, and still nothing delivered backs it
+  PASS  the withheld opening, answered on chain and still not delivered: frozen: domain A/4097368634310973098: answered, and still nothing delivered backs it
+  PASS  the opening outside the policy, answered on chain: frozen, as no answer can change what the opening says: domain A/15375361056544014202: answered, and still category not allowed
+  PASS  the answerer without openings answers every challenge, yet the honest delegation is frozen: the answerer needs the sealed openings: domain A/15375361056544014202: answered, and still nothing delivered backs it
+  PASS  the staked answerer answers and posts on chain all 4 sealed openings and the batch proof, in 20 chunks; the monitor reads both there and freezes nothing
+  PASS  an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake: domain A/15375361056544014202: answered, and still nothing delivered backs it
+  PASS  the extra unit's challenge goes unanswered, as no proof of it exists; past its deadline the monitor expires it and the delegation is frozen: domain A/15375361056544014202: challenged and not answered
+  PASS  the honest delegations, the offline ones with sealed openings among them, are neither held nor frozen
+  budget tripwire, no proof read
+  PASS  six payments of 10,000 across two domains, the sixth taking the total to 60,000 past B: nothing happens at once
+  PASS  at the sixth's decision time, it alone is challenged, on domain B, which is held: domain B/1005: the total backed is past the budget 50000
+  PASS  a further payment on domain B is refused: Held
+  PASS  its challenge goes unanswered, and the monitor freezes both domains: Frozen
+  openings checked in the clear, no proof read
+  PASS  an opening naming a category the policy does not allow: nothing at once, and at its decision time that settlement alone is challenged: domain B/1001: category not allowed
+  PASS  answered through an unsound answer system, it still breaks the policy, so both domains are frozen: Frozen
+  PASS  the same unit consumed on two domains: the later settlement is challenged: domain B/1001: units already consumed by domain A/1000; domain A/1002: the opening disagrees with the record
+  PASS  an opening that disagrees with its own record: that settlement is challenged: domain B/1001: units already consumed by domain A/1000; domain A/1002: the opening disagrees with the record
+  the chain shows the same whatever the cause: an adversary with the agent's key and no proof
+  PASS  budget 1,000,000, no openings: the same actions at the same steps as budget 50,000, no openings
+  PASS  budget 1,000,000, openings naming an allowed merchant: the same actions at the same steps as budget 50,000, no openings
+  PASS  budget 1,000,000, openings naming a merchant outside the allowlist: the same actions at the same steps as budget 50,000, no openings
+  PASS  in every case, nothing before the decision time, then all six challenged at once, then both domains frozen: [] A holds 0, B holds 0 | [A0,A2,A4,B1,B3,B5] A holds 3, B holds 3 | [] A frozen, B frozen
+  all checks pass

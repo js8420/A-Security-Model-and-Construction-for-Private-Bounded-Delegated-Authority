@@ -3,7 +3,7 @@ export { BoundedEvmServer } from "./server.js";
 export { BoundedEvmFacilitator } from "./facilitator.js";
 export { reserveAbi, disputeAbi } from "./abi.js";
 export { Monitor, type Domain, type Policy, type Record, type Settings } from "./monitor.js";
-export { Answerer, sealedTree, type Sealed } from "./answerer.js";
+export { Answerer, CHUNK, proofChunks, proofHash, sealedTree, type Sealed } from "./answerer.js";
 export { commitOpening, decodeOpening, encodeOpening, unitsOf, type Opening } from "./opening.js";
 export { seal, sealingKeyOf, unseal, type Binding } from "./seal.js";
 export { SCHEME, type BoundedPayload, type BoundedExtra, type FormedPayment, type PaymentSource } from "./types.js";

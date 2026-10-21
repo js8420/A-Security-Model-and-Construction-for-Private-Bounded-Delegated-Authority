@@ -183,15 +183,13 @@ fn config_plain() -> PlainConfig {
     StarkConfig::new(pcs, challenger())
 }
 
-/// 40 queries at blowup 16 with 20 grinding bits: 126 bits under the FRI
-/// list-decoding conjecture, and 100 without it. The earlier setting was the
-/// upstream test default --- 40 queries at blowup 4 with 8 grinding bits ---
-/// which is 88 conjectured and 48 provable, and was never chosen for this
-/// construction. The sweep of `sweep.rs` is why these three numbers and not
-/// others: grinding costs nothing in proof size, rate costs almost nothing,
-/// and queries cost about 208 kB each. Reaching 100 provable bits this way
-/// adds 12,800 bytes to a proof and takes proving from 1.7 s to 6.2 s for a
-/// 32-payment batch.
+/// 40 queries at blowup 16 with 20 grinding bits: 101 bits under the FRI
+/// list-decoding conjecture, and 72 provable round by round (`soundness.rs`),
+/// where the batching of the opened columns by one challenge over a degree-2
+/// extension is the term that binds. The upstream test default, 40 queries at
+/// blowup 4 with 8 grinding bits, is 88 conjectured and 47 provable and does
+/// not admit this circuit. Grinding costs nothing in proof size, rate costs
+/// almost nothing, and queries cost about 117 kB each.
 /// S-box registers in the Poseidon2 AIR. One register witnesses an
 /// intermediate value and holds every S-box constraint at degree 3; zero
 /// registers leaves them at degree 7 and removes the columns. Both verify under

@@ -38,7 +38,15 @@ hist, tag = sys.argv[1], sys.argv[2]
 for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisputeOnChain", "StateReadOnChain"):
     j = json.load(open(f"{hist}/receipts_{tag}_{s}.json"))
     print(s)
+    posted = []
     for t, r in zip(j["transactions"], j["receipts"]):
-        name = t["function"] or ("deploy " + (t["contractName"] or ""))
-        print(f"  {name.split('(')[0]:<28} {int(r['gasUsed'], 16):>10,}")
+        name = (t["function"] or ("deploy " + (t["contractName"] or ""))).split('(')[0]
+        if name == "postProof":
+            posted.append(int(r['gasUsed'], 16))
+            continue
+        print(f"  {name:<28} {int(r['gasUsed'], 16):>10,}")
+    if posted:
+        print(f"  {'postProof, all chunks':<28} {sum(posted):>10,}  in {len(posted)} transactions, the largest {max(posted):,}")
 PY
+
+python3 ../Analysis/posting_cost.py "$hist/receipts_${tag}_ValidityDisputeOnChain.json" | tee "$hist/run_${tag}_posting.txt"

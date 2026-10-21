@@ -1,4 +1,4 @@
-import { concat, keccak256, sha256, type Hex } from "viem";
+import { bytesToHex, concat, encodePacked, keccak256, sha256, type Hex } from "viem";
 import type { Monitor } from "./monitor.js";
 
 /** A payment's opening sealed to the monitor's key, and the settlement it belongs to. */
@@ -29,6 +29,23 @@ export function sealedTree(blobs: readonly Hex[]): { root: Hex; path: (i: number
   };
 }
 
+/** The size of every chunk of a posted proof but the last, as the dispute contract fixes it. */
+export const CHUNK = 262144;
+
+/** A proof cut into the chunks it is posted in. */
+export function proofChunks(proof: Uint8Array): Uint8Array[] {
+  const out: Uint8Array[] = [];
+  for (let at = 0; at < proof.length; at += CHUNK) out.push(proof.subarray(at, Math.min(at + CHUNK, proof.length)));
+  return out;
+}
+
+/** The hash a receipt names for a proof: chained over its chunks from zero, then its length. */
+export function proofHash(proof: Uint8Array): Hex {
+  let h = `0x${"00".repeat(32)}` as Hex;
+  for (const c of proofChunks(proof)) h = keccak256(concat([h, bytesToHex(c)]));
+  return keccak256(encodePacked(["bytes32", "uint256"], [h, BigInt(proof.length)]));
+}
+
 /**
  * The agent's answerer. With each batch the agent hands it the batch's proof
  * and every payment's opening sealed to the monitor's key, so that when the
@@ -43,13 +60,18 @@ export class Answerer {
   private readonly batches: { proof: Uint8Array; sealed: readonly Sealed[] }[] = [];
   private readonly proofs = new Set<Hex>();
 
-  /** Takes a batch and returns the root of its sealed openings, which the receipt signs. */
-  receive(proof: Uint8Array, sealed: readonly Sealed[]): Hex {
+  /** Takes a batch and returns what its receipt signs: the root of its sealed openings and the proof's hash. */
+  receive(proof: Uint8Array, sealed: readonly Sealed[]): { sealedRoot: Hex; proofHash: Hex } {
     const id = sha256(proof);
     if (this.proofs.has(id)) throw new Error("batch already held");
     this.proofs.add(id);
     this.batches.push({ proof, sealed });
-    return sealedTree(sealed.map((s) => s.blob)).root;
+    return { sealedRoot: sealedTree(sealed.map((s) => s.blob)).root, proofHash: proofHash(proof) };
+  }
+
+  /** The proof of the batch holding a settlement. */
+  proofOf(domain: bigint, digest: bigint): Uint8Array | undefined {
+    return this.batches.find((b) => b.sealed.some((s) => s.domain === domain && s.digest === digest))?.proof;
   }
 
   /** Everything the answerer holds, as it stores it. */

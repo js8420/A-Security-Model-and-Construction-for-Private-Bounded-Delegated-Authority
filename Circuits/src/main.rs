@@ -50,6 +50,7 @@ mod composed;
 mod vacuous;
 mod spend2;
 mod sweep;
+mod soundness;
 mod naysay;
 mod forge;
 mod assertion;
@@ -1220,8 +1221,9 @@ fn main() {
         for lb in [1usize, 2, 3, 4, 5] {
             let ok = prover::composed_verifies_at::<0, 16, 32, 16, 64>(
                 32, prover::NUM_QUERIES, lb, prover::POW_BITS);
-            let provable = (prover::NUM_QUERIES * lb) / 2 + prover::POW_BITS;
-            println!("  {:<22} {:>10} {:>12}", 1usize << lb, provable.min(126), ok);
+            let shape = soundness::Shape { rows: 32, width: w0, constraints: c0, degree: d0, ..soundness::COMPOSED };
+            let provable = soundness::provable(&shape, prover::NUM_QUERIES, lb, prover::POW_BITS).floor() as usize;
+            println!("  {:<22} {:>10} {:>12}", 1usize << lb, provable, ok);
         }
         println!();
         println!("  Width is a property of the AIR and does not move with the rate.");

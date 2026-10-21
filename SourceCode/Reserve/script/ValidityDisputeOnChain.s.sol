@@ -17,9 +17,10 @@ import {KeccakTree} from "../test/KeccakTree.sol";
 /// floor) and execution with cold accounts and storage, as on chain. The
 /// settlement is payment 0 of the exported batch, shares included; the answer
 /// carries its leaf's path to the root the proof commits. The answer to the
-/// principal's challenge asks for the settlement's sealed opening, which is
-/// then posted at its position in a tree of one 349-byte opening per payment
-/// of the batch, under the answerer's receipt.
+/// principal's challenge asks for what backs the settlement: its sealed
+/// opening, posted at its position in a tree of one 349-byte opening per
+/// payment of the batch, and the batch's STARK proof, posted in chunks under
+/// the hash the answerer's receipt names.
 ///
 /// The exported payments were signed from time 5000, so the node is started
 /// with its clock there: anvil --timestamp 5000.
@@ -28,6 +29,8 @@ contract ValidityDisputeOnChain is Script {
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
     string constant RESULT = "../../WorkingHistory/groth16_s6/out_s6_batch_a/onchain.txt";
+    /// The exported batch's STARK proof with its public values, as the agent hands it on.
+    string constant STARK = "../../Circuits/target/proof_128_keccak.bin";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -59,8 +62,12 @@ contract ValidityDisputeOnChain is Script {
         vd.open{value: 0.01 ether}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
-        _deliver(d, pk);
+        bytes memory stark = vm.readFileBinary(STARK);
+        bytes32 ph = _proofHash(stark);
+        _deliver(d, pk, ph);
         console.log("sealed opening delivered", uint256(vd.challengeOf(id, digest).status) == 4);
+        _postProof(stark);
+        console.log("proof posted, bytes", stark.length, vd.postedAt(id, ph) != 0);
 
         // The unanswered case, on a second reserve whose answer window is zero
         // and whose slot is one second, so the deadline falls within two
@@ -97,18 +104,65 @@ contract ValidityDisputeOnChain is Script {
 
     /// The answerer's receipt for the batch and its sealed openings, and the
     /// delivery of payment 0's.
-    function _deliver(Statement.Data memory d, uint256 pk) internal {
+    function _deliver(Statement.Data memory d, uint256 pk, bytes32 proofHash) internal {
         bytes32[] memory leaves = new bytes32[](Statement.PAYMENTS);
         for (uint256 i = 0; i < leaves.length; ++i) leaves[i] = keccak256(_opening(i));
-        ValidityDispute.Receipt memory rc = _receipt(pk, KeccakTree.root(leaves));
+        ValidityDispute.Receipt memory rc = _receipt(pk, KeccakTree.root(leaves), proofHash);
         bytes32[] memory sealedPath = KeccakTree.path(leaves, 0);
         vd.deliver(id, digest, rec, 0, Statement.path(d, 0), rc, _opening(0), sealedPath);
     }
 
-    function _receipt(uint256 pk, bytes32 sealedRoot) internal view returns (ValidityDispute.Receipt memory) {
+    function _receipt(uint256 pk, bytes32 sealedRoot, bytes32 proofHash) internal view returns (ValidityDispute.Receipt memory) {
         uint64 at = uint64(block.timestamp);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, vd.receiptDigest(id, Statement.ROOT, sealedRoot, at));
-        return ValidityDispute.Receipt({sealedRoot: sealedRoot, receivedAt: at, signature: abi.encodePacked(r, s, v)});
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, vd.receiptDigest(id, Statement.ROOT, sealedRoot, proofHash, at));
+        return ValidityDispute.Receipt({sealedRoot: sealedRoot, proofHash: proofHash, receivedAt: at, signature: abi.encodePacked(r, s, v)});
+    }
+
+    /// The chained hash postProof checks, computed in place: the word before
+    /// each chunk briefly holds the hash so far.
+    function _proofHash(bytes memory b) internal view returns (bytes32 h) {
+        uint256 size = vd.CHUNK();
+        uint256 n = b.length;
+        assembly {
+            let base := add(b, 32)
+            for { let at := 0 } lt(at, n) { at := add(at, size) } {
+                let len := sub(n, at)
+                if gt(len, size) { len := size }
+                let p := add(base, at)
+                let keep := mload(sub(p, 32))
+                mstore(sub(p, 32), h)
+                h := keccak256(sub(p, 32), add(len, 32))
+                mstore(sub(p, 32), keep)
+            }
+            let f := mload(0x40)
+            mstore(f, h)
+            mstore(add(f, 32), n)
+            h := keccak256(f, 64)
+        }
+    }
+
+    /// One transaction a chunk, as an answerer posts it. One buffer is
+    /// reused, and the memory each call's encoding takes is given back.
+    function _postProof(bytes memory b) internal {
+        bytes32 h = _proofHash(b);
+        uint256 size = vd.CHUNK();
+        bytes memory buf = new bytes(size);
+        uint256 i;
+        for (uint256 at = 0; at < b.length; at += size) {
+            uint256 len = b.length - at < size ? b.length - at : size;
+            uint256 fmp;
+            assembly {
+                let src := add(add(b, 32), at)
+                let dst := add(buf, 32)
+                for { let j := 0 } lt(j, len) { j := add(j, 32) } { mstore(add(dst, j), mload(add(src, j))) }
+                mstore(buf, len)
+                fmp := mload(0x40)
+            }
+            vd.postProof(id, h, i++, buf, at + len == b.length);
+            assembly {
+                mstore(0x40, fmp)
+            }
+        }
     }
 
     /// A stand-in for payment i's sealed opening: 349 bytes, as every one is.

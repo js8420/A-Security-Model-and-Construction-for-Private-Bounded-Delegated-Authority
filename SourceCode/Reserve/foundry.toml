@@ -8,9 +8,11 @@ optimizer = true
 optimizer_runs = 200
 gas_reports = ["Reserve"]
 # The tests deploy the real Permit2 from the artifact its own pinned build writes,
-# and read the Groth16 proof Pete made and the mainnet state proofs
-# fetch_state_proofs.py took.
+# and read the Groth16 proof Pete made, the mainnet state proofs
+# fetch_state_proofs.py took, and the exported STARK proof the dispute
+# script posts in chunks.
 fs_permissions = [
     { access = "read", path = "./lib/permit2/out" },
     { access = "read", path = "../../WorkingHistory" },
+    { access = "read", path = "../../Circuits/target" },
 ]

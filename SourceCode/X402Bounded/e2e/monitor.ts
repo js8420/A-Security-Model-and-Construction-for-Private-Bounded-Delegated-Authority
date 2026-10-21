@@ -16,7 +16,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
-  reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
+  proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
   type Check, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
@@ -150,19 +150,30 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
    * The answerer's receipt for a settlement standing as a batch of one, as the
    * stand-in answer system takes it: the settlement's leaf is the batch's root.
    */
-  const receipt = async (d: Domain, r: Record, sealedRoot: Hex, receivedAt: bigint) => {
+  const receipt = async (d: Domain, r: Record, sealedRoot: Hex, proof: Hex, receivedAt: bigint) => {
     const root = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "rootOf", args: [d.delegation, r.digest, recordOf(r), 0n, []] })) as Hex;
-    const h = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "receiptDigest", args: [d.delegation, root, sealedRoot, receivedAt] })) as Hex;
-    return { sealedRoot, receivedAt, signature: await answererKey.sign({ hash: h }) };
+    const h = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "receiptDigest", args: [d.delegation, root, sealedRoot, proof, receivedAt] })) as Hex;
+    return { sealedRoot, proofHash: proof, receivedAt, signature: await answererKey.sign({ hash: h }) };
+  };
+
+  /** The answerer posts a batch proof in chunks, one transaction each. */
+  const postProof = async (d: Domain, proof: Uint8Array) => {
+    const h = proofHash(proof);
+    const chunks = proofChunks(proof);
+    for (let i = 0; i < chunks.length; i++) {
+      const data = `0x${Buffer.from(chunks[i]).toString("hex")}` as Hex;
+      await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "postProof", args: [d.delegation, h, BigInt(i), data, i === chunks.length - 1], gas: 15_000_000n }));
+    }
+    return chunks.length;
   };
 
   /** The answerer posts a settlement's sealed opening on chain under its receipt. */
-  const deliver = async (d: Domain, r: Record, rc: { sealedRoot: Hex; receivedAt: bigint; signature: Hex }, opening: Hex, sealedPath: Hex[]) => {
+  const deliver = async (d: Domain, r: Record, rc: { sealedRoot: Hex; proofHash: Hex; receivedAt: bigint; signature: Hex }, opening: Hex, sealedPath: Hex[]) => {
     await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] }));
   };
 
   /** Anyone holding the receipt slashes an answerer that withheld; returns whether it went through. */
-  const slashWithholding = async (d: Domain, r: Record, rc: { sealedRoot: Hex; receivedAt: bigint; signature: Hex }) => {
+  const slashWithholding = async (d: Domain, r: Record, rc: { sealedRoot: Hex; proofHash: Hex; receivedAt: bigint; signature: Hex }) => {
     try {
       await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "slashWithholding", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
       return true;
@@ -183,7 +194,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  return { delegate, settle, answer, state, now, advance, receipt, deliver, slashWithholding, stakeOf };
+  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf };
 }
 
 const lines: string[] = [];
@@ -341,13 +352,13 @@ async function main() {
   const sS = await settleProven(dS);
   const answererS = new Answerer();
   const sealedS = sealAll(sS.os);
-  answererS.receive(honest, sealedS);
+  const heldS = answererS.receive(honest, sealedS);
   const dR = await A.delegate({ ...proven, answerer: true });
   const mR = new Monitor([dR], provenPolicy, proving(gateBoth(), KEYS.seal));
   const sR = await settleProven(dR);
   const answererR = new Answerer();
   const sealedR = sealAll(sR.os);
-  answererR.receive(honest, sealedR);
+  const heldR = answererR.receive(honest, sealedR);
   let twice = false;
   try {
     answererR.receive(honest, sealedS);
@@ -428,10 +439,10 @@ async function main() {
     await A.answer(dS, r);
     const i = sealedS.findIndex((x) => x.digest === r.digest);
     const one = tree([sealedS[i]]);
-    await A.deliver(dS, r, await A.receipt(dS, r, one.root, receivedAt), sealedS[i].blob, one.path(0));
+    await A.deliver(dS, r, await A.receipt(dS, r, one.root, heldS.proofHash, receivedAt), sealedS[i].blob, one.path(0));
   }
+  const chunksS = await A.postProof(dS, answererS.proofOf(sealedS[0].domain, sealedS[0].digest) as Uint8Array);
   for (const r of rR.challenged) await A.answer(dR, r);
-  const servedS = await answererS.serve(mS, true);
   const servedR = await answererR.serve(mR, true);
   await A.advance(Number(WAIT) + 1);
   const fY = await mY.poll();
@@ -443,12 +454,12 @@ async function main() {
   const fU2 = await mU2.poll();
   check("the answerer without openings answers every challenge, yet the honest delegation is frozen: the answerer needs the sealed openings", fU2.froze, fU2.reasons[0] ?? "");
   const fS = await mS.poll();
-  check(`the staked answerer answers, hands over the proof and posts all ${n} sealed openings on chain; the monitor reads them there and freezes nothing`, servedS.proofs === 1 && servedS.opened === 0 && mS.openedCount() === n && !fS.froze && !(await A.state(dS)).frozen, fS.reasons.join("; "));
+  check(`the staked answerer answers and posts on chain all ${n} sealed openings and the batch proof, in ${chunksS} chunks; the monitor reads both there and freezes nothing`, chunksS > 1 && mS.openedCount() === n && !fS.froze && !(await A.state(dS)).frozen, fS.reasons.join("; "));
   const fR = await mR.poll();
   const stakeBefore = await A.stakeOf(dR);
   const r0 = rR.challenged[0];
   const i0 = sealedR.findIndex((x) => x.digest === r0.digest);
-  const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, receivedAt));
+  const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, heldR.proofHash, receivedAt));
   check("an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
   const zBefore = await A.state(dZ);
   await A.advance(PAST_DEADLINE);

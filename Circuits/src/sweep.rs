@@ -7,29 +7,15 @@
 //! against each other through the FRI parameters, and quoting one setting hides
 //! the trade.
 //!
-//! Soundness is reported twice on purpose. The conjectured figure assumes a
-//! query costs an adversary the full rate, which is what deployed systems
-//! assume and what the upstream defaults are chosen for. The Johnson figure is
-//! what is provable without that conjecture, and it is roughly half. A reader
-//! sizing a secret or a bond should use the second.
+//! Soundness is reported twice on purpose. The conjectured figure charges a
+//! query the full rate, which is what deployed systems assume. The provable
+//! figure is the round-by-round bound of `soundness.rs`, which needs no
+//! conjecture, and over a degree-2 extension its batching term caps it well
+//! below the conjectured one. A reader sizing a secret or a bond should use
+//! the second.
 
 use crate::prover::{composed_proof_at, composed_verifies};
-
-/// Bits of soundness if each query costs the full rate. This is the number
-/// usually quoted and it rests on a conjecture about list decoding.
-fn bits_conjectured(queries: usize, log_blowup: usize, pow: usize) -> usize {
-    queries * log_blowup + pow
-}
-
-/// Bits provable in the Johnson regime, where a query is worth half the rate.
-/// No conjecture is needed for this one.
-fn bits_johnson(queries: usize, log_blowup: usize, pow: usize) -> usize {
-    (queries * log_blowup) / 2 + pow
-}
-
-/// The challenge field is a degree-2 extension of Goldilocks, so no argument
-/// over it is worth more than about this, whatever FRI contributes.
-const FIELD_BITS: usize = 126;
+use crate::soundness::{conjectured, provable, COMPOSED};
 
 /// Call data a 30M-gas block admits at 16 gas per non-zero byte.
 const CALLDATA_BYTES_PER_BLOCK: usize = 30_000_000 / 16;
@@ -200,10 +186,10 @@ pub fn run() {
         (80, 2, 8),
         (40, 2, 0),
         (40, 2, 16),
-        (84, 3, 16),  // the smallest setting here clearing 128 provable bits
-        // Candidates for 100 provable bits. Blowup is nearly free in proof
-        // size and grinding is free entirely, so these buy security from the
-        // two cheap directions rather than from queries.
+        (84, 3, 16),
+        // Blowup is nearly free in proof size and grinding is free entirely,
+        // so these buy security from the two cheap directions rather than
+        // from queries.
         (40, 4, 20),
         (54, 3, 20),
         (80, 2, 20),
@@ -217,8 +203,8 @@ pub fn run() {
             queries: q,
             blowup: b,
             pow: p,
-            conjectured: bits_conjectured(q, b, p).min(FIELD_BITS),
-            johnson: bits_johnson(q, b, p).min(FIELD_BITS),
+            conjectured: conjectured(&COMPOSED, q, b, p).floor() as usize,
+            johnson: provable(&COMPOSED, q, b, p).floor() as usize,
             bytes,
             commit,
             opened,
@@ -230,7 +216,7 @@ pub fn run() {
     }
 
     println!("  {:>7} {:>7} {:>5} {:>7} {:>8} {:>12} {:>10} {:>10} {:>9}",
-             "queries", "blowup", "pow", "conj.", "Johnson", "proof bytes", "prove ms", "verify ms", "verifies");
+             "queries", "blowup", "pow", "conj.", "provable", "proof bytes", "prove ms", "verify ms", "verifies");
     println!("  {:>7} {:>7} {:>5} {:>7} {:>8} {:>12} {:>10} {:>10}",
              "-".repeat(7), "-".repeat(7), "-".repeat(5), "-".repeat(7),
              "-".repeat(8), "-".repeat(12), "-".repeat(10), "-".repeat(10));
@@ -241,10 +227,9 @@ pub fn run() {
     }
 
     println!();
-    println!("  Blowup is the reciprocal rate. Conjectured soundness assumes a query");
-    println!("  costs the full rate; Johnson is what holds without that conjecture and");
-    println!("  is the figure to size a secret or a bond against. Both are capped at");
-    println!("  {} bits, the challenge field.", FIELD_BITS);
+    println!("  Blowup is the reciprocal rate. Conjectured soundness charges a query");
+    println!("  the full rate; provable is the round-by-round bound, which needs no");
+    println!("  conjecture and is the figure to size a secret or a bond against.");
 
     println!();
     println!("  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.");
@@ -265,7 +250,7 @@ pub fn run() {
     println!("  call data in one 30M-gas block, at 16 gas a byte    {:>12}", CALLDATA_BYTES_PER_BLOCK);
     println!("  one EIP-4844 blob                                   {:>12}", BLOB_BYTES);
     println!();
-    println!("  {:>12} {:>10} {:>12} {:>12}", "proof bytes", "Johnson", "blocks", "blobs");
+    println!("  {:>12} {:>10} {:>12} {:>12}", "proof bytes", "provable", "blocks", "blobs");
     println!("  {:>12} {:>10} {:>12} {:>12}",
              "-".repeat(12), "-".repeat(10), "-".repeat(12), "-".repeat(12));
     for r in &rows {

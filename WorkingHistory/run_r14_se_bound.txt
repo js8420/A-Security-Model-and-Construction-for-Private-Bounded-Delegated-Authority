@@ -1,0 +1,43 @@
+ROUND-BY-ROUND KNOWLEDGE-SOUNDNESS ERROR OF THE PAYMENT PROOF, BITS
+==============================================================================
+  batched columns N = 28656, constraints s = 14302, degree 7, 16 chunks, folds (4, 4, 2)
+
+  deployed: 40 queries, blowup 16, 20 grinding bits, degree-2 extension
+    johnson        72.1 bits m=3    constraints 108.6, out-of-domain point 104.7, batching 72.1, folding 85.3, queries 91.1
+    unique         56.5 bits        constraints 114.2, out-of-domain point 115.9, batching 101.2, folding 114.4, queries 56.5
+    conjectured   101.2 bits        constraints 114.2, out-of-domain point 115.9, batching 101.2, folding 114.4, queries 180.0
+  60 queries, blowup 16, 20 grinding bits
+    johnson        72.1 bits m=3    constraints 108.6, out-of-domain point 104.7, batching 72.1, folding 85.3, queries 126.7
+    unique         74.7 bits        constraints 114.2, out-of-domain point 115.9, batching 101.2, folding 114.4, queries 74.7
+    conjectured   101.2 bits        constraints 114.2, out-of-domain point 115.9, batching 101.2, folding 114.4, queries 260.0
+  40 queries, blowup 16, 20 grinding bits, degree-5 extension
+    johnson        99.8 bits m=127  constraints 288.2, out-of-domain point 271.9, batching 227.8, folding 241.0, queries 99.8
+    unique         56.5 bits        constraints 306.2, out-of-domain point 307.9, batching 293.2, folding 306.4, queries 56.5
+    conjectured   180.0 bits        constraints 306.2, out-of-domain point 307.9, batching 293.2, folding 306.4, queries 180.0
+  50 queries, blowup 16, 20 grinding bits, degree-5 extension
+    johnson       119.7 bits m=127  constraints 288.2, out-of-domain point 271.9, batching 227.8, folding 241.0, queries 119.7
+    unique         65.6 bits        constraints 306.2, out-of-domain point 307.9, batching 293.2, folding 306.4, queries 65.6
+    conjectured   220.0 bits        constraints 306.2, out-of-domain point 307.9, batching 293.2, folding 306.4, queries 220.0
+
+STATE-RESTORATION ERROR AT THE DEPLOYED SETTING, (t + 7) TIMES THE ABOVE
+==============================================================================
+  2^32 oracle queries     40.1 bits
+  2^48 oracle queries     24.1 bits
+  2^64 oracle queries      8.1 bits
+
+THE SWEEP OF THE FRI PARAMETERS, SOUNDNESS COLUMNS, WHOLE BITS ROUNDED DOWN
+==============================================================================
+  queries  blowup  grind  conjectured  provable
+       40      16     20          101        72
+       40       8      8          102        64
+       54       8     20          102        75
+       84       8     16          102        85
+       40       4      8           88        47
+       40       4      0           80        39
+       40       4     16           96        55
+       20       4      8           48        27
+       30       4      8           68        37
+       60       4      8          103        64
+       80       4      8          103        74
+       80       4     20          103        79
+       40       2      8           48        27

@@ -54,8 +54,9 @@ interface IReserveV {
 /// an answer or an expiry.
 ///
 /// Answerers. An answerer signs a receipt for each batch it holds: the
-/// batch's root and the root of a tree of the payments' openings, each sealed
-/// to the principal's key, in the batch's order. If a challenge against a
+/// batch's root, the root of a tree of the payments' openings, each sealed
+/// to the principal's key, in the batch's order, and the hash of the batch's
+/// proof as it is posted here in chunks. If a challenge against a
 /// settlement in that batch then expires, and the receipt left the answerer a
 /// full answer window, the receipt and the settlement's path to the root burn
 /// the answerer's stake, less a bounty of one challenger's bond to whoever
@@ -64,11 +65,14 @@ interface IReserveV {
 /// the rest leaves nobody a reason to silence one.
 ///
 /// Delivery. An answer to the principal's challenge is also its request for
-/// the settlement's sealed opening: within the delivery wait the opening
-/// must be posted here, at the settlement's position in the receipted tree.
-/// If it is not, or if what was posted is not what the receipt names, the
-/// receipt slashes the stake in the same way, provided the answerer held it
-/// before the answer.
+/// what backs the settlement: within the delivery wait the sealed opening
+/// must be posted here, at the settlement's position in the receipted tree,
+/// and the batch's proof posted here in chunks whose chained hash is the one
+/// the receipt names. The proof is too large for one transaction, so each
+/// chunk is a transaction of its own, and only its hash is kept. If either
+/// is missing at the wait's end, or the opening posted is not the one the
+/// receipt names, the receipt slashes the stake in the same way, provided
+/// the answerer held it before the answer.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can
@@ -112,8 +116,10 @@ contract ValidityDispute {
     uint64 public immutable slot;
     uint256 public immutable challengerBond;
     /// How long after answering the principal's challenge the sealed opening
-    /// may be posted.
+    /// and the proof may be posted.
     uint64 public immutable deliveryWait;
+    /// The size of every chunk of a posted proof but the last.
+    uint256 public constant CHUNK = 262144;
 
     mapping(bytes32 => Challenge) private challenges;
     mapping(address => uint64) public lastPrincipalDeadline;
@@ -122,6 +128,18 @@ contract ValidityDispute {
     mapping(address => uint256) public credit;
     /// The sealed-opening root a delivery was made under.
     mapping(bytes32 => bytes32) public deliveredUnder;
+
+    /// A proof being posted by one poster: the chained hash so far, the bytes
+    /// and chunks taken. Kept per poster, so nobody can spoil another's.
+    struct Posting {
+        bytes32 acc;
+        uint64 length;
+        uint32 chunks;
+    }
+
+    mapping(address => mapping(uint256 => mapping(bytes32 => Posting))) private postings;
+    /// When a proof with this hash was completely posted for a delegation.
+    mapping(uint256 => mapping(bytes32 => uint64)) public postedAt;
 
     error BondTooSmall();
     error AlreadyChallenged();
@@ -139,12 +157,16 @@ contract ValidityDispute {
     error ReceiptTooLate();
     error NotDue();
     error NotWithheld();
+    error BadChunk();
+    error ProofMismatch();
 
     event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline);
     event Answered(uint256 indexed id, uint64 digest);
     event Expired(uint256 indexed id, uint64 digest);
     event AnswererSlashed(uint256 indexed id, uint64 digest);
     event SealedDelivered(uint256 indexed id, uint64 digest, bytes opening);
+    event ProofChunk(uint256 indexed id, bytes32 indexed proofHash, address indexed poster, uint256 index);
+    event ProofPosted(uint256 indexed id, bytes32 indexed proofHash, address poster);
 
     constructor(
         address reserve_,
@@ -257,13 +279,39 @@ contract ValidityDispute {
     /// What an answerer signs on receiving a batch: the delegation, the
     /// batch's root, the root of its sealed openings, and when it received
     /// them.
-    function receiptDigest(uint256 id, bytes32 root, bytes32 sealedRoot, uint64 receivedAt) public view returns (bytes32) {
-        return keccak256(abi.encode(block.chainid, address(this), id, root, sealedRoot, receivedAt));
+    function receiptDigest(uint256 id, bytes32 root, bytes32 sealedRoot, bytes32 proofHash, uint64 receivedAt)
+        public
+        view
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(block.chainid, address(this), id, root, sealedRoot, proofHash, receivedAt));
+    }
+
+    /// Posts, for delegation `id`, chunk `index` of the proof whose hash is
+    /// `proofHash`: every chunk
+    /// CHUNK bytes, the last at most that. The hash is the chained hash of
+    /// the chunks, h = keccak(h, chunk) from zero, with the total length
+    /// hashed in at the end. The chunks travel in the transactions' call
+    /// data, which anyone can read back; only the chained hash is stored.
+    function postProof(uint256 id, bytes32 proofHash, uint256 index, bytes calldata chunk, bool last) external {
+        Posting storage p = postings[msg.sender][id][proofHash];
+        if (postedAt[id][proofHash] != 0 || index != p.chunks) revert BadChunk();
+        if (chunk.length == 0 || chunk.length > CHUNK || (!last && chunk.length != CHUNK)) revert BadChunk();
+        p.acc = keccak256(abi.encodePacked(p.acc, chunk));
+        p.length += uint64(chunk.length);
+        p.chunks += 1;
+        emit ProofChunk(id, proofHash, msg.sender, index);
+        if (last) {
+            if (keccak256(abi.encodePacked(p.acc, uint256(p.length))) != proofHash) revert ProofMismatch();
+            postedAt[id][proofHash] = uint64(block.timestamp);
+            emit ProofPosted(id, proofHash, msg.sender);
+        }
     }
 
     /// A receipt as the answerer signed it.
     struct Receipt {
         bytes32 sealedRoot;
+        bytes32 proofHash;
         uint64 receivedAt;
         bytes signature;
     }
@@ -311,10 +359,11 @@ contract ValidityDispute {
         emit SealedDelivered(id, digest, opening);
     }
 
-    /// Slashes the answerer that held a settlement's sealed opening before the
-    /// principal's challenge of it was answered and did not post it within the
-    /// delivery wait, or posted one under another sealed root than its
-    /// receipt names.
+    /// Slashes the answerer that held a settlement's batch before the
+    /// principal's challenge of it was answered, if by the end of the delivery
+    /// wait the sealed opening or the proof its receipt names was not posted,
+    /// or if the opening was posted under another sealed root than the
+    /// receipt's.
     function slashWithholding(
         uint256 id,
         uint64 digest,
@@ -327,10 +376,13 @@ contract ValidityDispute {
         Challenge storage c = challenges[k];
         _record(id, digest, s);
         _receipt(id, rootOf(id, digest, s, index, path), r);
-        if (c.status == Status.Answered && c.byPrincipal && block.timestamp > c.deadline) {
+        if (!c.byPrincipal || (c.status != Status.Answered && c.status != Status.Delivered)) revert NotWithheld();
+        bool swapped = c.status == Status.Delivered && deliveredUnder[k] != r.sealedRoot;
+        if (!swapped) {
+            uint64 at = postedAt[id][r.proofHash];
+            bool missing = c.status == Status.Answered || at == 0 || at > c.deadline;
+            if (block.timestamp <= c.deadline || !missing) revert NotWithheld();
             if (uint256(r.receivedAt) + deliveryWait > c.deadline) revert ReceiptTooLate();
-        } else if (c.status != Status.Delivered || deliveredUnder[k] == r.sealedRoot) {
-            revert NotWithheld();
         }
         emit AnswererSlashed(id, digest);
         reserve.slashAnswerer(id, msg.sender, challengerBond);
@@ -338,7 +390,7 @@ contract ValidityDispute {
 
     function _receipt(uint256 id, bytes32 root, Receipt calldata r) private view {
         (address answerer, ) = reserve.answererOf(id);
-        if (answerer == address(0) || _signer(receiptDigest(id, root, r.sealedRoot, r.receivedAt), r.signature) != answerer) {
+        if (answerer == address(0) || _signer(receiptDigest(id, root, r.sealedRoot, r.proofHash, r.receivedAt), r.signature) != answerer) {
             revert BadReceipt();
         }
     }
