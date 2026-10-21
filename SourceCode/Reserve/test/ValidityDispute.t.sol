@@ -51,7 +51,7 @@ contract ValidityDisputeTest is Groth16Result {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, ACCEPT, WINDOW, SLOT, CHALLENGER_BOND);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, ACCEPT, WINDOW, SLOT, CHALLENGER_BOND, 8 hours);
         acc.setDispute(address(vd));
         vm.deal(principal, 10 ether);
         vm.deal(challenger, 10 ether);

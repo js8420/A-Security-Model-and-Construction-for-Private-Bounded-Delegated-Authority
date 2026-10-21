@@ -53,14 +53,22 @@ interface IReserveV {
 /// principal. Credits are withdrawn, never pushed, so no recipient can block
 /// an answer or an expiry.
 ///
-/// Answerers. An answerer signs a receipt for each batch root it holds a
-/// proof of. If a challenge against a settlement in that batch then expires,
-/// and the receipt left the answerer a full answer window, the receipt and the
-/// settlement's path to the root burn the answerer's stake, less a bounty of
-/// one challenger's bond to whoever brings them. A stake of at least the
-/// agent's bond plus that bounty leaves a principal nothing to pay an
-/// answerer to stay silent with, and burning the rest leaves nobody a reason
-/// to silence one.
+/// Answerers. An answerer signs a receipt for each batch it holds: the
+/// batch's root and the root of a tree of the payments' openings, each sealed
+/// to the principal's key, in the batch's order. If a challenge against a
+/// settlement in that batch then expires, and the receipt left the answerer a
+/// full answer window, the receipt and the settlement's path to the root burn
+/// the answerer's stake, less a bounty of one challenger's bond to whoever
+/// brings them. A stake of at least the agent's bond plus that bounty leaves
+/// a principal nothing to pay an answerer to stay silent with, and burning
+/// the rest leaves nobody a reason to silence one.
+///
+/// Delivery. An answer to the principal's challenge is also its request for
+/// the settlement's sealed opening: within the delivery wait the opening
+/// must be posted here, at the settlement's position in the receipted tree.
+/// If it is not, or if what was posted is not what the receipt names, the
+/// receipt slashes the stake in the same way, provided the answerer held it
+/// before the answer.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can
@@ -69,8 +77,10 @@ interface IReserveV {
 contract ValidityDispute {
     using SettlementHash for Settlement;
 
-    enum Status { None, Open, Answered, Expired }
+    enum Status { None, Open, Answered, Expired, Delivered }
 
+    /// `deadline` is the answer's deadline while the challenge is open, and,
+    /// once the principal's challenge is answered, the delivery's.
     struct Challenge {
         address challenger;
         uint64 deadline;
@@ -101,12 +111,17 @@ contract ValidityDispute {
     /// What proving one answer takes, with margin.
     uint64 public immutable slot;
     uint256 public immutable challengerBond;
+    /// How long after answering the principal's challenge the sealed opening
+    /// may be posted.
+    uint64 public immutable deliveryWait;
 
     mapping(bytes32 => Challenge) private challenges;
     mapping(address => uint64) public lastPrincipalDeadline;
     mapping(address => uint64) public lastPublicDeadline;
     mapping(uint256 => uint256) public openCount;
     mapping(address => uint256) public credit;
+    /// The sealed-opening root a delivery was made under.
+    mapping(bytes32 => bytes32) public deliveredUnder;
 
     error BondTooSmall();
     error AlreadyChallenged();
@@ -122,11 +137,14 @@ contract ValidityDispute {
     error NotExpired();
     error BadReceipt();
     error ReceiptTooLate();
+    error NotDue();
+    error NotWithheld();
 
     event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline);
     event Answered(uint256 indexed id, uint64 digest);
     event Expired(uint256 indexed id, uint64 digest);
     event AnswererSlashed(uint256 indexed id, uint64 digest);
+    event SealedDelivered(uint256 indexed id, uint64 digest, bytes opening);
 
     constructor(
         address reserve_,
@@ -135,7 +153,8 @@ contract ValidityDispute {
         uint64 acceptWindow_,
         uint64 answerWindow_,
         uint64 slot_,
-        uint256 bond
+        uint256 bond,
+        uint64 deliveryWait_
     ) {
         reserve = IReserveV(reserve_);
         verifier = ISP1Verifier(verifier_);
@@ -144,6 +163,7 @@ contract ValidityDispute {
         answerWindow = answerWindow_;
         slot = slot_;
         challengerBond = bond;
+        deliveryWait = deliveryWait_;
     }
 
     function key(uint256 id, uint64 digest) public pure returns (bytes32) {
@@ -235,9 +255,17 @@ contract ValidityDispute {
     }
 
     /// What an answerer signs on receiving a batch: the delegation, the
-    /// batch's root, and when it received the proof.
-    function receiptDigest(uint256 id, bytes32 root, uint64 receivedAt) public view returns (bytes32) {
-        return keccak256(abi.encode(block.chainid, address(this), id, root, receivedAt));
+    /// batch's root, the root of its sealed openings, and when it received
+    /// them.
+    function receiptDigest(uint256 id, bytes32 root, bytes32 sealedRoot, uint64 receivedAt) public view returns (bytes32) {
+        return keccak256(abi.encode(block.chainid, address(this), id, root, sealedRoot, receivedAt));
+    }
+
+    /// A receipt as the answerer signed it.
+    struct Receipt {
+        bytes32 sealedRoot;
+        uint64 receivedAt;
+        bytes signature;
     }
 
     function slashAnswerer(
@@ -246,20 +274,73 @@ contract ValidityDispute {
         Settlement calldata s,
         uint256 index,
         bytes32[] calldata path,
-        uint64 receivedAt,
-        bytes calldata signature
+        Receipt calldata r
     ) external {
         Challenge storage c = challenges[key(id, digest)];
         if (c.status != Status.Expired) revert NotExpired();
         _record(id, digest, s);
-        if (uint256(receivedAt) + answerWindow > c.deadline) revert ReceiptTooLate();
-        bytes32 root = rootOf(id, digest, s, index, path);
-        (address answerer, ) = reserve.answererOf(id);
-        if (answerer == address(0) || _signer(receiptDigest(id, root, receivedAt), signature) != answerer) {
-            revert BadReceipt();
+        if (uint256(r.receivedAt) + answerWindow > c.deadline) revert ReceiptTooLate();
+        _receipt(id, rootOf(id, digest, s, index, path), r);
+        emit AnswererSlashed(id, digest);
+        reserve.slashAnswerer(id, msg.sender, challengerBond);
+    }
+
+    /// Posts a settlement's sealed opening after the principal's challenge of
+    /// it was answered: the opening sits at the settlement's own position in
+    /// the sealed tree the receipt names, so it is the one the answerer was
+    /// handed for this settlement. Anyone may post it.
+    function deliver(
+        uint256 id,
+        uint64 digest,
+        Settlement calldata s,
+        uint256 index,
+        bytes32[] calldata path,
+        Receipt calldata r,
+        bytes calldata opening,
+        bytes32[] calldata sealedPath
+    ) external {
+        bytes32 k = key(id, digest);
+        Challenge storage c = challenges[k];
+        if (c.status != Status.Answered || !c.byPrincipal) revert NotDue();
+        if (block.timestamp > c.deadline) revert TooLate();
+        _record(id, digest, s);
+        _receipt(id, rootOf(id, digest, s, index, path), r);
+        if (_up(keccak256(opening), index, sealedPath) != r.sealedRoot) revert BadPath();
+        c.status = Status.Delivered;
+        deliveredUnder[k] = r.sealedRoot;
+        emit SealedDelivered(id, digest, opening);
+    }
+
+    /// Slashes the answerer that held a settlement's sealed opening before the
+    /// principal's challenge of it was answered and did not post it within the
+    /// delivery wait, or posted one under another sealed root than its
+    /// receipt names.
+    function slashWithholding(
+        uint256 id,
+        uint64 digest,
+        Settlement calldata s,
+        uint256 index,
+        bytes32[] calldata path,
+        Receipt calldata r
+    ) external {
+        bytes32 k = key(id, digest);
+        Challenge storage c = challenges[k];
+        _record(id, digest, s);
+        _receipt(id, rootOf(id, digest, s, index, path), r);
+        if (c.status == Status.Answered && c.byPrincipal && block.timestamp > c.deadline) {
+            if (uint256(r.receivedAt) + deliveryWait > c.deadline) revert ReceiptTooLate();
+        } else if (c.status != Status.Delivered || deliveredUnder[k] == r.sealedRoot) {
+            revert NotWithheld();
         }
         emit AnswererSlashed(id, digest);
         reserve.slashAnswerer(id, msg.sender, challengerBond);
+    }
+
+    function _receipt(uint256 id, bytes32 root, Receipt calldata r) private view {
+        (address answerer, ) = reserve.answererOf(id);
+        if (answerer == address(0) || _signer(receiptDigest(id, root, r.sealedRoot, r.receivedAt), r.signature) != answerer) {
+            revert BadReceipt();
+        }
     }
 
     function _signer(bytes32 h, bytes calldata signature) private pure returns (address) {
@@ -313,7 +394,10 @@ contract ValidityDispute {
     function _settle(Challenge storage c, uint256 id, uint64 digest) private {
         c.status = Status.Answered;
         openCount[id] -= 1;
-        if (c.byPrincipal) reserve.release(id);
+        if (c.byPrincipal) {
+            c.deadline = uint64(block.timestamp) + deliveryWait;
+            reserve.release(id);
+        }
         (address answerer, ) = reserve.answererOf(id);
         credit[answerer != address(0) ? answerer : reserve.agentOf(id)] += challengerBond;
         emit Answered(id, digest);
@@ -326,9 +410,14 @@ contract ValidityDispute {
         view
         returns (bytes32 h)
     {
+        h = _up(leafHash(id, digest, s), index, path);
+    }
+
+    /// The root `leaf` reaches along `path` from position `index`.
+    function _up(bytes32 leaf_, uint256 index, bytes32[] calldata path) private pure returns (bytes32 h) {
         uint256 depth = path.length;
         if (depth > MAX_DEPTH || index >> depth != 0) revert BadPath();
-        h = leafHash(id, digest, s);
+        h = leaf_;
         for (uint256 j = 0; j < depth; ++j) {
             h = (index >> j) & 1 == 0 ? keccak256(abi.encodePacked(h, path[j])) : keccak256(abi.encodePacked(path[j], h));
         }

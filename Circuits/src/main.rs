@@ -59,6 +59,7 @@ mod degree;
 mod statement;
 mod dag;
 mod vectors;
+mod deep;
 
 use air::{Clause, PolicyAir, ALL_CLAUSES, EVERY_CLAUSE, RANGE_BITS};
 use p3_uni_stark::{get_max_constraint_degree, get_symbolic_constraints, AirLayout};
@@ -571,6 +572,23 @@ fn main() {
         let dir = std::env::args().nth(at + 1).expect("export-broken needs a directory");
         for (name, ok) in keccak::export_broken(&dir) {
             println!("  broken_{name}.bin written, verifies natively {ok}");
+        }
+        return;
+    }
+    if let Some(at) = std::env::args().position(|a| a == "deep-faults") {
+        let arg = |k: usize| std::env::args().nth(at + k);
+        let dir = arg(1).expect("deep-faults needs a directory");
+        let family = arg(2).expect("deep-faults needs a family");
+        let from: usize = arg(3).and_then(|a| a.parse().ok()).expect("deep-faults needs a first variant");
+        let count: usize = arg(4).and_then(|a| a.parse().ok()).expect("deep-faults needs a count");
+        deep::export(&dir, &family, from, count);
+        return;
+    }
+    if std::env::args().any(|a| a == "deep-census") {
+        let (draws, shapes) = deep::census();
+        println!("base-field draws {draws}");
+        for (i, (h, w)) in shapes.iter().enumerate() {
+            println!("extension {i}: {h} x {w}");
         }
         return;
     }

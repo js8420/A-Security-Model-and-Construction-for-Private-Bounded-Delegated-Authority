@@ -113,15 +113,24 @@ export class Monitor {
     this.openings.set(commitOpening(o), o);
   }
 
-  /** An opening sealed to the monitor, as an answerer holds it. Returns whether it opened. */
-  deliverSealed(blob: Hex): boolean {
+  /**
+   * An opening sealed to the monitor for the settlement of `digest` on the
+   * domain whose id is `domain`, as an answerer holds it and posts it.
+   * Returns whether it opened.
+   */
+  async deliverSealed(blob: Hex, domain: bigint, digest: bigint): Promise<boolean> {
     if (!this.settings.sealKey) return false;
-    try {
-      this.deliverOpening(unseal(blob, this.settings.sealKey));
-      return true;
-    } catch {
-      return false;
+    for (const d of this.domains) {
+      const c = await this.context(d);
+      if (c.domain !== domain) continue;
+      try {
+        this.deliverOpening(unseal(blob, this.settings.sealKey, { commitment: c.terms.commitment, domain, digest }));
+        return true;
+      } catch {
+        return false;
+      }
     }
+    return false;
   }
 
   /** Returns whether every verifier accepted the batch. */
@@ -175,6 +184,8 @@ export class Monitor {
     if (d.dispute) {
       const window = await this.acceptWindow(d);
       if (this.settings.decideAfter >= window) throw new Error(`${d.name}: the decision time must fall inside the acceptance window of ${window} s`);
+      const due = (await d.chain.readContract({ address: d.dispute, abi: disputeAbi, functionName: "deliveryWait" })) as bigint;
+      if (this.settings.deliveryWait < due) throw new Error(`${d.name}: the delivery wait must be at least the ${due} s the dispute contract allows an answerer`);
     }
     const domain = await read<bigint>("domain");
     const commitment = await read<Hex>("commitmentOf", [d.delegation]);
@@ -320,6 +331,12 @@ export class Monitor {
         }
         const expiries = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Expired", args: { id: d.delegation }, ...range });
         for (const l of expiries) this.expired.add(key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }));
+        const posted = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "SealedDelivered", args: { id: d.delegation }, ...range });
+        const c = await this.context(d);
+        for (const l of posted) {
+          const a = l.args as { digest: bigint; opening: Hex };
+          await this.deliverSealed(a.opening, c.domain, a.digest);
+        }
       }
       this.from.set(d.name, head + 1n);
     }

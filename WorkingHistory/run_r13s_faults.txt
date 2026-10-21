@@ -1,0 +1,37 @@
+RANDOM ALTERATIONS OF THE HONEST PROOF: 100 CHANGED
+==============================================================================
+  check                          all
+  parsing                 24 /    24
+  grinding                35 /    35
+  input opening           41 /    41
+  each cell: deployed / independent
+
+  accepted by one verifier and refused by the other: 0
+  refused by both at different checks: 0
+
+FAULTS THE PROVER MADE, ONE PER PROOF, EVERYTHING ELSE HONEST
+==============================================================================
+  draw: 4 proofs
+    fold opening         deployed     2   independent     2
+    constraints          deployed     2   independent     2
+    accepted by one and refused by the other 0; refused at different checks 0
+      draw 0             constraints 1
+      draw 1             constraints 1
+      draw 2             fold opening 1
+      draw 3             fold opening 1
+  codeword: 4 proofs
+    accepted             deployed     2   independent     2
+    final polynomial     deployed     2   independent     2
+    accepted by one and refused by the other 0; refused at different checks 0
+      trace              final polynomial 1
+      quotient or randomisation accepted 2, final polynomial 1
+  trace: 4 proofs
+    constraints          deployed     4   independent     4
+    accepted by one and refused by the other 0; refused at different checks 0
+  public: 4 proofs
+    constraints          deployed     4   independent     4
+    accepted by one and refused by the other 0; refused at different checks 0
+  grinding: 4 proofs
+    grinding             deployed     4   independent     4
+    accepted by one and refused by the other 0; refused at different checks 0
+

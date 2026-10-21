@@ -251,6 +251,11 @@ fn pcs_seeded(num_queries: usize, log_blowup: usize, pow_bits: usize, fixed: boo
     )
 }
 
+/// The deployed FRI parameters on fresh salts.
+pub(crate) fn fri_fresh() -> FriParameters<ChallengeMmcs> {
+    fri_seeded(NUM_QUERIES, LOG_BLOWUP, POW_BITS, false)
+}
+
 /// The FRI half of the configuration, on its own salt stream. Separate seeds:
 /// cloning the input MMCS into this one would blind both commitments from an
 /// identical stream, which is not independent blinding.

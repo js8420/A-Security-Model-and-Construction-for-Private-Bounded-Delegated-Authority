@@ -13,6 +13,11 @@ pragma solidity ^0.8.28;
 /// the settlements on its own chain. And an answer publishes the opening, the
 /// budget, the cap, the validity window and one leaf of each list to every
 /// reader of the chain.
+///
+/// The principal may cancel its own open challenge, as it does once the
+/// agent's late opening has reached it off chain and checks out: the hold
+/// lifts, the agent is credited the challenger's bond as an answer would
+/// credit it, and nothing is published.
 contract RevealDispute {
     /// The principal's policy, committed at issuance with a salt.
     struct Policy {
@@ -59,13 +64,15 @@ contract RevealDispute {
         uint64 spent;
         uint32 holds;
         bool frozen;
+        address agent;
     }
 
     enum Status {
         None,
         Open,
         Answered,
-        Expired
+        Expired,
+        Cancelled
     }
 
     struct Challenge {
@@ -116,6 +123,7 @@ contract RevealDispute {
     event Challenged(uint256 indexed id, uint64 digest, uint64 deadline);
     event Answered(uint256 indexed id, uint64 digest);
     event Expired(uint256 indexed id, uint64 digest);
+    event Cancelled(uint256 indexed id, uint64 digest);
 
     constructor(uint64 domain_, uint64 acceptWindow_, uint64 answerWindow_, uint256 bond) {
         domain = domain_;
@@ -124,11 +132,14 @@ contract RevealDispute {
         challengerBond = bond;
     }
 
-    function register(bytes32 policy, bytes32 revoked, uint64 unitSize, uint64 rangeBase, uint64 rangeLen) external returns (uint256 id) {
+    function register(bytes32 policy, bytes32 revoked, uint64 unitSize, uint64 rangeBase, uint64 rangeLen, address agent)
+        external
+        returns (uint256 id)
+    {
         id = nextId++;
         delegations[id] = Delegation({
             principal: msg.sender, policy: policy, revoked: revoked, unitSize: unitSize, rangeBase: rangeBase,
-            rangeLen: rangeLen, spent: 0, holds: 0, frozen: false
+            rangeLen: rangeLen, spent: 0, holds: 0, frozen: false, agent: agent
         });
     }
 
@@ -213,6 +224,19 @@ contract RevealDispute {
         if (_root(keccak256(abi.encodePacked(o.category)), a.categoryIndex, a.categoryPath) != p.categories) {
             revert CategoryNotAllowed();
         }
+    }
+
+    /// The principal withdraws its challenge before the deadline.
+    function cancel(uint256 id, uint64 digest) external {
+        Challenge storage c = challenges[key(id, digest)];
+        if (c.status != Status.Open) revert NotOpen();
+        if (block.timestamp > c.deadline) revert TooLate();
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.principal) revert NotPrincipal();
+        c.status = Status.Cancelled;
+        d.holds -= 1;
+        credit[d.agent] += challengerBond;
+        emit Cancelled(id, digest);
     }
 
     function expire(uint256 id, uint64 digest) external {

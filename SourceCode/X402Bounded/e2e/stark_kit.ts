@@ -140,3 +140,38 @@ export function offsets(b: Uint8Array): Offsets {
   o.publicValue = at + 8;
   return o as Offsets;
 }
+
+/** The checks a refusal is sorted into, in the order both verifiers make them. */
+export const CHECKS = [
+  "accepted", "parsing", "shape", "out-of-domain point", "grinding", "input opening", "fold opening", "final polynomial", "constraints",
+] as const;
+export type Check = (typeof CHECKS)[number];
+
+/** The check behind the independent verifier's verdict. */
+export function independentCheck(v: { ok: true } | { ok: false; reason: string }): Check {
+  if (v.ok) return "accepted";
+  const r = v.reason;
+  if (r.startsWith("malformed")) return "parsing";
+  if (r === "out-of-domain point on the trace domain") return "out-of-domain point";
+  if (r === "commit grinding" || r === "query grinding") return "grinding";
+  if (r.startsWith("input commitment opening")) return "input opening";
+  if (r.startsWith("fold commitment opening")) return "fold opening";
+  if (r === "final polynomial disagrees with the fold") return "final polynomial";
+  if (r === "constraints do not match the quotient at the out-of-domain point") return "constraints";
+  return "shape";
+}
+
+/** The check behind the deployed verifier's verdict, as `verify-file` prints it. */
+export function deployedCheck(line: string): Check {
+  const l = line.trim();
+  if (l.startsWith("accept")) return "accepted";
+  const r = l.replace(/^reject\s+/, "");
+  if (r.startsWith("malformed")) return "parsing";
+  if (r.includes("OodPointInDomain")) return "out-of-domain point";
+  if (r.includes("InvalidPowWitness")) return "grinding";
+  if (r.includes("InputError")) return "input opening";
+  if (r.includes("CommitPhaseMmcsError")) return "fold opening";
+  if (r.includes("FinalPolyMismatch")) return "final polynomial";
+  if (r.includes("OodEvaluationMismatch")) return "constraints";
+  return "shape";
+}

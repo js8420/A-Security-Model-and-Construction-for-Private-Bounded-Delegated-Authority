@@ -2,9 +2,12 @@
 # The evidence behind the independent verifier: its own test set, differential
 # testing of both verifiers on randomly altered proofs, and mutation testing of
 # the independent verifier's code against the smaller first test set and
-# against the full one.
+# against the full one, and faulty proofs the prover makes that reach each
+# deep check.
 # Usage: run_assurance.sh TAG [seeds] [per-seed]. With MUTATE set to a
 # comma-separated list of files under src/stark, only those are mutated.
+# DEEP sets how many faulty proofs of each family are made (default 4), and
+# MUTATION=no skips the mutation testing.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
@@ -59,13 +62,31 @@ out="$hist/run_${tag}_fuzz.txt"
     echo "DIFFERENTIAL TESTING OF THE TWO VERIFIERS: $seeds SEEDS, $per ALTERATIONS EACH"
     pids=()
     for s in $(seq 1 "$seeds"); do
-        SEED=$s COUNT=$per npx tsx e2e/stark_fuzz.ts > "$work/fuzz_$s.txt" &
+        SEED=$s COUNT=$per FUZZ_JSON="$work/fuzz_$s.json" npx tsx e2e/stark_fuzz.ts > "$work/fuzz_$s.txt" &
         pids+=($!)
     done
     for p in "${pids[@]}"; do wait "$p"; done
     cat "$work"/fuzz_*.txt
 } | tee "$out"
 
+deep=${DEEP:-4}
+chunk=25
+mkdir "$work/deep"
+results="$hist/run_${tag}_deep.jsonl"
+: > "$results"
+for fam in draw codeword trace public grinding; do
+    from=0
+    while [ "$from" -lt "$deep" ]; do
+        n=$(( deep - from < chunk ? deep - from : chunk ))
+        "$bin" deep-faults "$work/deep" "$fam" "$from" "$n"
+        DEEP_DIR="$work/deep" FAMILY="$fam" DEEP_RESULTS="$results" npx tsx e2e/stark_deep.ts
+        from=$(( from + n ))
+    done
+done
+for f in "$work"/fuzz_*.json; do cp "$f" "$hist/run_${tag}_$(basename "$f")"; done
+python3 "$here/../Analysis/fault_summary.py" "$work" "$results" | tee "$hist/run_${tag}_faults.txt"
+
+if [ "${MUTATION:-yes}" = no ]; then exit 0; fi
 cores=$(nproc)
 workers=${STRYKER_CONCURRENCY:-$(( cores > 2 ? cores / 2 : 1 ))}
 for set in base full; do

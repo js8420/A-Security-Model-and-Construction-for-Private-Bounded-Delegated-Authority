@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConstraints, verifyStark } from "../src/index.js";
-import { offsets } from "./stark_kit.js";
+import { CHECKS, deployedCheck, independentCheck, offsets, type Check } from "./stark_kit.js";
 
 /**
  * Differential testing of the two verifiers on randomly altered copies of the
@@ -13,7 +13,9 @@ import { offsets } from "./stark_kit.js";
  * polynomial, grinding witness, degree or public values, where the
  * transcript and the constraint check read; and the file cut short or
  * extended. Prints one line of counts, and every alteration on which the
- * verifiers disagree or which either accepts.
+ * verifiers disagree or which either accepts. With FUZZ_JSON set, also
+ * writes how many alterations each verifier refused at each check, and how
+ * many it refused at a different check from the other.
  */
 const env = (k: string) => {
   const v = process.env[k];
@@ -73,15 +75,17 @@ function alter(kind: number): { bytes: Uint8Array; what: string } {
 
 const dir = mkdtempSync(join(tmpdir(), "fuzz-"));
 const deployed = (bytes: Uint8Array) =>
-  new Promise<boolean>((resolve) => {
+  new Promise<string>((resolve) => {
     const file = join(dir, "p.bin");
     writeFileSync(file, bytes);
-    execFile(bin, ["verify-file", file], (err, stdout) => resolve(!err && stdout.trim().startsWith("accept")));
+    execFile(bin, ["verify-file", file], (_err, stdout) => resolve(stdout.trim()));
   });
 
 async function main() {
   const tally = { both: 0, neither: 0, deployedOnly: 0, independentOnly: 0, unchanged: 0 };
   const odd: string[] = [];
+  const at = (): Record<Check, number> => Object.fromEntries(CHECKS.map((c) => [c, 0])) as Record<Check, number>;
+  const checks = { deployed: at(), independent: at(), otherCheck: 0 };
   for (let i = 0; i < count; i++) {
     const kind = i % 4;
     const { bytes, what } = alter(kind);
@@ -89,8 +93,13 @@ async function main() {
       tally.unchanged += 1;
       continue;
     }
-    const d = await deployed(bytes);
-    const v = verifyStark(bytes, air).ok;
+    const dc = deployedCheck(await deployed(bytes));
+    const ic = independentCheck(verifyStark(bytes, air));
+    checks.deployed[dc] += 1;
+    checks.independent[ic] += 1;
+    if (dc !== ic) checks.otherCheck += 1;
+    const d = dc === "accepted";
+    const v = ic === "accepted";
     if (d && v) tally.both += 1;
     else if (!d && !v) tally.neither += 1;
     else if (d) tally.deployedOnly += 1;
@@ -100,6 +109,8 @@ async function main() {
   rmSync(dir, { recursive: true, force: true });
   console.log(`seed ${seed}: ${count} alterations; both refuse ${tally.neither}, both accept ${tally.both}, only the deployed accepts ${tally.deployedOnly}, only the independent accepts ${tally.independentOnly}, left unchanged ${tally.unchanged}`);
   for (const l of odd) console.log(l);
+  const out = process.env.FUZZ_JSON;
+  if (out) writeFileSync(out, JSON.stringify({ seed, count, ...tally, checks }));
 }
 
 main().catch((e) => {

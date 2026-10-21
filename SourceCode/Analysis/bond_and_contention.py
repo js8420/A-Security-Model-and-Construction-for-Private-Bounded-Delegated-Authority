@@ -16,6 +16,10 @@ W_D = 8.0
 DELTA_F = 12.0 + 2.0
 SIGMA_X = 12.0 + 0.5
 THETA = 1.0
+# The monitor's margin: the decision time comes this long after the latest
+# moment an honest agent's delivery can arrive, w_d + theta after the signed
+# time, so the monitor has time to verify what arrives last.
+MARGIN = 1.0
 C_ANS = 82.0 / 60.0
 W_RATE = DAY
 # The challenger's bond, which is also the bounty a slash pays: set at the
@@ -23,7 +27,7 @@ W_RATE = DAY
 BETA = 3.616 * 3179.2 / 3600
 
 def windows():
-    w = W_D + DELTA_F + SIGMA_X + THETA
+    w = W_D + THETA + MARGIN + DELTA_F + SIGMA_X
     k_w = math.ceil((w + THETA) / W_RATE) + 1
     w_a = C_ANS + DELTA_F + SIGMA_X
     print("WINDOWS ON BASE, HOURS")
@@ -32,7 +36,9 @@ def windows():
     print(f"  forced inclusion Delta_f                   {DELTA_F:8.1f}")
     print(f"  clock bound sigma_x                        {SIGMA_X:8.1f}")
     print(f"  signed-time tolerance theta                {THETA:8.1f}")
-    print(f"  acceptance window w = w_d + Delta_f + sigma_x + theta {w:5.1f}")
+    print(f"  monitor's margin m                         {MARGIN:8.1f}")
+    print(f"  acceptance window w = w_d + theta + m + Delta_f + sigma_x {w:5.1f}")
+    print(f"  decision time after the signed time, w - Delta_f - sigma_x {w - DELTA_F - SIGMA_X:4.1f}")
     print(f"  rate window W                              {W_RATE:8.1f}")
     print(f"  windows a bond covers, ceil((w+theta)/W)+1 {k_w:8d}")
     print(f"  answer window at least c + Delta_f + sigma_x {w_a:6.1f}, set to 30")

@@ -1,0 +1,50 @@
+RANDOM ALTERATIONS OF THE HONEST PROOF: 2000 CHANGED
+==============================================================================
+  check                          all
+  parsing                503 /   503
+  grinding               642 /   642
+  input opening          848 /   848
+  fold opening             7 /     7
+  each cell: deployed / independent
+
+  accepted by one verifier and refused by the other: 0
+  refused by both at different checks: 0
+
+FAULTS THE PROVER MADE, ONE PER PROOF, EVERYTHING ELSE HONEST
+==============================================================================
+  draw: 200 proofs
+    fold opening         deployed   134   independent   134
+    final polynomial     deployed    32   independent    32
+    constraints          deployed    34   independent    34
+    accepted by one and refused by the other 0; refused at different checks 0
+      draw 0                                       constraints 17
+      draw 1                                       constraints 17
+      draw 2                                       fold opening 17
+      draw 3                                       fold opening 17
+      draw 4                                       fold opening 17
+      draw 5                                       fold opening 17
+      draw 6                                       fold opening 17
+      draw 7                                       fold opening 17
+      draw 8                                       fold opening 16
+      draw 9                                       fold opening 16
+      draw 10                                      final polynomial 16
+      draw 11                                      final polynomial 16
+  codeword: 200 proofs
+    accepted             deployed    72   independent    72
+    final polynomial     deployed   125   independent   125
+    constraints          deployed     3   independent     3
+    accepted by one and refused by the other 0; refused at different checks 0
+      trace extension, one entry                   final polynomial 3, constraints 3
+      trace extension, half the entries            final polynomial 6
+      quotient or randomisation extension, one entry accepted 72, final polynomial 22
+      quotient or randomisation extension, half the entries final polynomial 94
+  trace: 200 proofs
+    constraints          deployed   200   independent   200
+    accepted by one and refused by the other 0; refused at different checks 0
+  public: 200 proofs
+    constraints          deployed   200   independent   200
+    accepted by one and refused by the other 0; refused at different checks 0
+  grinding: 200 proofs
+    grinding             deployed   200   independent   200
+    accepted by one and refused by the other 0; refused at different checks 0
+

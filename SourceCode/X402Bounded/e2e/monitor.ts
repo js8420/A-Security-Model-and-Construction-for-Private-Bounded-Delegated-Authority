@@ -16,8 +16,8 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
-  reserveAbi, seal, sealingKeyOf, statements, unitsOf, unseal,
-  type Check, type Domain, type Opening, type Policy, type Record, type Statement,
+  reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
+  type Check, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
 import { offsets } from "./stark_kit.js";
@@ -29,6 +29,7 @@ const KEYS = {
   sender: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
   payee: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   seal: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
+  answerer: "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
 } as const;
 const P = 0xffffffff00000001n;
 const ZERO: Address = "0x0000000000000000000000000000000000000000";
@@ -44,6 +45,7 @@ function artifact(file: string, name: string): { abi: Abi; bytecode: Hex } {
 }
 
 const agent = privateKeyToAccount(KEYS.agent);
+const answererKey = privateKeyToAccount(KEYS.answerer);
 const payee = privateKeyToAccount(KEYS.payee).address;
 const reserveFull = artifact("Reserve.sol", "Reserve").abi;
 
@@ -56,11 +58,13 @@ interface Terms {
   revocationRoot: Hex;
   secretHash: Hex;
   openOnRequest?: boolean;
+  answerer?: boolean;
 }
 
 const ACCEPT_WINDOW = 86_400n;
 const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
+const WAIT = 600n;
 
 /**
  * A reserve on one local chain, with a dispute contract whose answer system
@@ -73,6 +77,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const pub = createPublicClient({ chain: chainDef, transport: http(rpc) }) as PublicClient;
   const principal = createWalletClient({ account: privateKeyToAccount(KEYS.principal), chain: chainDef, transport: http(rpc) });
   const sender = createWalletClient({ account: privateKeyToAccount(KEYS.sender), chain: chainDef, transport: http(rpc) });
+  const answering = createWalletClient({ account: answererKey, chain: chainDef, transport: http(rpc) });
   const done = async (h: Hex) => {
     const r = await pub.waitForTransactionReceipt({ hash: h });
     if (r.status !== "success") throw new Error(`transaction ${h} reverted`);
@@ -89,7 +94,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const reserve = await deploy("Reserve.sol", "Reserve", [domainId, token, ZERO, poseidon, 3600n, 2n * 86400n]);
   const vkey = keccak256("0x01");
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
-  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, ACCEPT_WINDOW, ANSWER_WINDOW, SLOT, parseEther("0.01")]);
+  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, ACCEPT_WINDOW, ANSWER_WINDOW, SLOT, parseEther("0.01"), WAIT]);
   await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "setDispute", args: [vd] }));
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
@@ -102,10 +107,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     const terms = {
       agent: agent.address, cap: t.cap, velocityN: 20n, windowW: 86_400n, secretHash: t.secretHash, funding: 0,
       deposit: 10n ** 12n, commitment: t.commitment, revocationRoot: t.revocationRoot, expiry: now + 30n * 86_400n,
-      unitSize: t.unitSize, rangeBase: t.rangeBase, rangeLen: t.rangeLen, monitor: ZERO, answerer: ZERO,
+      unitSize: t.unitSize, rangeBase: t.rangeBase, rangeLen: t.rangeLen, monitor: ZERO, answerer: t.answerer ? answererKey.address : ZERO,
       openOnRequest: t.openOnRequest ?? false,
     };
     await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms], value: parseEther("0.1") }));
+    if (t.answerer) await done(await answering.writeContract({ address: reserve, abi: reserveFull, functionName: "stakeAnswerer", args: [id], value: parseEther("0.2") }));
     return { name, chain: pub, wallet: principal, reserve, delegation: id, dispute: vd };
   };
 
@@ -136,6 +142,37 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "answer", args: [d.delegation, r.digest, s, 0n, [], root] }));
   };
 
+  /** The record a settlement's calls name. */
+  const recordOf = (r: { amount: bigint; payee: Address; time: bigint; elems: bigint[]; epoch: bigint }) =>
+    ({ elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch });
+
+  /**
+   * The answerer's receipt for a settlement standing as a batch of one, as the
+   * stand-in answer system takes it: the settlement's leaf is the batch's root.
+   */
+  const receipt = async (d: Domain, r: Record, sealedRoot: Hex, receivedAt: bigint) => {
+    const root = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "rootOf", args: [d.delegation, r.digest, recordOf(r), 0n, []] })) as Hex;
+    const h = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "receiptDigest", args: [d.delegation, root, sealedRoot, receivedAt] })) as Hex;
+    return { sealedRoot, receivedAt, signature: await answererKey.sign({ hash: h }) };
+  };
+
+  /** The answerer posts a settlement's sealed opening on chain under its receipt. */
+  const deliver = async (d: Domain, r: Record, rc: { sealedRoot: Hex; receivedAt: bigint; signature: Hex }, opening: Hex, sealedPath: Hex[]) => {
+    await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] }));
+  };
+
+  /** Anyone holding the receipt slashes an answerer that withheld; returns whether it went through. */
+  const slashWithholding = async (d: Domain, r: Record, rc: { sealedRoot: Hex; receivedAt: bigint; signature: Hex }) => {
+    try {
+      await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "slashWithholding", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const stakeOf = async (d: Domain) => ((await pub.readContract({ address: reserve, abi: reserveFull, functionName: "answererOf", args: [d.delegation] })) as [Address, bigint])[1];
+
   const state = async (d: Domain) => {
     const [frozen, holds] = (await pub.readContract({ address: reserve, abi: reserveAbi, functionName: "frozenOf", args: [d.delegation] })) as [boolean, number];
     return { frozen, holds };
@@ -146,7 +183,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  return { delegate, settle, answer, state, now, advance };
+  return { delegate, settle, answer, state, now, advance, receipt, deliver, slashWithholding, stakeOf };
 }
 
 const lines: string[] = [];
@@ -192,7 +229,6 @@ async function main() {
   };
   const ids = new Map([["domain A", 8453n], ["domain B", 10n]]);
   const UNIT = 10_000n;
-  const WAIT = 600n;
   const DECIDE = ACCEPT_WINDOW - 600n;
   const PAST_DEADLINE = Number(ANSWER_WINDOW + 40n * SLOT);
   const plain: Terms = { cap: 50_000n, unitSize: UNIT, rangeBase: 0n, rangeLen: 1024n, commitment: keccak256("0x02"), revocationRoot: keccak256("0x03"), secretHash: keccak256("0x01") };
@@ -284,11 +320,12 @@ async function main() {
   await mV.deliverProof(honest);
 
   const to = sealingKeyOf(KEYS.seal);
+  const sealAll = (os: Opening[]): Sealed[] => os.map((o) => ({ domain: o.domain, digest: o.nonce, blob: seal(o, to, { commitment: pt.commitment, domain: o.domain, digest: o.nonce }) }));
   const dU = await A.delegate(asked);
   const mU = new Monitor([dU], provenPolicy, proving(gateBoth(), KEYS.seal));
   const u = await settleProven(dU);
   const answererU = new Answerer();
-  answererU.receive(honest, u.os.map((o) => seal(o, to)));
+  answererU.receive(honest, sealAll(u.os));
   const dU2 = await A.delegate(asked);
   const mU2 = new Monitor([dU2], provenPolicy, proving(gateBoth(), KEYS.seal));
   await settleProven(dU2);
@@ -298,9 +335,28 @@ async function main() {
   const mT = new Monitor([dT], provenPolicy, proving(gateBoth(), KEYS.seal));
   const t = await settleProven(dT);
   const answererT = new Answerer();
-  answererT.receive(honest, t.os.map((o) => seal(o, to)));
+  answererT.receive(honest, sealAll(t.os));
+  const dS = await A.delegate({ ...proven, answerer: true });
+  const mS = new Monitor([dS], provenPolicy, proving(gateBoth(), KEYS.seal));
+  const sS = await settleProven(dS);
+  const answererS = new Answerer();
+  const sealedS = sealAll(sS.os);
+  answererS.receive(honest, sealedS);
+  const dR = await A.delegate({ ...proven, answerer: true });
+  const mR = new Monitor([dR], provenPolicy, proving(gateBoth(), KEYS.seal));
+  const sR = await settleProven(dR);
+  const answererR = new Answerer();
+  const sealedR = sealAll(sR.os);
+  answererR.receive(honest, sealedR);
+  let twice = false;
+  try {
+    answererR.receive(honest, sealedS);
+  } catch {
+    twice = true;
+  }
+  const receivedAt = await A.now();
 
-  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT];
+  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR];
   const early = await Promise.all(all.map((m) => m.poll()));
   check("before the decision time the monitor acts on nothing: no challenge and no freeze under any delegation", early.every((r) => r.challenged.length === 0 && !r.froze));
   check("the honest batch passes both verifiers; the forged one is refused beside a deployed verifier that accepts anything", acceptedX && !acceptedY);
@@ -323,14 +379,18 @@ async function main() {
   const plainHex = u.os.map((o) => encodeOpening(o).slice(2));
   check("the answerer holds ciphertexts only: no opening's encoding appears in what it stores", held.sealed.every((b) => plainHex.every((p) => !b.includes(p))));
   check("every sealed opening has one length, so its size reveals no field", new Set(held.sealed.map((b) => b.length)).size === 1, `${(held.sealed[0].length - 2) / 2} bytes`);
+  const b0 = { commitment: pt.commitment, domain: payments[0].domain, digest: payments[0].digest };
   let wrongKey = false;
   try {
-    unseal(held.sealed[0], KEYS.agent);
+    unseal(held.sealed[0], KEYS.agent, b0);
   } catch {
     wrongKey = true;
   }
   const flipped = `${held.sealed[0].slice(0, -2)}${held.sealed[0].endsWith("00") ? "01" : "00"}` as Hex;
-  check("a key other than the monitor's does not open a sealed opening, and an altered one is refused", wrongKey && !mU.deliverSealed(flipped));
+  check("a key other than the monitor's does not open a sealed opening, and an altered one is refused", wrongKey && !(await mU.deliverSealed(flipped, b0.domain, b0.digest)));
+  const otherDigest = payments[n - 1].digest;
+  check("a sealed opening is bound to its settlement: offered for another settlement of the batch, it does not open", !(await mU.deliverSealed(held.sealed[0], b0.domain, otherDigest)) && (await mU.deliverSealed(held.sealed[0], b0.domain, b0.digest)));
+  check("the answerer takes a batch once: a second set of openings for a proof it holds is refused", twice);
 
   await A.advance(Number(DECIDE));
   const rX = await mX.poll();
@@ -353,6 +413,9 @@ async function main() {
   check(`the offline agent whose answerer holds the proof alone: all ${n} challenged`, rU2.challenged.length === n, rU2.reasons[0] ?? "");
   const rT = await mT.poll();
   check("the offline agent opening every payment, with its answerer: nothing challenged", rT.challenged.length === 0 && !rT.froze, rT.reasons.join("; "));
+  const rS = await mS.poll();
+  const rR = await mR.poll();
+  check(`two offline agents whose staked answerers have delivered nothing yet: all ${n} challenged under each`, rS.challenged.length === n && rR.challenged.length === n);
 
   for (const r of rY.challenged) await A.answer(dY, r);
   const lifted = await A.state(dY);
@@ -360,6 +423,16 @@ async function main() {
   for (const r of rW.challenged) await A.answer(dW, r);
   for (const r of rV.challenged) await A.answer(dV, r);
   for (const r of rU2.challenged) await A.answer(dU2, r);
+  const tree = (s: Sealed[]) => sealedTree(s.map((x) => x.blob));
+  for (const r of rS.challenged) {
+    await A.answer(dS, r);
+    const i = sealedS.findIndex((x) => x.digest === r.digest);
+    const one = tree([sealedS[i]]);
+    await A.deliver(dS, r, await A.receipt(dS, r, one.root, receivedAt), sealedS[i].blob, one.path(0));
+  }
+  for (const r of rR.challenged) await A.answer(dR, r);
+  const servedS = await answererS.serve(mS, true);
+  const servedR = await answererR.serve(mR, true);
   await A.advance(Number(WAIT) + 1);
   const fY = await mY.poll();
   check("no backing proof arrives within the delivery wait, so the monitor freezes the delegation", fY.froze && (await A.state(dY)).frozen, fY.reasons[0] ?? "");
@@ -369,11 +442,19 @@ async function main() {
   check("the opening outside the policy, answered on chain: frozen, as no answer can change what the opening says", fV.froze && fV.reasons.some((r) => r.includes("category")), fV.reasons[0] ?? "");
   const fU2 = await mU2.poll();
   check("the answerer without openings answers every challenge, yet the honest delegation is frozen: the answerer needs the sealed openings", fU2.froze, fU2.reasons[0] ?? "");
+  const fS = await mS.poll();
+  check(`the staked answerer answers, hands over the proof and posts all ${n} sealed openings on chain; the monitor reads them there and freezes nothing`, servedS.proofs === 1 && servedS.opened === 0 && mS.openedCount() === n && !fS.froze && !(await A.state(dS)).frozen, fS.reasons.join("; "));
+  const fR = await mR.poll();
+  const stakeBefore = await A.stakeOf(dR);
+  const r0 = rR.challenged[0];
+  const i0 = sealedR.findIndex((x) => x.digest === r0.digest);
+  const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, receivedAt));
+  check("an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
   const zBefore = await A.state(dZ);
   await A.advance(PAST_DEADLINE);
   const fZ = await mZ.poll();
   check("the extra unit's challenge goes unanswered, as no proof of it exists; past its deadline the monitor expires it and the delegation is frozen", !zBefore.frozen && fZ.froze && (await A.state(dZ)).frozen, fZ.reasons[0] ?? "");
-  const ends = await Promise.all([dX, dU, dT].map((d) => A.state(d)));
+  const ends = await Promise.all([dX, dU, dT, dS].map((d) => A.state(d)));
   check("the honest delegations, the offline ones with sealed openings among them, are neither held nor frozen", ends.every((e) => !e.frozen && e.holds === 0));
 
   section("budget tripwire, no proof read");

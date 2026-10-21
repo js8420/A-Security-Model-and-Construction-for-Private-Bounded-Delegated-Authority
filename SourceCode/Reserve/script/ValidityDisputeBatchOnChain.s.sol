@@ -39,7 +39,7 @@ contract ValidityDisputeBatchOnChain is Script {
         vm.startBroadcast(pk);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
-        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), 1 days, 1 days, 2 hours, 0.01 ether);
+        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), 1 days, 1 days, 2 hours, 0.01 ether, 8 hours);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);

@@ -13,6 +13,7 @@ contract RevealDisputeTest is Test {
     uint64 constant UNIT = 10_000;
     uint64 constant BUDGET = 100_000;
     uint64 constant T0 = 5_000;
+    address constant AGENT = address(0xA6E47);
 
     struct Setup {
         RevealDispute rd;
@@ -35,7 +36,7 @@ contract RevealDisputeTest is Test {
             budget: BUDGET, cap: 50_000, tStart: 0, tExpiry: T0 + 30 days,
             merchants: KeccakTree.root(s.merchants), categories: KeccakTree.root(s.categories), salt: keccak256("policy salt")
         });
-        s.id = s.rd.register(keccak256(abi.encode(s.p)), KeccakTree.root(s.revoked), UNIT, 0, 4096);
+        s.id = s.rd.register(keccak256(abi.encode(s.p)), KeccakTree.root(s.revoked), UNIT, 0, 4096, AGENT);
     }
 
     function _opening(uint64 domain, uint64 amount, uint64 merchant, uint64 category, uint64 runStart, uint64 nonce)
@@ -52,7 +53,7 @@ contract RevealDisputeTest is Test {
     /// Settles the opening and opens the principal's challenge. Returns the running total recorded with it.
     function _settleAndChallenge(Setup memory s, uint64 digest, RevealDispute.Opening memory o) internal returns (uint64 total) {
         s.rd.settle(s.id, digest, o.amount, o.payee, o.time, keccak256(abi.encode(o)));
-        (, , , , , , total, , ) = s.rd.delegations(s.id);
+        (, , , , , , total, , , ) = s.rd.delegations(s.id);
         s.rd.open{value: 0.01 ether}(s.id, digest, o.amount, o.payee, o.time, keccak256(abi.encode(o)), total);
     }
 
@@ -124,7 +125,7 @@ contract RevealDisputeTest is Test {
         Setup memory s = _setup(DOMAIN, 7);
         s.p.tStart = T0 + 1;
         RevealDispute.Policy memory p = s.p;
-        uint256 id = s.rd.register(keccak256(abi.encode(p)), KeccakTree.root(s.revoked), UNIT, 0, 4096);
+        uint256 id = s.rd.register(keccak256(abi.encode(p)), KeccakTree.root(s.revoked), UNIT, 0, 4096, AGENT);
         s.id = id;
         RevealDispute.Opening memory o = _opening(DOMAIN, 20_000, 5, 3, 0, 1);
         uint64 total = _settleAndChallenge(s, 1, o);
@@ -213,6 +214,43 @@ contract RevealDisputeTest is Test {
         vm.warp(T0 + 1 days + 1);
         vm.expectRevert(RevealDispute.WindowClosed.selector);
         s.rd.open{value: 0.01 ether}(s.id, 1, o.amount, o.payee, o.time, keccak256(abi.encode(o)), o.amount);
+    }
+
+    /// The principal, holding the late opening off chain, cancels: the hold
+    /// lifts, the agent is credited the bond, and nothing is revealed.
+    function testCancelReleasesTheHoldAndCreditsTheAgent() public {
+        Setup memory s = _setup(DOMAIN, 7);
+        RevealDispute.Opening memory o = _opening(DOMAIN, 20_000, 5, 3, 0, 1);
+        _settleAndChallenge(s, 1, o);
+        vm.expectRevert(RevealDispute.Held.selector);
+        s.rd.settle(s.id, 2, 1, address(1), T0, bytes32(0));
+        s.rd.cancel(s.id, 1);
+        assertEq(uint256(_status(s, 1)), uint256(RevealDispute.Status.Cancelled));
+        assertEq(s.rd.credit(AGENT), 0.01 ether);
+        s.rd.settle(s.id, 2, 1, address(1), T0, bytes32(0));
+        vm.expectRevert(RevealDispute.NotOpen.selector);
+        _answer(s, 1, o, o.amount, 0);
+        vm.warp(block.timestamp + 2 hours + 1);
+        vm.expectRevert(RevealDispute.NotOpen.selector);
+        s.rd.expire(s.id, 1);
+    }
+
+    function testOnlyThePrincipalCancels() public {
+        Setup memory s = _setup(DOMAIN, 7);
+        RevealDispute.Opening memory o = _opening(DOMAIN, 20_000, 5, 3, 0, 1);
+        _settleAndChallenge(s, 1, o);
+        vm.prank(AGENT);
+        vm.expectRevert(RevealDispute.NotPrincipal.selector);
+        s.rd.cancel(s.id, 1);
+    }
+
+    function testCancelAfterTheDeadlineRefused() public {
+        Setup memory s = _setup(DOMAIN, 7);
+        RevealDispute.Opening memory o = _opening(DOMAIN, 20_000, 5, 3, 0, 1);
+        _settleAndChallenge(s, 1, o);
+        vm.warp(block.timestamp + 2 hours + 1);
+        vm.expectRevert(RevealDispute.TooLate.selector);
+        s.rd.cancel(s.id, 1);
     }
 
     /// Execution gas of one answer, warm, by list depth: lists of 2^depth

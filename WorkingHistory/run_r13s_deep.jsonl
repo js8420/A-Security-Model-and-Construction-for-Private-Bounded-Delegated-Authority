@@ -1,0 +1,20 @@
+{"family":"draw","variant":0,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":1,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":2,"where":"draw 2","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":3,"where":"draw 3","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"codeword","variant":0,"where":"trace extension 0 (4096 x 14294), entry 3476832","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":1,"where":"quotient or randomisation extension 1 (4096 x 4), entry 3535","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":2,"where":"quotient or randomisation extension 2 (4096 x 4), entry 13220","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":3,"where":"quotient or randomisation extension 3 (4096 x 4), entry 11661","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"trace","variant":0,"where":"trace row 28 column 10048","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":1,"where":"trace row 114 column 9544","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":2,"where":"trace row 39 column 2265","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":3,"where":"trace row 57 column 11705","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":0,"where":"public value 22651","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":1,"where":"public value 16815","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":2,"where":"public value 3768","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":3,"where":"public value 5775","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"grinding","variant":0,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":1,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":2,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":3,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}

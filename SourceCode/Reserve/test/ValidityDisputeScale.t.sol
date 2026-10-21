@@ -45,6 +45,7 @@ contract ValidityDisputeScaleTest is Test {
     uint64 constant ACCEPT = 1 days;
     uint64 constant WINDOW = 1 days;
     uint64 constant SLOT = 2 hours;
+    uint64 constant DELIVERY = 8 hours;
     uint64 constant LIFE = 30 days;
     bytes32 constant PROGRAM = bytes32(uint256(1));
 
@@ -61,7 +62,7 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(100 days);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT + 1 hours);
-        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND, DELIVERY);
         acc.setDispute(address(vd));
         vm.deal(principal, 100 ether);
         vm.deal(challenger, 100 ether);
@@ -581,9 +582,20 @@ contract ValidityDisputeScaleTest is Test {
         acc.stakeAnswerer{value: AGENT_BOND}(r);
     }
 
-    function _receipt(uint256 pk, uint256 r, bytes32 root, uint64 at) internal view returns (bytes memory) {
-        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, at));
-        return abi.encodePacked(rr, ss, v);
+    /// Stands for the root of a batch's sealed openings in tests that do not deliver one.
+    bytes32 constant SEALED_ROOT = keccak256("sealed openings");
+
+    function _receipt(uint256 pk, uint256 r, bytes32 root, uint64 at) internal view returns (ValidityDispute.Receipt memory) {
+        return _receiptOver(pk, r, root, SEALED_ROOT, at);
+    }
+
+    function _receiptOver(uint256 pk, uint256 r, bytes32 root, bytes32 sealedRoot, uint64 at)
+        internal
+        view
+        returns (ValidityDispute.Receipt memory)
+    {
+        (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, sealedRoot, at));
+        return ValidityDispute.Receipt({sealedRoot: sealedRoot, receivedAt: at, signature: abi.encodePacked(rr, ss, v)});
     }
 
     /// An answer pays the registered answerer, whoever sends it.
@@ -606,7 +618,7 @@ contract ValidityDisputeScaleTest is Test {
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
         uint64 at = uint64(block.timestamp);
-        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
         _openBy(principal, r, 5);
         vm.warp(_deadline(r, 5) + 1);
         uint256 p0 = principal.balance;
@@ -617,7 +629,7 @@ contract ValidityDisputeScaleTest is Test {
         uint256 p1 = principal.balance;
         uint256 c0 = challenger.balance;
         vm.prank(challenger);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
         assertEq(agent.balance, a0);
         assertEq(principal.balance, p1);
         assertEq(challenger.balance, c0 + BOND);
@@ -638,13 +650,13 @@ contract ValidityDisputeScaleTest is Test {
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
         uint64 at = uint64(block.timestamp);
-        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
         _openBy(principal, r, 5);
         vm.expectRevert(ValidityDispute.NotExpired.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
         _answerAlone(r, 5);
         vm.expectRevert(ValidityDispute.NotExpired.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
     }
 
     function _expired() internal returns (uint256 r, Settlement memory s, uint64 at) {
@@ -660,9 +672,9 @@ contract ValidityDisputeScaleTest is Test {
     /// A receipt signed by anyone but the registered answerer moves nothing.
     function testReceiptByAnotherKeyRefused() public {
         (uint256 r, Settlement memory s, uint64 at) = _expired();
-        bytes memory rc = _receipt(OTHER_PK, r, vd.leafHash(r, 5, s), at);
+        ValidityDispute.Receipt memory rc = _receipt(OTHER_PK, r, vd.leafHash(r, 5, s), at);
         vm.expectRevert(ValidityDispute.BadReceipt.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
     }
 
     /// A receipt for a batch the settlement is not in moves nothing.
@@ -670,11 +682,11 @@ contract ValidityDisputeScaleTest is Test {
         (uint256 r, Settlement memory s, uint64 at) = _expired();
         bytes32[] memory path = new bytes32[](1);
         path[0] = keccak256("other");
-        bytes memory rc = _receipt(ANSWERER_PK, r, keccak256("another root"), at);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, keccak256("another root"), at);
         vm.expectRevert(ValidityDispute.BadReceipt.selector);
-        vd.slashAnswerer(r, 5, s, 0, path, at, rc);
+        vd.slashAnswerer(r, 5, s, 0, path, rc);
         vm.expectRevert(ValidityDispute.BadReceipt.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
     }
 
     /// An answerer handed the proof with less than an answer window left is
@@ -682,17 +694,167 @@ contract ValidityDisputeScaleTest is Test {
     function testReceiptWithoutAFullWindowRefused() public {
         (uint256 r, Settlement memory s, ) = _expired();
         uint64 late = _deadline(r, 5) - WINDOW + 1;
-        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), late);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), late);
         vm.expectRevert(ValidityDispute.ReceiptTooLate.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), late, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
     }
 
     /// A receipt with a different time than the one signed moves nothing.
     function testReceiptTimeIsSigned() public {
         (uint256 r, Settlement memory s, uint64 at) = _expired();
-        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        rc.receivedAt = at - 1;
         vm.expectRevert(ValidityDispute.BadReceipt.selector);
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at - 1, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
+        rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        rc.sealedRoot = keccak256("other openings");
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
+    }
+
+    /// One sealed opening, 349 bytes as every one is, standing for a
+    /// ciphertext the contract never reads.
+    function _sealed(uint256 tag) internal pure returns (bytes memory b) {
+        b = new bytes(349);
+        for (uint256 i = 0; i < 349; i += 32) {
+            bytes32 w = keccak256(abi.encode(tag, i));
+            for (uint256 j = 0; j < 32 && i + j < 349; ++j) b[i + j] = w[j];
+        }
+    }
+
+    /// A settlement of a batch of one, receipted with its sealed opening,
+    /// challenged by the principal and answered.
+    function _answered() internal returns (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) {
+        (r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        s = _rec(r, 5);
+        rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp));
+        _openBy(principal, r, 5);
+        _answerAlone(r, 5);
+    }
+
+    /// Answering the principal's challenge opens a delivery due one delivery
+    /// wait later; answering anyone else's does not.
+    function testAnswerToThePrincipalAsksForTheSealedOpening() public {
+        (uint256 r, , ValidityDispute.Receipt memory rc) = _answered();
+        ValidityDispute.Challenge memory c = vd.challengeOf(r, 5);
+        assertEq(uint256(c.status), uint256(ValidityDispute.Status.Answered));
+        assertEq(c.deadline, uint64(block.timestamp) + DELIVERY);
+        _settle(AGENT_PK, r, 6);
+        _openBy(challenger, r, 6);
+        _answerAlone(r, 6);
+        Settlement memory s6 = _rec(r, 6);
+        ValidityDispute.Receipt memory rc6 = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 6, s6), keccak256(_sealed(6)), rc.receivedAt);
+        vm.expectRevert(ValidityDispute.NotDue.selector);
+        vd.deliver(r, 6, s6, 0, new bytes32[](0), rc6, _sealed(6), new bytes32[](0));
+    }
+
+    /// The receipted opening, posted in time, is delivered once and the
+    /// receipt can no longer slash.
+    function testDeliveredOpeningIsPostedAndEndsTheDuty() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.expectEmit(true, false, false, true, address(vd));
+        emit ValidityDispute.SealedDelivered(r, 5, _sealed(5));
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Delivered));
+        vm.expectRevert(ValidityDispute.NotDue.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+    }
+
+    /// Only the opening the receipt names, at the settlement's own position,
+    /// can be delivered.
+    function testOtherOpeningCannotBeDelivered() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.expectRevert(ValidityDispute.BadPath.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(6), new bytes32[](0));
+        ValidityDispute.Receipt memory other = _receiptOver(OTHER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(6)), rc.receivedAt);
+        vm.expectRevert(ValidityDispute.BadReceipt.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), other, _sealed(6), new bytes32[](0));
+    }
+
+    function testDeliveryAfterTheWaitRefused() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.TooLate.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+    }
+
+    /// Nothing posted within the wait: the receipt burns the stake less the
+    /// bounty, and the agent keeps its bond, since the challenge was answered.
+    function testWithheldOpeningSlashesTheStake() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        address agent = vm.addr(AGENT_PK);
+        uint256 a0 = agent.balance;
+        uint256 c0 = challenger.balance;
+        vm.prank(challenger);
+        uint256 g0 = gasleft();
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        console.log("slash for withholding, batch of one", g0 - gasleft());
+        assertEq(challenger.balance, c0 + BOND);
+        assertEq(agent.balance, a0);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+        assertEq(acc.burnt(), AGENT_BOND - BOND);
+    }
+
+    /// An answerer handed the batch only after the answer is not to blame.
+    function testReceiptAfterTheAnswerCannotSlashWithholding() public {
+        (uint256 r, Settlement memory s, ) = _answered();
+        ValidityDispute.Receipt memory late = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp) + 1);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.ReceiptTooLate.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), late);
+    }
+
+    /// Delivering under a second receipt with other openings is caught by the
+    /// first: two sealed roots for one batch are the answerer's own signatures.
+    function testDeliveryUnderAnotherReceiptSlashes() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        ValidityDispute.Receipt memory swapped = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(9)), rc.receivedAt);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), swapped, _sealed(9), new bytes32[](0));
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), swapped);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// Gas of delivering one sealed opening of a batch of 128, whose two
+    /// paths have seven siblings each.
+    function testDeliveryGas() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        uint256 index = 77;
+        bytes32[] memory path = new bytes32[](7);
+        bytes32[] memory sealedPath = new bytes32[](7);
+        for (uint256 j = 0; j < 7; ++j) {
+            path[j] = keccak256(abi.encode("statement sibling", j));
+            sealedPath[j] = keccak256(abi.encode("sealed sibling", j));
+        }
+        bytes32 root = _climb(vd.leafHash(r, 5, s), index, path);
+        bytes32 sealedRoot = _climb(keccak256(_sealed(5)), index, sealedPath);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, root, sealedRoot, uint64(block.timestamp));
+        _openBy(principal, r, 5);
+        vd.answer(r, 5, s, index, path, abi.encodePacked(root));
+        bytes memory opening = _sealed(5);
+        uint256 g0 = gasleft();
+        vd.deliver(r, 5, s, index, path, rc, opening, sealedPath);
+        console.log("deliver sealed opening, batch of 128", g0 - gasleft());
+    }
+
+    function _climb(bytes32 h, uint256 index, bytes32[] memory path) internal pure returns (bytes32) {
+        for (uint256 j = 0; j < path.length; ++j) {
+            h = (index >> j) & 1 == 0 ? keccak256(abi.encodePacked(h, path[j])) : keccak256(abi.encodePacked(path[j], h));
+        }
+        return h;
     }
 
     /// Only the registered answerer stakes, and it takes its stake back only
@@ -738,13 +900,13 @@ contract ValidityDisputeScaleTest is Test {
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
         uint64 at = uint64(block.timestamp);
-        bytes memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
         _openBy(principal, r, 5);
         vm.warp(_deadline(r, 5) + 1);
         vd.expire(r, 5);
         vm.prank(challenger);
         g0 = gasleft();
-        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), at, rc);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
         console.log("slash answerer, batch of one", g0 - gasleft());
     }
 

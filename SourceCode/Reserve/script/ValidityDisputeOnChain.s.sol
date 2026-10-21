@@ -10,12 +10,16 @@ import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {MockToken} from "../test/MockToken.sol";
 import {Statement} from "../test/Statement.sol";
+import {KeccakTree} from "../test/KeccakTree.sol";
 
 /// The validity dispute as real transactions on a local node, so every gas
 /// figure is a receipt's gasUsed: intrinsic cost, calldata (with the EIP-7623
 /// floor) and execution with cold accounts and storage, as on chain. The
 /// settlement is payment 0 of the exported batch, shares included; the answer
-/// carries its leaf's path to the root the proof commits.
+/// carries its leaf's path to the root the proof commits. The answer to the
+/// principal's challenge asks for the settlement's sealed opening, which is
+/// then posted at its position in a tree of one 349-byte opening per payment
+/// of the batch, under the answerer's receipt.
 ///
 /// The exported payments were signed from time 5000, so the node is started
 /// with its clock there: anvil --timestamp 5000.
@@ -55,6 +59,8 @@ contract ValidityDisputeOnChain is Script {
         vd.open{value: 0.01 ether}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
+        _deliver(d, pk);
+        console.log("sealed opening delivered", uint256(vd.challengeOf(id, digest).status) == 4);
 
         // The unanswered case, on a second reserve whose answer window is zero
         // and whose slot is one second, so the deadline falls within two
@@ -78,12 +84,40 @@ contract ValidityDisputeOnChain is Script {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 8 hours);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
         token.approve(address(acc), type(uint256).max);
-        id = acc.register{value: 1 ether}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));
+        Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1);
+        t.answerer = me;
+        id = acc.register{value: 1 ether}(t);
+        acc.stakeAnswerer{value: 1 ether}(id);
+    }
+
+    /// The answerer's receipt for the batch and its sealed openings, and the
+    /// delivery of payment 0's.
+    function _deliver(Statement.Data memory d, uint256 pk) internal {
+        bytes32[] memory leaves = new bytes32[](Statement.PAYMENTS);
+        for (uint256 i = 0; i < leaves.length; ++i) leaves[i] = keccak256(_opening(i));
+        ValidityDispute.Receipt memory rc = _receipt(pk, KeccakTree.root(leaves));
+        bytes32[] memory sealedPath = KeccakTree.path(leaves, 0);
+        vd.deliver(id, digest, rec, 0, Statement.path(d, 0), rc, _opening(0), sealedPath);
+    }
+
+    function _receipt(uint256 pk, bytes32 sealedRoot) internal view returns (ValidityDispute.Receipt memory) {
+        uint64 at = uint64(block.timestamp);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, vd.receiptDigest(id, Statement.ROOT, sealedRoot, at));
+        return ValidityDispute.Receipt({sealedRoot: sealedRoot, receivedAt: at, signature: abi.encodePacked(r, s, v)});
+    }
+
+    /// A stand-in for payment i's sealed opening: 349 bytes, as every one is.
+    function _opening(uint256 i) internal pure returns (bytes memory b) {
+        b = new bytes(349);
+        for (uint256 j = 0; j < 349; j += 32) {
+            bytes32 w = keccak256(abi.encode(i, j));
+            for (uint256 k = 0; k < 32 && j + k < 349; ++k) b[j + k] = w[k];
+        }
     }
 
     function _settle(Statement.Data memory d) internal {
