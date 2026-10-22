@@ -3,13 +3,16 @@
 # proof, on a bigmem node. Submit from this folder:
 #   sbatch prove.sbatch            output folder out_<job id>
 #   sbatch prove.sbatch batch_a    output folder out_batch_a
+# The slowest healthy run measured took under three hours, so the limit is
+# six: a job on a node that stalls ends there rather than after two days.
+# Add --mail-type=BEGIN,END,FAIL --mail-user=ADDRESS at submission for alerts.
 #SBATCH --job-name=groth16
 #SBATCH --partition=bigmem
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=700G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=06:00:00
 #SBATCH --output=groth16_%j.log
 set -euo pipefail
 HERE=$SLURM_SUBMIT_DIR

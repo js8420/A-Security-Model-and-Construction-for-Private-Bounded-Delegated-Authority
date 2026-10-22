@@ -34,7 +34,12 @@ export interface Policy {
 export interface Settings {
   /** Checks delivered proofs; null reads no proof, and then an opening alone backs a settlement. */
   gate: ProofGate | null;
-  /** How long the agent or its answerer has to deliver what was asked for. */
+  /**
+   * How long the agent or its answerer has to deliver off chain what was
+   * asked for, w_d. The dispute contract gives a staked answerer a longer
+   * posting wait to put the same on chain, long enough to force it in
+   * through Ethereum; the monitor does not wait for that.
+   */
   deliveryWait: bigint;
   /**
    * How long after a settlement's signed time the monitor decides on it.
@@ -66,6 +71,50 @@ interface Chained {
 }
 
 const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`;
+
+/** Shares live in F_p[X]/(X^2 - 7), the extension the circuit forms them in. */
+const P = 0xffffffff00000001n;
+type F2 = readonly [bigint, bigint];
+const md = (x: bigint) => ((x % P) + P) % P;
+const sub2 = (a: F2, b: F2): F2 => [md(a[0] - b[0]), md(a[1] - b[1])];
+const mul2 = (a: F2, b: F2): F2 => [md(a[0] * b[0] + 7n * a[1] * b[1]), md(a[0] * b[1] + a[1] * b[0])];
+const pow = (b: bigint, e: bigint): bigint => {
+  let r = 1n;
+  for (b = md(b); e > 0n; e >>= 1n, b = md(b * b)) if (e & 1n) r = md(r * b);
+  return r;
+};
+const inv2 = (a: F2): F2 => {
+  const n = pow(md(a[0] * a[0] - 7n * a[1] * a[1]), P - 2n);
+  return [md(a[0] * n), md(-a[1] * n)];
+};
+
+/**
+ * Algorithm Extract on the settlements read so far, across every domain: a
+ * nullifier published twice is a unit consumed twice, and two shares under
+ * one key at different indices give the line and so the secret. Each slot
+ * publishes its two share lanes and its nullifier, in that order.
+ */
+export function extractSecret(settled: readonly { digest: bigint; domain: bigint; elems: readonly bigint[] }[]): F2[] {
+  const seen = new Map<bigint, { t: F2; i: F2 }>();
+  const found: F2[] = [];
+  for (const r of settled) {
+    const i: F2 = [r.digest, r.domain];
+    for (let k = 0; k + 2 < r.elems.length; k += 3) {
+      const t: F2 = [r.elems[k], r.elems[k + 1]];
+      const nf = r.elems[k + 2];
+      const other = seen.get(nf);
+      if (!other) {
+        seen.set(nf, { t, i });
+        continue;
+      }
+      const di = sub2(other.i, i);
+      if (di[0] === 0n && di[1] === 0n) continue;
+      const kv = mul2(sub2(other.t, t), inv2(di));
+      found.push(sub2(t, mul2(kv, i)));
+    }
+  }
+  return found;
+}
 
 /**
  * The principal's monitor. It reads every domain's settlement records and
@@ -101,6 +150,7 @@ export class Monitor {
   private readonly answered = new Map<string, bigint>();
   private readonly expired = new Set<string>();
   private readonly requested = new Map<string, bigint>();
+  private claimed = false;
   private frozen = false;
   readonly reasons: string[] = [];
 
@@ -185,8 +235,6 @@ export class Monitor {
     if (d.dispute) {
       const window = await this.acceptWindow(d);
       if (this.settings.decideAfter >= window) throw new Error(`${d.name}: the decision time must fall inside the acceptance window of ${window} s`);
-      const due = (await d.chain.readContract({ address: d.dispute, abi: disputeAbi, functionName: "deliveryWait" })) as bigint;
-      if (this.settings.deliveryWait < due) throw new Error(`${d.name}: the delivery wait must be at least the ${due} s the dispute contract allows an answerer`);
     }
     const domain = await read<bigint>("domain");
     const commitment = await read<Hex>("commitmentOf", [d.delegation]);
@@ -385,17 +433,65 @@ export class Monitor {
     return w;
   }
 
-  private async challenge(d: Domain, r: Record): Promise<void> {
+  /**
+   * Opens the principal's challenge, which holds settlement. A settlement is
+   * challenged at most once, so if another party challenged it first the
+   * principal's challenge cannot be opened; this returns false and the
+   * caller freezes the delegation instead.
+   */
+  private async challenge(d: Domain, r: Record): Promise<boolean> {
     const dispute = d.dispute as Address;
     const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengerBond" })) as bigint;
     const s = { elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch };
-    const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond });
+    let hash: Hex;
+    try {
+      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond });
+    } catch (e) {
+      if (String(e).includes("AlreadyChallenged")) return false;
+      throw e;
+    }
     const receipt = await d.chain.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`challenge of ${key(r)} reverted`);
     const ev = parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Challenged" });
     const mine = ev.find((e) => e.args.digest === r.digest);
     if (!mine) throw new Error(`challenge of ${key(r)} left no event`);
     this.challenged.set(key(r), mine.args.deadline);
+    return true;
+  }
+
+  /**
+   * Step 4: as soon as the transcript gives up a secret that opens the
+   * delegation's H(s), claim the bond on every domain, which also freezes
+   * the delegation there. A candidate that opens nothing is dropped, and a
+   * domain whose bond is already paid is skipped. Returns whether a claim
+   * went through.
+   */
+  private async claim(): Promise<boolean> {
+    const settled = [];
+    for (const r of this.records.values()) {
+      const c = await this.context(this.domainOf(r));
+      settled.push({ digest: r.digest, domain: c.domain, elems: r.elems });
+    }
+    for (const secret of extractSecret(settled)) {
+      let any = false;
+      for (const d of this.domains) {
+        try {
+          const { request } = await d.chain.simulateContract({
+            account: d.wallet.account, address: d.reserve, abi: reserveAbi, functionName: "claim", args: [d.delegation, [secret[0], secret[1]]],
+          });
+          const hash = await d.wallet.writeContract(request);
+          await d.chain.waitForTransactionReceipt({ hash });
+          any = true;
+        } catch {
+          continue;
+        }
+      }
+      if (any) {
+        this.claimed = true;
+        return true;
+      }
+    }
+    return false;
   }
 
   private async freezeAll(): Promise<void> {
@@ -411,8 +507,9 @@ export class Monitor {
   /**
    * Reads new records, answers and expiries on every domain, then acts. Every
    * record past its decision time and not in order is challenged; on a
-   * domain with no dispute contract, or if the monitor itself comes too late
-   * to challenge, the delegation is frozen instead. A challenge past its deadline unanswered is expired, and one
+   * domain with no dispute contract, if the monitor itself comes too late
+   * to challenge, or if another party challenged the record first, the
+   * delegation is frozen instead. A challenge past its deadline unanswered is expired, and one
    * answered whose record is still not in order the delivery wait later
    * freezes the delegation on every domain.
    */
@@ -421,6 +518,13 @@ export class Monitor {
     const total = this.total();
     const challenged: Record[] = [];
     const reasons: string[] = [];
+    if (!this.claimed && (await this.claim())) {
+      reasons.push("a unit consumed twice gave up the secret: the bond is claimed on every domain");
+      this.reasons.push(...reasons);
+      const was = this.frozen;
+      this.frozen = true;
+      return { total, challenged, froze: !was, reasons };
+    }
     if (this.frozen) return { total, challenged, froze: false, reasons };
     const backed = await this.backedSet();
     const breaches = await this.breaches(backed);
@@ -436,8 +540,11 @@ export class Monitor {
         if (why.length === 0) continue;
         reasons.push(`${k}: ${why.join("; ")}`);
         if (d.dispute && now < r.time + (await this.acceptWindow(d))) {
-          await this.challenge(d, r);
-          challenged.push(r);
+          if (await this.challenge(d, r)) challenged.push(r);
+          else {
+            reasons.push(`${k}: challenged first by another party, whose challenge does not hold settlement`);
+            freeze = true;
+          }
         } else freeze = true;
         continue;
       }

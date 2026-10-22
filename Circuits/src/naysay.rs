@@ -22,7 +22,7 @@ use p3_symmetric::MerkleCap;
 use p3_uni_stark::{prove, verify, Proof, StarkConfig};
 
 use crate::composed::ComposedAir;
-use crate::prover::{
+use crate::prover::{EXT_DEGREE, 
     deployed_pcs, Challenge, Compress, Hash, P2Challenger as Challenger, P2Pcs as Pcs, P2ValMmcs as ValMmcs,
     SaltRng, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, NUM_RANDOM_CODEWORDS, ROWS,
 };
@@ -574,8 +574,8 @@ pub(crate) fn sides(
 /// taken from the recorded transcript.
 pub(crate) fn identity(air: &Air, proof: &RProof, pv: &[Val], events: &[Event]) -> Identity {
     let e = drawn(events);
-    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[i..i + 2]).expect("two");
-    let (alpha, zeta) = (ext(0), ext(2));
+    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[EXT_DEGREE * i..EXT_DEGREE * (i + 1)]).expect("one coefficient per degree");
+    let (alpha, zeta) = (ext(0), ext(1));
     let local = &proof.opened_values.trace_local;
     let zeros = vec![Challenge::ZERO; local.len()];
     let next = proof.opened_values.trace_next.as_deref().unwrap_or(&zeros);
@@ -765,7 +765,7 @@ pub struct Outputs {
 
 pub(crate) fn outputs(events: &[Event], rounds: usize) -> Outputs {
     let e = drawn(events);
-    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[2 * i..2 * i + 2]).expect("two");
+    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&e[EXT_DEGREE * i..EXT_DEGREE * (i + 1)]).expect("one coefficient per degree");
     // Drawn in order: the constraint alpha, zeta, the FRI batching alpha,
     // then one folding challenge per commit-phase layer.
     Outputs {

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PARAMS, loadConstraints, maxDegree, verifyStark } from "../src/index.js";
+import { DEG } from "../src/stark/field.js";
 import { offsets } from "./stark_kit.js";
 
 /**
@@ -50,7 +51,7 @@ const o = offsets(full);
 const COL_CID = 2;
 const R_AMOUNT = 6;
 const tampered: [string, Uint8Array][] = [
-  ["category opened", bump(full, o.traceLocal + 16 * COL_CID)],
+  ["category opened", bump(full, o.traceLocal + 8 * DEG * COL_CID)],
   ["quotient chunk", bump(full, o.quotientChunk)],
   ["public amount", bump(full, o.publicValue + 8 * (air.globals + R_AMOUNT))],
   ["trace value at a query", bump(full, o.inputRow)],

@@ -1,0 +1,48 @@
+ROUND-BY-ROUND KNOWLEDGE-SOUNDNESS ERROR OF THE PAYMENT PROOF, BITS
+==============================================================================
+  batched openings N = 28673, constraints s = 14302, degree 7, 16 chunks, folds (4, 4, 2)
+
+  deployed: 44 queries, blowup 16, 20 grinding bits, cubic extension
+    johnson       107.5 bits m=59   constraints 167.4, out-of-domain point 158.4, batching 107.5, folding 120.7, queries 107.5
+    unique         60.1 bits        constraints 178.2, out-of-domain point 178.4, batching 165.2, folding 178.4, queries 60.1
+    conjectured   165.2 bits        constraints 178.2, out-of-domain point 178.4, batching 165.2, folding 178.4, queries 196.0
+  40 queries, blowup 16, 20 grinding bits, cubic extension
+    johnson        99.8 bits m=127  constraints 160.2, out-of-domain point 143.9, batching 99.8, folding 113.0, queries 99.8
+    unique         56.5 bits        constraints 178.2, out-of-domain point 178.4, batching 165.2, folding 178.4, queries 56.5
+    conjectured   165.2 bits        constraints 178.2, out-of-domain point 178.4, batching 165.2, folding 178.4, queries 180.0
+  58 queries, blowup 8, 20 grinding bits, cubic extension
+    johnson       106.5 bits m=92   constraints 166.8, out-of-domain point 157.2, batching 106.6, folding 119.8, queries 106.5
+    unique         68.1 bits        constraints 178.2, out-of-domain point 179.0, batching 166.2, folding 179.4, queries 68.1
+    conjectured   166.2 bits        constraints 178.2, out-of-domain point 179.0, batching 166.2, folding 179.4, queries 194.0
+  the earlier setting: 40 queries, blowup 16, quadratic extension
+    johnson        72.1 bits m=3    constraints 108.6, out-of-domain point 104.7, batching 72.1, folding 85.3, queries 91.1
+    unique         56.5 bits        constraints 114.2, out-of-domain point 114.4, batching 101.2, folding 114.4, queries 56.5
+    conjectured   101.2 bits        constraints 114.2, out-of-domain point 114.4, batching 101.2, folding 114.4, queries 180.0
+  40 queries, blowup 8, 20 grinding bits, quadratic extension
+    johnson        73.1 bits m=4    constraints 109.2, out-of-domain point 105.8, batching 73.1, folding 86.3, queries 73.2
+    unique         53.2 bits        constraints 114.2, out-of-domain point 115.0, batching 102.2, folding 115.4, queries 53.2
+    conjectured   102.2 bits        constraints 114.2, out-of-domain point 115.0, batching 102.2, folding 115.4, queries 140.0
+  100 queries, blowup 8, 20 grinding bits, quadratic extension
+    johnson        75.6 bits m=3    constraints 109.6, out-of-domain point 106.7, batching 75.6, folding 88.8, queries 147.8
+    unique        102.2 bits        constraints 114.2, out-of-domain point 115.0, batching 102.2, folding 115.4, queries 102.9
+    conjectured   102.2 bits        constraints 114.2, out-of-domain point 115.0, batching 102.2, folding 115.4, queries 320.0
+
+STATE-RESTORATION ERROR AT THE DEPLOYED SETTING, (q + 7) TIMES THE ABOVE
+==============================================================================
+  2^32 oracle queries     75.5 bits
+  2^48 oracle queries     59.5 bits
+  2^64 oracle queries     43.5 bits
+
+THE SWEEP OF THE FRI PARAMETERS, CUBIC EXTENSION, WHOLE BITS ROUNDED DOWN
+==============================================================================
+  queries  blowup  grind  conjectured  provable  rows zk needs
+       44      16     20          165       107            100
+       40      16     20          165        99             92
+       50      16     20          165       118            112
+       44       8     20          152        85            100
+       54       8     20          166       100            120
+       58       8     20          166       106            128
+       40       8      8          128        67             92
+       44       4     20          108        63            100
+       40       4      8           88        47             92
+       40       2      8           48        27             92

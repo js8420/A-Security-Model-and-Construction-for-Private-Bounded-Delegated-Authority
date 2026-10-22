@@ -1,0 +1,77 @@
+    Finished `release` profile [optimized] target(s) in 8.04s
+     Running `target/release/dispute-verifier-profile ../program-keccak/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-keccak ../../target/proof_128_keccak.bin /tmp/r15_profile.json`
+Profiling enabled
+Profiling sample rate: 8000
+Writing profile, this can take awhile
+Profile written successfully
+WHERE THE DISPUTE VERIFIER'S INSTRUCTIONS GO
+==============================================================================
+  instructions executed                             817007459
+  the proof verifies                                     true
+  samples, one per 1000 instructions                    102125
+
+  phase                                      share   instructions
+  reading the proof (bincode)                7.60%       62128567
+  symbolic constraint analysis               0.00%              0
+  Merkle path checks                         4.84%       39552361
+  transcript (duplex challenger)             0.00%              0
+  constraint evaluation at zeta              2.37%       19392177
+  FRI folding and openings                  84.63%      691446313
+  quotient recomposition                     0.00%              0
+  other verifier work                        0.00%              0
+  guest main, outside the verifier           0.00%              0
+  unattributed                               0.55%        4488041
+
+  functions by inclusive share
+  100.00%  __start
+  100.00%  dispute_verifier_keccak[62ab2230d0545ec7]::main
+  100.00%  main
+   91.78%  p3_uni_stark[96a683922026085b]::verifier::verify_with_preprocessed::<..>
+   91.78%  p3_uni_stark[96a683922026085b]::verifier::verify::<..>
+   86.10%  <..>::verify
+   84.93%  p3_fri[d7bd7f3aae456c2f]::verifier::verify_fri::<..>
+   83.90%  p3_fri[d7bd7f3aae456c2f]::verifier::open_input::<..>
+   69.32%  <..>::mul
+    7.60%  <..>::deserialize_tuple::<..>
+    7.60%  <..>::visit_seq::<..>
+    7.41%  <..>::deserialize_struct::<..>
+    4.84%  <..>::verify_batch
+    4.79%  <..>::next_element_seed::<..>
+    4.57%  <..>::hash_iter::<..>
+    4.09%  <..>::deserialize::<..>
+    3.58%  <..>::next
+    3.20%  <..>::from_iter
+    2.65%  <..>::evaluate_periodic_column_at::<..>
+    2.59%  <..>::interpolate_coset::<..>
+    2.38%  p3_uni_stark[96a683922026085b]::verifier::verify_constraints::<..>
+    2.37%  <..>::eval
+    2.30%  <..>::constrain_anchored::<..>
+    2.03%  p3_field[1eb5c1c83023d5d6]::batch_inverse::batch_multiplicative_inverse::<..>
+    1.92%  p3_poseidon2_air[4bbb6f2bef0c9414]::air::eval::<..>
+
+  functions by self share
+   69.32%  <..>::mul
+   10.93%  p3_fri[d7bd7f3aae456c2f]::verifier::open_input::<..>
+    4.09%  <..>::deserialize::<..>
+    3.57%  <..>::next
+    1.37%  <..>::visit_seq::<..>
+    1.32%  <..>::observe_slice
+    1.20%  <..>::alloc
+    1.09%  p3_field[1eb5c1c83023d5d6]::batch_inverse::batch_multiplicative_inverse::<..>
+    1.04%  <..>::hash_iter::<..>
+    0.94%  <..>::update
+    0.89%  <..>::dealloc
+    0.58%  <..>::ext_mul
+    0.51%  memcpy
+    0.40%  <..>::interpolate_coset::<..>
+    0.32%  <..>::ext_square
+    0.32%  <..>::deserialize_tuple::<..>
+    0.30%  <..>::eval
+    0.27%  <..>::try_inverse
+    0.18%  <..>::internal_linear_layer::<..>
+    0.16%  <..>::assert_eq::<..>
+    0.14%  <..>::external_linear_layer::<..>
+    0.13%  <..>::verify_batch
+    0.12%  <..>::fold::<..>
+    0.08%  memset
+    0.07%  <..>::collect

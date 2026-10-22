@@ -1,4 +1,4 @@
-import { P, eadd, emul, eneg, esub, lift, type E } from "./field.js";
+import { E0, P, eadd, emul, eneg, esub, lift, type E } from "./field.js";
 
 const MAGIC = "PBDAG001";
 
@@ -133,7 +133,7 @@ export function fold(c: Constraints, at: Point, alpha: E): E {
       case Op.Mul: v.set(i, emul(get(x), get(y))); break;
     }
   });
-  let acc: E = [0n, 0n];
+  let acc: E = E0;
   for (const r of c.roots) acc = eadd(emul(acc, alpha), get(r));
   return acc;
 }

@@ -75,7 +75,10 @@ class Reader {
   }
 
   e(): E {
-    return [this.f(), this.f()];
+    const a = this.f();
+    const b = this.f();
+    const c = this.f();
+    return [a, b, c];
   }
 
   vec<T>(item: () => T): T[] {

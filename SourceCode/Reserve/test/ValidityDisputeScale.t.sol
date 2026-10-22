@@ -435,7 +435,8 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(_deadline(r, 42) + 1);
         uint256 before = principal.balance;
         vd.expire(r, 42);
-        assertEq(principal.balance, before + AGENT_BOND);
+        assertEq(principal.balance, before);
+        assertEq(acc.credit(principal), AGENT_BOND);
         assertEq(vd.credit(address(bad)), BOND);
     }
 
@@ -454,9 +455,9 @@ contract ValidityDisputeScaleTest is Test {
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(r);
         vd.expire(r, 5);
-        uint256 before = agent.balance;
         acc.close(r);
-        assertEq(agent.balance, before);
+        assertEq(acc.credit(agent), 0);
+        assertEq(acc.credit(principal), AGENT_BOND);
     }
 
     function testCloseAfterAnAnsweredChallengeReturnsTheBond() public {
@@ -466,9 +467,8 @@ contract ValidityDisputeScaleTest is Test {
         _openBy(challenger, r, 5);
         _answerAlone(r, 5);
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
-        uint256 before = agent.balance;
         acc.close(r);
-        assertEq(agent.balance, before + AGENT_BOND);
+        assertEq(acc.credit(agent), AGENT_BOND);
     }
 
     /// M1: an unanswered challenge forfeits the bond and freezes the
@@ -527,9 +527,8 @@ contract ValidityDisputeScaleTest is Test {
         acc.reclaim(r);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         address agent = vm.addr(AGENT_PK);
-        uint256 bond = agent.balance;
         acc.close(r);
-        assertEq(agent.balance, bond + AGENT_BOND);
+        assertEq(acc.credit(agent), AGENT_BOND);
     }
 
     /// A principal that is a contract wallet monitors from an EOA: that
@@ -656,28 +655,25 @@ contract ValidityDisputeScaleTest is Test {
         ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), at);
         _openBy(principal, r, 5);
         vm.warp(_deadline(r, 5) + 1);
-        uint256 p0 = principal.balance;
         vd.expire(r, 5);
-        assertEq(principal.balance, p0 + AGENT_BOND);
+        assertEq(acc.credit(principal), AGENT_BOND);
         address agent = vm.addr(AGENT_PK);
-        uint256 a0 = agent.balance;
-        uint256 p1 = principal.balance;
-        uint256 c0 = challenger.balance;
         vm.prank(challenger);
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
-        assertEq(agent.balance, a0);
-        assertEq(principal.balance, p1);
-        assertEq(challenger.balance, c0 + BOND);
+        assertEq(acc.credit(agent), 0);
+        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.credit(challenger), BOND);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
         assertEq(acc.burnt(), AGENT_BOND - BOND);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         acc.close(r);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + DELIVERY + 1);
         uint256 b0 = ans.balance;
         vm.prank(ans);
         acc.unstakeAnswerer(r);
         assertEq(ans.balance, b0);
-        assertGe(address(acc).balance, acc.burnt());
+        assertGe(address(acc).balance, acc.burnt() + acc.credit(principal) + acc.credit(challenger));
     }
 
     function testSlashBeforeExpiryRefused() public {
@@ -877,12 +873,11 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(block.timestamp + DELIVERY + 1);
         address agent = vm.addr(AGENT_PK);
         uint256 a0 = agent.balance;
-        uint256 c0 = challenger.balance;
         vm.prank(challenger);
         uint256 g0 = gasleft();
         vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
         console.log("slash for withholding, batch of one", g0 - gasleft());
-        assertEq(challenger.balance, c0 + BOND);
+        assertEq(acc.credit(challenger), BOND);
         assertEq(agent.balance, a0);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
@@ -961,6 +956,10 @@ contract ValidityDisputeScaleTest is Test {
         vm.prank(challenger);
         vm.expectRevert(Reserve.NotAnswerer.selector);
         acc.unstakeAnswerer(r);
+        vm.prank(ans);
+        vm.expectRevert(Reserve.NotClosed.selector);
+        acc.unstakeAnswerer(r);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + DELIVERY + 1);
         uint256 b0 = ans.balance;
         vm.prank(ans);
         acc.unstakeAnswerer(r);
@@ -1037,5 +1036,81 @@ contract ValidityDisputeScaleTest is Test {
         for (uint256 i = 0; i < ids.length; ++i) {
             items[i] = ValidityDispute.Item({id: ids[i], digest: ds[i], s: ss[i], index: at[i], path: paths[i]});
         }
+    }
+
+    /// A challenge expiring after the close delay lets anyone close at once,
+    /// but the answerer's stake waits a further close delay and delivery wait,
+    /// so the agent's receipt still burns it.
+    function testStakeStaysForASlashAfterTheClose() public {
+        (uint256 r, address ans) = _registerWithAnswerer();
+        vm.warp(block.timestamp + LIFE - 10 minutes);
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receipt(ANSWERER_PK, r, vd.leafHash(r, 5, s), uint64(block.timestamp));
+        _openBy(principal, r, 5);
+        vm.warp(_deadline(r, 5) + 1);
+        vd.expire(r, 5);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
+        acc.close(r);
+        vm.prank(ans);
+        vm.expectRevert(Reserve.NotClosed.selector);
+        acc.unstakeAnswerer(r);
+        vm.prank(challenger);
+        vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+        assertEq(acc.credit(challenger), BOND);
+    }
+
+    /// The same for a delivery that falls due after an answer: an answer ends
+    /// the challenge's count, so the close comes first, and the withholding
+    /// slash still lands.
+    function testWithholdingSlashesAfterTheClose() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        vm.warp(block.timestamp + LIFE - 10 minutes);
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp));
+        _openBy(principal, r, 5);
+        _answerAlone(r, 5);
+        vm.warp(block.timestamp + ACCEPT + 1 hours + DELIVERY + 1);
+        acc.close(r);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// Each principal of an agent has a queue of its own: another principal's
+    /// challenges, or those under a delegation the agent issued to itself, do
+    /// not push back this principal's deadline.
+    function testAnotherPrincipalDoesNotDelayTheQueue() public {
+        address other = address(0xB0B0);
+        vm.deal(other, 100 ether);
+        token.mint(other, 1e15);
+        vm.prank(other);
+        token.approve(address(acc), type(uint256).max);
+        vm.prank(other);
+        uint256 o = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(20)), bytes32(uint256(21)), uint64(block.timestamp) + LIFE));
+        uint256 r = _register(AGENT_PK, 10);
+        for (uint64 d = 1; d <= 6; ++d) _settle(AGENT_PK, o, d);
+        for (uint64 d = 1; d <= 6; ++d) _openBy(other, o, d);
+        _settle(AGENT_PK, r, 50);
+        _openBy(principal, r, 50);
+        assertLe(_deadline(r, 50), uint64(block.timestamp) + WINDOW + 2 * SLOT);
+        assertGt(_deadline(o, 6), _deadline(r, 50) + 8 * SLOT);
+    }
+
+    /// The reserve credits ether rather than sending it, so an agent that
+    /// refuses ether cannot block the close that returns the deposit.
+    function testAgentThatRefusesEtherCannotBlockClose() public {
+        RefusesEther bad = new RefusesEther();
+        vm.prank(principal);
+        uint256 r = acc.register{value: AGENT_BOND}(TermsOf.make(address(bad), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(30)), bytes32(uint256(31)), uint64(block.timestamp) + LIFE));
+        vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
+        uint256 before = token.balanceOf(principal);
+        acc.close(r);
+        assertEq(token.balanceOf(principal), before + 100_000_000);
+        assertEq(acc.credit(address(bad)), AGENT_BOND);
     }
 }

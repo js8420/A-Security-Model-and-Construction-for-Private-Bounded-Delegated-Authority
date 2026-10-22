@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   PARAMS, ProofGate, deployedVerifier, independentVerifier, loadConstraints, maxDegree, verifyStark, type Check,
 } from "../src/index.js";
+import { DEG } from "../src/stark/field.js";
 import { offsets } from "./stark_kit.js";
 
 const P = 0xffffffff00000001n;
@@ -47,7 +48,7 @@ const R_AMOUNT = 6;
 const o = offsets(full);
 const powWitness = word(full, o.queryPow);
 const tampered: [string, Uint8Array][] = [
-  ["the category id opened at the out-of-domain point", bump(full, o.traceLocal + 16 * COL_CID)],
+  ["the category id opened at the out-of-domain point", bump(full, o.traceLocal + 8 * DEG * COL_CID)],
   ["a quotient chunk opened at the out-of-domain point", bump(full, o.quotientChunk)],
   ["a payment's amount in the public values", bump(full, o.publicValue + 8 * (air.globals + R_AMOUNT))],
   ["a trace value opened at a query", bump(full, o.inputRow)],

@@ -3,20 +3,26 @@
 The interactive protocol is the zero-knowledge DEEP-ALI of Haboeck and Kindi,
 whose round-by-round knowledge soundness Atapoor, Delpech de Saint Guilhem and
 Kindi prove (ePrint 2024/1553, Theorems 2 and 3). Plonky3 departs from that
-protocol in four places, and each changes one term:
+protocol in five places, and each changes one term:
 
   constraints   combined by the powers of one challenge, not by independent
                 ones: the combination is a polynomial of degree s - 1 in it.
   batching      the N opened columns are combined by the powers of one
                 challenge: the proximity gap is that of a curve of degree N - 1
-                (Ben-Sasson, Carmon, Ishai, Kopparty, Saraf 2020, Theorem 1.6),
-                N - 1 times the gap of a line.
+                (Ben-Sasson, Carmon, Ishai, Kopparty, Saraf 2020), N - 1 times
+                the gap of a line.
   folding       arities 4, 4 and 2: a fold of arity a is a curve of degree a - 1.
   grinding      the query round is drawn only after a 20-bit proof of work, so
                 each oracle query reaches it with probability 2^-20.
+  out of domain the point is not resampled, so it lands where a quotient by
+                (X - zeta) is undefined, the evaluation domain or the hiding
+                commitment's, with probability at most 2|D|/|G|.
 
-The provable figure is the Johnson regime (list decoding, multiplicity m >= 3)
-or the unique-decoding regime, whichever is better. The conjectured figure
+The challenge field is the cubic extension of Goldilocks; over the quadratic
+one the batching term caps the provable figure near 72 bits, which the script
+also prints. The provable figure is the Johnson regime (list decoding,
+multiplicity 3 <= m < k/2 with eta > 0) or the unique-decoding regime,
+whichever is better. The conjectured figure
 takes the query term at the full rate, as the usual conjecture does, and every
 other term at its unique-decoding value, which is the least any analysis
 charges. Each figure is the round-by-round error; against an adversary making
@@ -34,24 +40,26 @@ WIDTH = 14292 + 2       # AIR columns plus the hiding commitment's two random co
 CONSTRAINTS = 14302     # constraints the AIR asserts
 DEGREE = 7              # their degree
 CHUNKS = 16             # quotient chunks
-CHUNK_OPEN = 2 + 2      # a chunk's two base coordinates plus two random codewords
-RANDOM_OPEN = 2 + 2     # the mask's two polynomials plus two random codewords
+EXT = 3                 # degree of the challenge field over Goldilocks
+CODEWORDS = 2           # random codewords the hiding commitment appends to each matrix
 FOLDS = (4, 4, 2)       # FRI fold arities
 ROUNDS = 7              # constraint challenge, out-of-domain point, batching, three folds, queries
 
 
-def batched(width=WIDTH):
-    """Columns the batching challenge combines: the trace at two points, each chunk and the mask at one."""
-    return 2 * width + CHUNKS * CHUNK_OPEN + RANDOM_OPEN
+def batched(ext=EXT):
+    """Openings the batching challenge combines: the trace with its random
+    codewords at two points, and at one point each quotient chunk's ext base
+    coordinates and the mask's ext polynomials, each with the random codewords."""
+    return 2 * WIDTH + CHUNKS * (ext + CODEWORDS) + (ext + CODEWORDS)
 
 
-def terms(regime, queries, log_blowup, pow_bits, ext=2, m=None):
+def terms(regime, queries, log_blowup, pow_bits, ext=EXT, m=None):
     G = P**ext
     k = 2 * ROWS                      # degree bound: the hiding commitment doubles the height
     D = k * 2**log_blowup
     rho = k / D
     kp = k + 2
-    N = batched()
+    N = batched(ext)
     deg = max(DEGREE * (kp - 1) + (k - 1), kp + (CHUNKS - 1) * k + (kp - 1))
     grind = 2.0**(-pow_bits)
     if regime == "johnson":
@@ -59,14 +67,14 @@ def terms(regime, queries, log_blowup, pow_bits, ext=2, m=None):
         gap = (m + 0.5)**7 * D * D / (3 * rho**1.5 * G)
         return {
             "constraints": L * (CONSTRAINTS - 1) / G,
-            "out-of-domain point": L * L * deg / (G - 2 * D),
+            "out-of-domain point": L * L * deg / (G - 2 * D) + 2 * D / G,
             "batching": (N - 1) * gap,
             "folding": max((a - 1) * (gap + (2 * m + 1) / math.sqrt(rho) * (D + 1) / G) for a in FOLDS),
             "queries": (math.sqrt(rho) * (1 + 1 / (2 * m)))**queries * grind,
         }
     unique = {
         "constraints": (CONSTRAINTS - 1) / G,
-        "out-of-domain point": deg / (G - 2 * D),
+        "out-of-domain point": deg / (G - 2 * D) + 2 * D / G,
         "batching": (N - 1) * D / G,
         "folding": max((a - 1) * (D + 1) / G for a in FOLDS),
     }
@@ -78,13 +86,16 @@ def terms(regime, queries, log_blowup, pow_bits, ext=2, m=None):
 
 
 def johnson_ok(m, log_blowup):
+    """The hypotheses of the Johnson-regime theorem: 3 <= m < k/2, and
+    eta = sqrt(rho)(1 + 1/(2m)) - sqrt((k + 2)/|D|) > 0."""
     k = 2 * ROWS
     D = k * 2**log_blowup
     rho = k / D
-    return rho - 2 * m / D > 0 and math.sqrt(rho) * (1 + 1 / (2 * m)) < 1
+    eta = math.sqrt(rho) * (1 + 1 / (2 * m)) - math.sqrt((k + 2) / D)
+    return 3 <= m < k / 2 and rho - 2 * m / D > 0 and eta > 0 and math.sqrt(rho) * (1 + 1 / (2 * m)) < 1
 
 
-def best(regime, queries, log_blowup, pow_bits, ext=2):
+def best(regime, queries, log_blowup, pow_bits, ext=EXT):
     """The largest error over the rounds, minimised over the multiplicity in the Johnson regime."""
     if regime != "johnson":
         t = terms(regime, queries, log_blowup, pow_bits, ext)
@@ -104,17 +115,17 @@ def bits(x):
     return -math.log2(x)
 
 
-def provable(queries, log_blowup, pow_bits, ext=2):
+def provable(queries, log_blowup, pow_bits, ext=EXT):
     j = best("johnson", queries, log_blowup, pow_bits, ext)
     u = best("unique", queries, log_blowup, pow_bits, ext)
     return max(bits(j[0]), bits(u[0]))
 
 
-def conjectured(queries, log_blowup, pow_bits, ext=2):
+def conjectured(queries, log_blowup, pow_bits, ext=EXT):
     return bits(best("conjectured", queries, log_blowup, pow_bits, ext)[0])
 
 
-def show(label, queries, log_blowup, pow_bits, ext=2):
+def show(label, queries, log_blowup, pow_bits, ext=EXT):
     print(f"  {label}")
     for regime in ("johnson", "unique", "conjectured"):
         w, m, t = best(regime, queries, log_blowup, pow_bits, ext)
@@ -123,30 +134,34 @@ def show(label, queries, log_blowup, pow_bits, ext=2):
         print(f"    {regime:<12} {bits(w):6.1f} bits{mm:<6}  {parts}")
 
 
+SWEEP = [(44, 4, 20), (40, 4, 20), (50, 4, 20), (44, 3, 20), (54, 3, 20), (58, 3, 20),
+         (40, 3, 8), (44, 2, 20), (40, 2, 8), (40, 1, 8)]
+
+
 def main():
     print("ROUND-BY-ROUND KNOWLEDGE-SOUNDNESS ERROR OF THE PAYMENT PROOF, BITS")
     print("=" * 78)
-    print(f"  batched columns N = {batched()}, constraints s = {CONSTRAINTS}, degree {DEGREE}, "
+    print(f"  batched openings N = {batched()}, constraints s = {CONSTRAINTS}, degree {DEGREE}, "
           f"{CHUNKS} chunks, folds {FOLDS}")
     print()
-    show("deployed: 40 queries, blowup 16, 20 grinding bits, degree-2 extension", 40, 4, 20)
-    show("60 queries, blowup 16, 20 grinding bits", 60, 4, 20)
-    show("40 queries, blowup 16, 20 grinding bits, degree-5 extension", 40, 4, 20, ext=5)
-    show("50 queries, blowup 16, 20 grinding bits, degree-5 extension", 50, 4, 20, ext=5)
+    show("deployed: 44 queries, blowup 16, 20 grinding bits, cubic extension", 44, 4, 20)
+    show("40 queries, blowup 16, 20 grinding bits, cubic extension", 40, 4, 20)
+    show("58 queries, blowup 8, 20 grinding bits, cubic extension", 58, 3, 20)
+    show("the earlier setting: 40 queries, blowup 16, quadratic extension", 40, 4, 20, ext=2)
+    show("40 queries, blowup 8, 20 grinding bits, quadratic extension", 40, 3, 20, ext=2)
+    show("100 queries, blowup 8, 20 grinding bits, quadratic extension", 100, 3, 20, ext=2)
     print()
-    w = best("johnson", 40, 4, 20)[0]
-    print("STATE-RESTORATION ERROR AT THE DEPLOYED SETTING, (t + 7) TIMES THE ABOVE")
+    w = best("johnson", 44, 4, 20)[0]
+    print("STATE-RESTORATION ERROR AT THE DEPLOYED SETTING, (q + 7) TIMES THE ABOVE")
     print("=" * 78)
     for h in (32, 48, 64):
         print(f"  2^{h} oracle queries   {bits((2**h + ROUNDS) * w):6.1f} bits")
     print()
-    print("THE SWEEP OF THE FRI PARAMETERS, SOUNDNESS COLUMNS, WHOLE BITS ROUNDED DOWN")
+    print("THE SWEEP OF THE FRI PARAMETERS, CUBIC EXTENSION, WHOLE BITS ROUNDED DOWN")
     print("=" * 78)
-    print(f"  {'queries':>7} {'blowup':>7} {'grind':>6} {'conjectured':>12} {'provable':>9}")
-    for q, lb, g in [(40, 4, 20), (40, 3, 8), (54, 3, 20), (84, 3, 16),
-                     (40, 2, 8), (40, 2, 0), (40, 2, 16), (20, 2, 8), (30, 2, 8),
-                     (60, 2, 8), (80, 2, 8), (80, 2, 20), (40, 1, 8)]:
-        print(f"  {q:>7} {2**lb:>7} {g:>6} {math.floor(conjectured(q, lb, g)):>12} {math.floor(provable(q, lb, g)):>9}")
+    print(f"  {'queries':>7} {'blowup':>7} {'grind':>6} {'conjectured':>12} {'provable':>9} {'rows zk needs':>14}")
+    for q, lb, g in SWEEP:
+        print(f"  {q:>7} {2**lb:>7} {g:>6} {math.floor(conjectured(q, lb, g)):>12} {math.floor(provable(q, lb, g)):>9} {2 * (2 * EXT + q):>14}")
 
 
 if __name__ == "__main__":

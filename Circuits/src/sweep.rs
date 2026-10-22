@@ -10,15 +10,22 @@
 //! Soundness is reported twice on purpose. The conjectured figure charges a
 //! query the full rate, which is what deployed systems assume. The provable
 //! figure is the round-by-round bound of `soundness.rs`, which needs no
-//! conjecture, and over a degree-2 extension its batching term caps it well
-//! below the conjectured one. A reader sizing a secret or a bond should use
-//! the second.
+//! conjecture. Over the cubic extension the deployment uses, the queries bind
+//! it; over a degree-2 extension the batching term would cap it near 72 bits
+//! whatever the queries. A reader sizing a secret or a bond should use the
+//! provable figure.
 
-use crate::prover::{composed_proof_at, composed_verifies};
+use crate::prover::{composed_proof_at, composed_verifies, LOG_BLOWUP, NUM_QUERIES, POW_BITS};
 use crate::soundness::{conjectured, provable, COMPOSED};
 
-/// Call data a 30M-gas block admits at 16 gas per non-zero byte.
-const CALLDATA_BYTES_PER_BLOCK: usize = 30_000_000 / 16;
+/// Gas a byte of call data costs a data-heavy transaction under EIP-7623's
+/// floor, which the measured posting of the batch proof pays.
+const CALLDATA_GAS_PER_BYTE: usize = 40;
+/// Call data one 60M-gas Ethereum block admits at that price.
+const CALLDATA_BYTES_PER_BLOCK: usize = 60_000_000 / CALLDATA_GAS_PER_BYTE;
+/// The chunk the dispute contract posts a proof in, under the 128 KiB
+/// transaction pool limit and the 120,000-byte deposit cap of the OP Stack.
+const CHUNK_BYTES: usize = 98_304;
 /// One EIP-4844 blob.
 const BLOB_BYTES: usize = 131_072;
 
@@ -44,7 +51,8 @@ struct Row {
 /// same order. If that is what the hiding rows carry, then proving the same
 /// circuit at 0 bits and at 20 bits should differ by that amount in the median
 /// AND the 0-bit rows should be the tighter of the two. Measured here rather
-/// than argued from the distribution, with the two settings interleaved.
+/// than argued from the distribution, with the two settings interleaved, at
+/// the deployed queries and rate.
 fn grinding() {
     const ITERS: usize = 24;
     let mut off: Vec<f64> = Vec::with_capacity(ITERS);
@@ -52,9 +60,9 @@ fn grinding() {
     let mut ok_all = true;
     for _ in 0..ITERS {
         let (_, _, _, _, us0, _, o0) =
-            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, 40, 4, 0);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, NUM_QUERIES, LOG_BLOWUP, 0);
         let (_, _, _, _, us1, _, o1) =
-            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, 40, 4, 20);
+            composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, NUM_QUERIES, LOG_BLOWUP, POW_BITS);
         off.push(us0 as f64 / 1000.0);
         on.push(us1 as f64 / 1000.0);
         ok_all &= o0 && o1;
@@ -70,15 +78,14 @@ fn grinding() {
     println!();
     println!("WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED");
     println!("{}", "=".repeat(78));
-    println!("  Same circuit, same rate, {} interleaved pairs. Only the grinding", ITERS);
-    println!("  bits differ. Both settings are below the rate this circuit needs to");
-    println!("  verify, so neither proof is accepted ({}); the timing is the point.", ok_all);
+    println!("  Same circuit, {} queries at blowup {}, {} interleaved pairs. Only the", NUM_QUERIES, 1usize << LOG_BLOWUP, ITERS);
+    println!("  grinding bits differ. Every proof verifies: {}.", ok_all);
     println!();
     println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}", "grinding bits", "min", "q1", "median", "q3", "q3-q1");
     println!("  {:<22} {:>9} {:>9} {:>9} {:>9} {:>9}",
              "-".repeat(22), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9), "-".repeat(9));
     println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "0", a0, b0, c0, d0, d0 - b0);
-    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", "20", a1, b1, c1, d1, d1 - b1);
+    println!("  {:<22} {:>9.2} {:>9.2} {:>9.2} {:>9.2} {:>9.2}", POW_BITS, a1, b1, c1, d1, d1 - b1);
     println!();
     println!("  median difference {:.2} ms, spread difference {:.2} ms.", c1 - c0, (d1 - b1) - (d0 - b0));
     println!("  A geometric search over 2^20 hashes has a mean and a standard");
@@ -173,26 +180,20 @@ pub fn run() {
     println!("FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT {} ROWS", crate::prover::ROWS);
     println!("{}", "=".repeat(78));
 
-    // Chosen rather than swept exhaustively: three blowups at a fixed query
-    // count to isolate rate, three query counts at the deployed blowup to
-    // isolate queries, and the two grinding settings that bracket the default.
     let settings: Vec<(usize, usize, usize)> = vec![
-        (40, 2, 8),   // the deployment's setting
-        (40, 1, 8),
-        (40, 3, 8),
-        (20, 2, 8),
-        (30, 2, 8),
-        (60, 2, 8),
-        (80, 2, 8),
-        (40, 2, 0),
-        (40, 2, 16),
-        (84, 3, 16),
-        // Blowup is nearly free in proof size and grinding is free entirely,
-        // so these buy security from the two cheap directions rather than
-        // from queries.
+        // The deployed setting, then the neighbours that reach about 100
+        // provable bits over the cubic extension, then settings that do not
+        // admit a degree-seven quotient under the hiding commitment.
+        (44, 4, 20),
         (40, 4, 20),
+        (50, 4, 20),
+        (44, 3, 20),
         (54, 3, 20),
-        (80, 2, 20),
+        (58, 3, 20),
+        (40, 3, 8),
+        (44, 2, 20),
+        (40, 2, 8),
+        (40, 1, 8),
     ];
 
     let mut rows: Vec<Row> = Vec::new();
@@ -247,27 +248,28 @@ pub fn run() {
     println!();
     println!("WHAT A SETTLEMENT DOMAIN CAN CARRY");
     println!("{}", "=".repeat(78));
-    println!("  call data in one 30M-gas block, at 16 gas a byte    {:>12}", CALLDATA_BYTES_PER_BLOCK);
+    println!("  call data in one 60M-gas block, at {} gas a byte   {:>12}", CALLDATA_GAS_PER_BYTE, CALLDATA_BYTES_PER_BLOCK);
+    println!("  the dispute contract's chunk                        {:>12}", CHUNK_BYTES);
     println!("  one EIP-4844 blob                                   {:>12}", BLOB_BYTES);
     println!();
-    println!("  {:>12} {:>10} {:>12} {:>12}", "proof bytes", "provable", "blocks", "blobs");
-    println!("  {:>12} {:>10} {:>12} {:>12}",
-             "-".repeat(12), "-".repeat(10), "-".repeat(12), "-".repeat(12));
+    println!("  {:>12} {:>10} {:>12} {:>12} {:>12}", "proof bytes", "provable", "blocks", "chunks", "blobs");
+    println!("  {:>12} {:>10} {:>12} {:>12} {:>12}",
+             "-".repeat(12), "-".repeat(10), "-".repeat(12), "-".repeat(12), "-".repeat(12));
     for r in &rows {
-        println!("  {:>12} {:>10} {:>12.2} {:>12.1}",
+        println!("  {:>12} {:>10} {:>12.2} {:>12} {:>12.1}",
                  r.bytes, r.johnson,
                  r.bytes as f64 / CALLDATA_BYTES_PER_BLOCK as f64,
+                 r.bytes.div_ceil(CHUNK_BYTES),
                  r.bytes as f64 / BLOB_BYTES as f64);
     }
 
-    let best = rows.iter().min_by_key(|r| r.bytes).expect("at least one setting");
+    let best = rows.iter().filter(|r| r.verifies).min_by_key(|r| r.bytes).expect("a setting that verifies");
     println!();
-    println!("  The smallest proof measured here is {} bytes at {} provable bits,",
+    println!("  The smallest proof that verifies here is {} bytes at {} provable bits:",
              best.bytes, best.johnson);
-    println!("  which is {:.1} blobs. No setting in this sweep brings a proof of this",
-             best.bytes as f64 / BLOB_BYTES as f64);
-    println!("  circuit within one block of call data: the opening proof dominates and");
-    println!("  it shrinks only with the query count, which is what soundness buys.");
-    println!("  A backend meeting a settlement domain's budget has to replace the");
-    println!("  opening argument, not tune it.");
+    println!("  {:.2} blocks of call data, {} chunks, {:.1} blobs. The opening proof",
+             best.bytes as f64 / CALLDATA_BYTES_PER_BLOCK as f64,
+             best.bytes.div_ceil(CHUNK_BYTES), best.bytes as f64 / BLOB_BYTES as f64);
+    println!("  dominates and shrinks only with the query count, which is what");
+    println!("  soundness buys, so a smaller proof needs another opening argument.");
 }

@@ -996,7 +996,7 @@ fn main() {
     }
 
     println!();
-    println!("COST STRUCTURE: WHAT EACH DESIGN DECISION BUYS, 32-ROW TRACES");
+    println!("COST STRUCTURE: WHAT EACH DESIGN DECISION BUYS, {}-ROW TRACES", prover::ROWS);
     println!("{}", "=".repeat(78));
     println!("  {:<30} {:>8} {:>11} {:>12} {:>11}",
              "variant", "columns", "prove/pmt", "proof bytes", "verify/pmt");

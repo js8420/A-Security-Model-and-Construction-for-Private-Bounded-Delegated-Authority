@@ -6,7 +6,9 @@ execution gas at the base fee plus an L1 data fee, which its gas price oracle
 quotes from the transaction's size; a proof is incompressible, so the oracle's
 upper bound for that size is the fee. The base fee is the median over the last
 1,024 blocks, and the dollar price is Chainlink's ETH / USD feed on Base. The
-same is printed for one answer, so the two can be set against the bounty.
+same is printed for one answer and for one delivery of a sealed opening, so
+each can be set against the bounty. For comparison the script also prints what
+the same transactions' gas would cost on Ethereum at a base fee of 1 gwei.
 
 Run: python3 posting_cost.py RECEIPTS_JSON
 Env: L2_RPC (one endpoint, tried first).
@@ -56,7 +58,7 @@ def first(out):
 
 def main():
     receipts = json.load(open(sys.argv[1]))
-    posted, answer = [], None
+    posted, answer, delivery = [], None, None
     for t, r in zip(receipts["transactions"], receipts["receipts"]):
         name = (t["function"] or "").split("(")[0]
         data = t["transaction"].get("input") or t["transaction"].get("data")
@@ -65,6 +67,10 @@ def main():
             posted.append((int(r["gasUsed"], 16), size))
         elif name == "answer" and answer is None:
             answer = (int(r["gasUsed"], 16), size)
+        elif name == "deliver" and delivery is None:
+            delivery = (int(r["gasUsed"], 16), size)
+    if not posted or answer is None or delivery is None:
+        raise SystemExit(f"{sys.argv[1]} lacks a postProof, an answer or a deliver transaction")
     url = endpoint()
     history = json.loads(cast("rpc", "--rpc-url", url, "eth_feeHistory", "0x400", "latest", "[]"))
     fees = [int(x, 16) for x in history["baseFeePerGas"]]
@@ -85,10 +91,13 @@ def main():
     print(f"  base fee, least and greatest            {min(fees) / 1e9:>10.6f} {max(fees) / 1e9:>10.6f} gwei")
     print(f"  ETH / USD, Chainlink on Base            {price:>14.2f}")
     print()
-    for label, txs in (("proof, all chunks", posted), ("one answer", [answer])):
+    for label, txs in (("proof, all chunks", posted), ("one answer", [answer]), ("one delivery", [delivery])):
         e, d = cost(txs)
-        print(f"  {label:<20} {len(txs):>3} tx  {sum(g for g, _ in txs):>12,} gas  {sum(s for _, s in txs):>10,} bytes")
-        print(f"  {'':<20} execution {e:.8f} ETH, L1 data {d:.8f} ETH, total {e + d:.8f} ETH = {(e + d) * price:.2f} USD")
+        gas = sum(g for g, _ in txs)
+        print(f"  {label:<20} {len(txs):>3} tx  {gas:>12,} gas  {sum(s for _, s in txs):>10,} bytes")
+        print(f"  {'':<20} execution {e:.8f} ETH, L1 data {d:.8f} ETH, total {e + d:.8f} ETH = {(e + d) * price:.4f} USD")
+        l1 = gas * 1e9 / 1e18
+        print(f"  {'':<20} on Ethereum at 1 gwei {l1:.8f} ETH = {l1 * price:.4f} USD")
 
 
 if __name__ == "__main__":

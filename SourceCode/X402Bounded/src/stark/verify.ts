@@ -1,6 +1,6 @@
 import { fold, maxDegree, type Constraints } from "./constraints.js";
 import {
-  E0, E1, GENERATOR, X, bitrev, eadd, ebatchInv, eeq, einv, emul, escale, esquarings, esub, ezero,
+  DEG, E0, E1, GENERATOR, X, bitrev, eadd, ebatchInv, eeq, einv, emul, escale, esquarings, esub, ezero,
   inv, lift, mul, pow, sub, twoAdic, type E,
 } from "./field.js";
 import { verifyOpening } from "./merkle.js";
@@ -9,7 +9,7 @@ import { Transcript } from "./transcript.js";
 
 /** The deployed parameters. A proof made under any others is refused rather than interpreted. */
 export const PARAMS = {
-  queries: 40,
+  queries: 44,
   logBlowup: 4,
   queryPowBits: 20,
   commitPowBits: 0,
@@ -93,8 +93,8 @@ export function lagrange(xs: readonly bigint[], ys: readonly E[], z: E): E {
   return out;
 }
 
-/** The extension element whose basis coefficients are the given extension values: c0 + c1 X. */
-const fromBasis = (c: readonly E[]): E => eadd(c[0], emul(c[1], X));
+/** The extension element whose basis coefficients are the given extension values: c0 + c1 X + c2 X^2. */
+const fromBasis = (c: readonly E[]): E => eadd(c[0], emul(eadd(c[1], emul(c[2], X)), X));
 
 /** Periodic column j of the batch: payment r's value j, for r over the batch. */
 function periodicColumns(pv: readonly bigint[], globals: number, rowWidth: number): bigint[][] {
@@ -149,8 +149,8 @@ export function check(proof: StarkProof, pv: readonly bigint[], air: Constraints
   need(proof.traceLocal.length === W, "trace opening width");
   need(proof.traceNext !== null && proof.traceNext.length === W, "next-row opening width");
   need(proof.preprocessedLocal === null && proof.preprocessedNext === null, "unexpected preprocessed trace");
-  need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === 2), "quotient chunk shape");
-  need(proof.random !== null && proof.random.length === 2, "random opening shape");
+  need(proof.quotientChunks.length === chunks && proof.quotientChunks.every((c) => c.length === DEG), "quotient chunk shape");
+  need(proof.random !== null && proof.random.length === DEG, "random opening shape");
   need(proof.randomCap !== null, "missing random commitment");
   const periodic = periodicColumns(pv, air.globals, air.rowWidth);
   const period = periodic[0].length;
@@ -268,7 +268,7 @@ function fri(proof: StarkProof, rounds: Round[], logLde: number, t: Transcript):
       for (let j = 0; j < arity; j++) evals.push(j === pos ? folded : s.siblings[k++]);
       const logFolded = logH - s.logArity;
       index = Math.floor(index / arity);
-      const row = evals.flatMap((e) => [e[0], e[1]]);
+      const row = evals.flatMap((e) => [...e]);
       const why = verifyOpening(proof.friCaps[ri], 2 ** logFolded, index, [row], s.opening.salts, s.opening.siblings, prm.saltElems);
       need(why === null, `fold commitment opening: ${why}`);
       const start = pow(twoAdic(logFolded + s.logArity), BigInt(bitrev(index, logFolded)));

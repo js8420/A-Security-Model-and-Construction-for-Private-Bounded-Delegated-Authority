@@ -1,0 +1,10 @@
+file                          mutants  killed  survived   score      errors
+src/stark/constraints.ts           79      79         0  100.0%           7
+src/stark/field.ts                160     160         0  100.0%          37
+src/stark/merkle.ts                80      80         0  100.0%           6
+src/stark/proof.ts                 41      41         0  100.0%          54
+src/stark/transcript.ts            51      51         0  100.0%          11
+src/stark/verify.ts               236     236         0  100.0%          91
+all                               647     647         0  100.0%         206
+timeouts counted as killed: 16
+surviving mutants:

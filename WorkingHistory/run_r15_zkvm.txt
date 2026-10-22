@@ -1,0 +1,22 @@
+   Compiling sp1-prover-types v6.8.1
+   Compiling dispute-verifier-script v0.1.0 (/mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/Circuits/zkvm/script)
+warning: dispute-verifier-script@0.1.0: rustc +succinct --version: "rustc 1.96.0-dev\n"
+warning: dispute-verifier-script@0.1.0: dispute-verifier-keccak built at 2026-10-21 17:03:03
+   Compiling sp1-prover v6.8.1
+   Compiling sp1-sdk v6.8.1
+    Finished `release` profile [optimized] target(s) in 2m 05s
+     Running `target/release/dispute-verifier-script ../../target/proof_128_keccak.bin`
+DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, KECCAK COMMITMENTS
+==============================================================================
+  proof bytes read                                    6087489
+  the proof verifies inside the zkVM                     true
+  committed root                               0xa4355c4fe44819540570e899ebcdc01bc61c0b8aaaa883da33faaedbf292eea9
+  instructions executed                             817007459
+  light execution, seconds                               19.5
+  counting execution, seconds                             0.6
+  instructions, gas metering                        817007459
+  trace chunks metered                                      2
+  prover gas                                        831834126
+  syscalls                                              48256
+  gas metering, seconds                                  18.7
+  a tampered proof is refused inside the zkVM            true

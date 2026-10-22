@@ -98,16 +98,6 @@ contract TranscriptGas is Fixture {
         console.log("ratio x100", (logged * 100) / preventive);
     }
 
-    /// Call data alone, at 16 gas a non-zero byte, for presenting the batch
-    /// proof of 128 payments the harness measures. Not a call: it exceeds the
-    /// per-transaction cap.
-    function testChallengeCallDataBudget() public pure {
-        uint256 proofBytes = 5_378_237;
-        console.log("challenge call data alone, gas", proofBytes * 16);
-        console.log("proof bytes", proofBytes);
-        console.log("over the 2^24 per-transaction cap x100", proofBytes * 16 * 100 / (1 << 24));
-    }
-
     function testRevokeIsThePrincipals() public {
         uint256 id = _reg(Reserve.Funding.Deposit);
         uint64[] memory st = _one(B0);
@@ -143,6 +133,21 @@ contract TranscriptGas is Fixture {
         vm.stopPrank();
         assertEq(acc.revokedCount(id), 3);
         assertEq(acc.epochOf(id), 2);
+    }
+
+    /// A revocation recorded after the agent signed and before the settlement
+    /// lands refuses the settlement, which would otherwise record the new
+    /// epoch, whose root the agent's proof was not made against.
+    function testRevocationAfterSignatureRefusesSettlement() public {
+        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint64[] memory e = _elems(14, 1);
+        bytes memory sg = _sign(id, _amount(e), 1, _now(), e);
+        vm.prank(principal);
+        acc.revoke(id, _one(B0 + 500), _one(10), keccak256("after signing"));
+        vm.expectRevert(Reserve.BadSignature.selector);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, OPENING, sg);
+        sg = _sign(id, _amount(e), 1, _now(), e);
+        acc.settleLogged(id, payee, _amount(e), 1, _now(), e, OPENING, sg);
     }
 
     /// The signature covers the payee, so a settlement redirected to anyone
@@ -254,7 +259,14 @@ contract TranscriptGas is Fixture {
         uint256 bond = agent.balance;
         acc.close(id);
         assertEq(token.balanceOf(principal), tokens + BUDGET - 14 * Statement.UNIT);
+        assertEq(acc.credit(agent), 1 ether);
+        assertEq(agent.balance, bond);
+        vm.prank(agent);
+        acc.withdraw();
         assertEq(agent.balance, bond + 1 ether);
+        vm.prank(agent);
+        vm.expectRevert(Reserve.NothingToWithdraw.selector);
+        acc.withdraw();
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(id);
         vm.expectRevert(Reserve.BondAlreadyPaid.selector);

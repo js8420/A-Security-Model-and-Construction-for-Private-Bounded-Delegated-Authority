@@ -43,7 +43,7 @@ use core::convert::Infallible;
 use p3_challenger::{HashChallenger, SerializingChallenger64};
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
-use p3_field::extension::BinomialExtensionField;
+use p3_field::extension::CubicTrinomialExtensionField;
 use p3_field::PrimeField64;
 use p3_fri::{FriParameters, HidingFriPcs};
 use p3_goldilocks::Goldilocks;
@@ -54,7 +54,7 @@ use p3_uni_stark::{verify, Proof, StarkConfig};
 use rand_core::{TryCryptoRng, TryRng};
 
 type Val = Goldilocks;
-type Challenge = BinomialExtensionField<Val, 2>;
+type Challenge = CubicTrinomialExtensionField<Val>;
 type U64Hash = PaddingFreeSponge<KeccakF, 25, 17, 4>;
 type FieldHash = SerializingHasher<U64Hash>;
 type Compress = CompressionFunctionFromHasher<U64Hash, 2, 4>;
@@ -86,7 +86,7 @@ impl TryCryptoRng for NoRng {}
 // fails verification, so the run checks them.
 const LOG_BLOWUP: usize = 4;
 const LOG_FINAL_POLY_LEN: usize = 3;
-const NUM_QUERIES: usize = 40;
+const NUM_QUERIES: usize = 44;
 const POW_BITS: usize = 20;
 const NUM_RANDOM_CODEWORDS: usize = 2;
 

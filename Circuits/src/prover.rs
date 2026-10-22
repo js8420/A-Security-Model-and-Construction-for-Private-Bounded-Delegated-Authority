@@ -5,7 +5,7 @@ use p3_air::BaseAir;
 use p3_challenger::{DuplexChallenger, HashChallenger, SerializingChallenger64};
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
-use p3_field::extension::BinomialExtensionField;
+use p3_field::extension::CubicTrinomialExtensionField;
 use p3_field::Field;
 use p3_fri::{FriParameters, HidingFriPcs, TwoAdicFriPcs};
 use p3_goldilocks::{default_goldilocks_poseidon2_8, Goldilocks, Poseidon2Goldilocks};
@@ -28,7 +28,11 @@ use crate::trace::{composed_case, composed_public_values, full_public_values, va
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
 pub(crate) type Val = Goldilocks;
-pub(crate) type Challenge = BinomialExtensionField<Val, 2>;
+/// The challenge field: the cubic extension F_p[X]/(X^3 - X - 1). Over the
+/// quadratic extension the batching of the opened columns by one challenge
+/// caps the provable soundness near 72 bits (`soundness.rs`); over this one
+/// the queries bind, at 107 bits.
+pub(crate) type Challenge = CubicTrinomialExtensionField<Val>;
 pub(crate) type Perm = Poseidon2Goldilocks<8>;
 pub(crate) type Hash = PaddingFreeSponge<Perm, 8, 4, 4>;
 pub(crate) type Compress = TruncatedPermutation<Perm, 2, 4, 8>;
@@ -183,13 +187,11 @@ fn config_plain() -> PlainConfig {
     StarkConfig::new(pcs, challenger())
 }
 
-/// 40 queries at blowup 16 with 20 grinding bits: 101 bits under the FRI
-/// list-decoding conjecture, and 72 provable round by round (`soundness.rs`),
-/// where the batching of the opened columns by one challenge over a degree-2
-/// extension is the term that binds. The upstream test default, 40 queries at
-/// blowup 4 with 8 grinding bits, is 88 conjectured and 47 provable and does
-/// not admit this circuit. Grinding costs nothing in proof size, rate costs
-/// almost nothing, and queries cost about 117 kB each.
+/// 44 queries at blowup 16 with 20 grinding bits over the cubic extension:
+/// 107 bits provable round by round (`soundness.rs`), the queries binding. The
+/// upstream test default, 40 queries at blowup 4 with 8 grinding bits over the
+/// quadratic extension, does not admit this circuit. Grinding costs nothing in
+/// proof size; the queries are most of it, as the sweep prints.
 /// S-box registers in the Poseidon2 AIR. One register witnesses an
 /// intermediate value and holds every S-box constraint at degree 3; zero
 /// registers leaves them at degree 7 and removes the columns. Both verify under
@@ -199,13 +201,13 @@ fn config_plain() -> PlainConfig {
 /// that way; everything that means "as built" reads this.
 pub const REGISTERS: usize = 0;
 
-pub const NUM_QUERIES: usize = 40;
+pub const NUM_QUERIES: usize = 44;
 pub const LOG_BLOWUP: usize = 4;
 pub const POW_BITS: usize = 20;
 pub const LOG_FINAL_POLY_LEN: usize = 3;
 
 /// Degree of the challenge field over Goldilocks.
-pub const EXT_DEGREE: usize = 2;
+pub const EXT_DEGREE: usize = 3;
 
 /// The hiding commitment blinds a trace of height n with n random rows, so
 /// each column has n random values to hide what a proof opens of it: one

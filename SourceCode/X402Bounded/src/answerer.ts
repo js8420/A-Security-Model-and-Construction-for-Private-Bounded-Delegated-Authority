@@ -1,5 +1,6 @@
 import { bytesToHex, concat, encodePacked, keccak256, sha256, type Hex } from "viem";
 import type { Monitor } from "./monitor.js";
+import type { ProofGate } from "./stark/gate.js";
 
 /** A payment's opening sealed to the monitor's key, and the settlement it belongs to. */
 export interface Sealed {
@@ -30,7 +31,7 @@ export function sealedTree(blobs: readonly Hex[]): { root: Hex; path: (i: number
 }
 
 /** The size of every chunk of a posted proof but the last, as the dispute contract fixes it. */
-export const CHUNK = 262144;
+export const CHUNK = 98304;
 
 /** A proof cut into the chunks it is posted in. */
 export function proofChunks(proof: Uint8Array): Uint8Array[] {
@@ -52,19 +53,45 @@ export function proofHash(proof: Uint8Array): Hex {
  * agent is offline the answerer can still answer a challenge on chain and
  * deliver to the monitor everything that backs the batch. The answerer holds
  * the openings only as ciphertexts of one fixed length: it learns no field
- * the proof hides. It takes each batch once: a second set of openings for a
- * proof it holds is refused, since it would have to receipt two trees for
- * one batch, and either receipt could then slash it.
+ * the proof hides.
+ *
+ * Its receipt can slash its stake, so it signs only what it can stand
+ * behind. It checks the proof with every verifier of its gate before it
+ * signs, and refuses a proof any verifier rejects. It refuses sealed openings
+ * that do not name the proof's payments one for one, in the proof's order.
+ * It takes each payment once: a batch that repeats a proof it holds, or names
+ * a payment of a batch it holds, is refused, since it would then receipt two
+ * trees for one settlement and either receipt could slash it.
  */
 export class Answerer {
   private readonly batches: { proof: Uint8Array; sealed: readonly Sealed[] }[] = [];
   private readonly proofs = new Set<Hex>();
+  private readonly payments = new Set<string>();
+
+  constructor(private readonly gate: ProofGate) {}
 
   /** Takes a batch and returns what its receipt signs: the root of its sealed openings and the proof's hash. */
-  receive(proof: Uint8Array, sealed: readonly Sealed[]): { sealedRoot: Hex; proofHash: Hex } {
+  async receive(proof: Uint8Array, sealed: readonly Sealed[]): Promise<{ sealedRoot: Hex; proofHash: Hex }> {
     const id = sha256(proof);
     if (this.proofs.has(id)) throw new Error("batch already held");
+    const r = await this.gate.deliver(proof);
+    if (!r.accepted) {
+      const why = r.verdicts.filter((v) => !v.verdict.ok).map((v) => v.name).join(", ");
+      throw new Error(`proof refused by ${why}`);
+    }
+    const named = r.payments.map((p) => `${p.domain}/${p.digest}`);
+    if (new Set(named).size !== named.length) throw new Error("proof names a payment twice");
+    if (named.some((n) => this.payments.has(n))) throw new Error("batch overlaps a held batch");
+    if (sealed.length > 0) {
+      if (sealed.length !== r.payments.length) throw new Error("sealed openings do not match the proof's payments");
+      sealed.forEach((s, i) => {
+        if (s.domain !== r.payments[i].domain || s.digest !== r.payments[i].digest) {
+          throw new Error(`sealed opening ${i} names another payment than the proof's`);
+        }
+      });
+    }
     this.proofs.add(id);
+    for (const n of named) this.payments.add(n);
     this.batches.push({ proof, sealed });
     return { sealedRoot: sealedTree(sealed.map((s) => s.blob)).root, proofHash: proofHash(proof) };
   }

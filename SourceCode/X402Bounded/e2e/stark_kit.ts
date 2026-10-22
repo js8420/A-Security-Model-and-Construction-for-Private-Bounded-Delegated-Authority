@@ -1,4 +1,4 @@
-import type { E } from "../src/stark/field.js";
+import { DEG, type E } from "../src/stark/field.js";
 import type { Digest, StarkProof } from "../src/stark/proof.js";
 
 /** The inverse of parse: a proof and its public values back to the bincode the deployed prover writes. */
@@ -23,10 +23,7 @@ export function encode(p: StarkProof, pv: readonly bigint[]): Uint8Array {
       item(x);
     }
   };
-  const e = (x: E) => {
-    u64(x[0]);
-    u64(x[1]);
-  };
+  const e = (x: E) => x.forEach(u64);
   const digest = (d: Digest) => d.forEach(u64);
   const cap = (c: readonly Digest[]) => vec(c, digest);
   cap(p.traceCap);
@@ -98,19 +95,21 @@ export function offsets(b: Uint8Array): Offsets {
     at += n;
   };
   const cap = () => vec(skip(32));
+  /** One extension element: DEG base coordinates of 8 bytes. */
+  const ext = skip(8 * DEG);
   const o: Partial<Offsets> = {};
   cap();
   cap();
   option(cap);
   o.traceLocal = at + 8;
-  vec(skip(16));
-  option(() => vec(skip(16)));
-  option(() => vec(skip(16)));
-  option(() => vec(skip(16)));
+  vec(ext);
+  option(() => vec(ext));
+  option(() => vec(ext));
+  option(() => vec(ext));
   o.quotientChunk = at + 16;
-  vec(() => vec(skip(16)));
-  option(() => vec(skip(16)));
-  vec(() => vec(() => vec(() => vec(skip(16)))));
+  vec(() => vec(ext));
+  option(() => vec(ext));
+  vec(() => vec(() => vec(() => vec(ext))));
   vec(cap);
   vec(skip(8));
   vec(() => {
@@ -126,13 +125,13 @@ export function offsets(b: Uint8Array): Offsets {
     vec(() => {
       at += 1;
       if (first && o.foldSibling === undefined) o.foldSibling = at + 8;
-      vec(skip(16));
+      vec(ext);
       vec(() => vec(skip(8)));
       vec(skip(32));
     });
   });
   o.finalPoly = at + 8;
-  vec(skip(16));
+  vec(ext);
   o.queryPow = at;
   at += 8;
   o.degreeBits = at;

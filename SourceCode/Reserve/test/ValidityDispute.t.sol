@@ -141,6 +141,9 @@ contract ValidityDisputeTest is Groth16Result {
         uint256 principalBefore = principal.balance;
         uint256 challengerBefore = challenger.balance;
         vd.expire(id, _digest(0));
+        assertEq(acc.credit(principal), AGENT_BOND);
+        vm.prank(principal);
+        acc.withdraw();
         assertEq(principal.balance, principalBefore + AGENT_BOND);
         vm.prank(challenger);
         vd.withdraw();
@@ -161,9 +164,8 @@ contract ValidityDisputeTest is Groth16Result {
         vm.expectRevert(Verifier.ProofInvalid.selector);
         _answer(other, 5, s, 5);
         vm.warp(vd.challengeOf(other, _digest(5)).deadline + 1);
-        uint256 before = principal.balance;
         vd.expire(other, _digest(5));
-        assertEq(principal.balance, before + AGENT_BOND);
+        assertEq(acc.credit(principal), AGENT_BOND);
     }
 
     /// The same proof cannot answer for a settlement that paid more for the

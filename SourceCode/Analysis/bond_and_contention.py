@@ -2,12 +2,17 @@
 adversary or a censoring set of proposers can impose on a forced transaction
 on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
 protocol constants, so one run is the result. The bounty adds to the price
-of proving an answer what posting the batch proof and sending the answer cost
-on Base, as posting_cost.py measured them.
+of proving an answer, which the Groth16 runs on Pete measured, what posting the
+batch proof, sending the answer and delivering a sealed opening cost on Base,
+as posting_cost.py measured them, and rounds the sum up to the next 10 cents.
+The answer window and the slot are checked against the slowest proving run.
 
-Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt
+Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR
+where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run;
+folders whose name holds "low" are runs at the low-memory setting.
 """
 import math
+import os
 import re
 import sys
 
@@ -17,6 +22,10 @@ DAY = 24.0  # hours
 # hours on Ethereum, which the censorship table below sizes. sigma_x: a block's time lies within the sequencing window
 # behind and max_sequencer_drift (1800 s) ahead of Ethereum's clock.
 W_D = 8.0
+# The posting wait w_p the dispute contract gives an answerer to deliver and
+# post after a challenge is answered: at least Delta_f + sigma_x, so that a
+# forced transaction sent at once lands inside it, plus the margin.
+W_P = 30.0
 DELTA_F = 12.0 + 2.0
 SIGMA_X = 12.0 + 0.5
 THETA = 1.0
@@ -24,20 +33,46 @@ THETA = 1.0
 # moment an honest agent's delivery can arrive, w_d + theta after the signed
 # time, so the monitor has time to verify what arrives last.
 MARGIN = 1.0
-C_ANS = 82.0 / 60.0
+# The answer window w_a and the slot eta of the dispute contract. An answer
+# must be proved and forced in before its deadline, so w_a covers the slowest
+# measured proving time plus Delta_f + sigma_x; an agent finishes one answer
+# per slot, so eta covers the slowest proving time.
+W_A = 32.0
+SLOT = 4.0
 W_RATE = DAY
-# The challenger's bond, which is also the bounty a slash pays: the computed
-# price of proving one answer, 64 vCPU at 3.616 USD an hour for 3,179.2 s,
-# plus the measured cost on Base of sending the answer and of posting the batch
-# proof, which an answer to the principal's challenge obliges.
-PROVING = 3.616 * 3179.2 / 3600
+# The challenger's bond, which is also the bounty a slash pays: the price of
+# proving one answer, 64 vCPU at 3.616 USD an hour for the measured proving
+# time, plus the measured cost on Base of sending the answer, of delivering a
+# sealed opening and of posting the batch proof, which an answer to the
+# principal's challenge obliges, rounded up to the next 10 cents.
+VCPU_HOUR_64 = 3.616
+
+
+def runs(folder):
+    """Every Groth16 run in the folder: name, setup and proving seconds, low-memory or not."""
+    out = []
+    for name in sorted(os.listdir(folder)):
+        path = os.path.join(folder, name, "onchain.txt")
+        if not name.startswith("out_") or not os.path.isfile(path):
+            continue
+        f = {}
+        for line in open(path, encoding="utf8"):
+            parts = line.split()
+            if len(parts) == 2 and parts[0] in ("setup_seconds", "prove_seconds", "verifies"):
+                f[parts[0]] = parts[1]
+        if f.get("verifies") != "true" or "prove_seconds" not in f:
+            raise SystemExit(f"{path}: not a verified Groth16 run")
+        out.append((name, float(f.get("setup_seconds", 0)), float(f["prove_seconds"]), "low" in name))
+    if not any(not low for *_, low in out):
+        raise SystemExit(f"no run at the default setting in {folder}")
+    return out
 
 
 def posted(path):
     usd = {}
     label = None
     for line in open(path, encoding="utf8"):
-        m = re.match(r"\s+(proof, all chunks|one answer)\s", line)
+        m = re.match(r"\s+(proof, all chunks|one answer|one delivery)\s", line)
         if m:
             label = m.group(1)
             continue
@@ -45,21 +80,28 @@ def posted(path):
         if m and label:
             usd[label] = float(m.group(1))
             label = None
-    if set(usd) != {"proof, all chunks", "one answer"}:
-        raise SystemExit(f"no posting and answer cost in {path}")
-    return usd["proof, all chunks"], usd["one answer"]
+    if set(usd) != {"proof, all chunks", "one answer", "one delivery"}:
+        raise SystemExit(f"no posting, answer and delivery cost in {path}")
+    return usd["proof, all chunks"], usd["one answer"], usd["one delivery"]
 
 
-POSTING, SENDING = posted(sys.argv[1])
-BETA = PROVING + POSTING + SENDING
+POSTING, SENDING, DELIVERING = posted(sys.argv[1])
+RUNS = runs(sys.argv[2])
+PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
+T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
+PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
+COST = PROVING + POSTING + SENDING + DELIVERING
+BETA = math.ceil(round(COST * 10, 9)) / 10
 
 def windows():
     w = W_D + THETA + MARGIN + DELTA_F + SIGMA_X
     k_w = math.ceil((w + THETA) / W_RATE) + 1
-    w_a = C_ANS + DELTA_F + SIGMA_X
+    w_a = T_ANS + DELTA_F + SIGMA_X
     print("WINDOWS ON BASE, HOURS")
     print("=" * 78)
     print(f"  delivery w_d                               {W_D:8.1f}")
+    print(f"  posting wait w_p >= Delta_f + sigma_x + m  {W_P:8.1f}")
+    assert W_P >= DELTA_F + SIGMA_X + MARGIN
     print(f"  forced inclusion Delta_f                   {DELTA_F:8.1f}")
     print(f"  clock bound sigma_x                        {SIGMA_X:8.1f}")
     print(f"  signed-time tolerance theta                {THETA:8.1f}")
@@ -68,7 +110,11 @@ def windows():
     print(f"  decision time after the signed time, w - Delta_f - sigma_x {w - DELTA_F - SIGMA_X:4.1f}")
     print(f"  rate window W                              {W_RATE:8.1f}")
     print(f"  windows a bond covers, ceil((w+theta)/W)+1 {k_w:8d}")
-    print(f"  answer window at least c + Delta_f + sigma_x {w_a:6.1f}, set to 30")
+    print(f"  slowest proving run, setup included          {T_ANS:8.2f}")
+    print(f"  answer window w_a >= t_ans + Delta_f + sigma_x {w_a:6.1f}, set to {W_A:.0f}")
+    print(f"  slot eta >= t_ans                              {T_ANS:6.2f}, set to {SLOT:.0f}")
+    print(f"  one challenge forfeits by w_a + 2 eta           {W_A + 2 * SLOT:6.1f}")
+    assert W_A >= w_a and SLOT >= T_ANS
     print()
     return k_w
 
@@ -216,12 +262,23 @@ def bribery():
     print()
 
 if __name__ == "__main__":
+    print("THE GROTH16 RUNS, SECONDS")
+    print("=" * 78)
+    for name, st, p, low in RUNS:
+        print(f"  {name:<28} {'low memory' if low else 'default':<12} setup {st:7.1f}  prove {p:9.1f}")
+    print()
     print("THE BOUNTY, USD")
     print("=" * 78)
-    print(f"  proving one answer, computed                {PROVING:8.2f}")
-    print(f"  posting the batch proof on Base, measured    {POSTING:8.2f}")
-    print(f"  sending the answer on Base, measured         {SENDING:8.2f}")
-    print(f"  bounty and challenger's bond beta            {BETA:8.2f}")
+    rows = [
+        (f"proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour", f"{PROVING:.4f}"),
+        ("posting the batch proof on Base, measured", f"{POSTING:.4f}"),
+        ("sending the answer on Base, measured", f"{SENDING:.4f}"),
+        ("delivering a sealed opening on Base, measured", f"{DELIVERING:.4f}"),
+        ("sum", f"{COST:.4f}"),
+        ("bounty and challenger's bond beta, rounded up", f"{BETA:.2f}"),
+    ]
+    for label, v in rows:
+        print(f"  {label:<66}{v:>10}")
     print()
     k_w = windows()
     profiles(k_w)

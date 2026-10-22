@@ -28,7 +28,7 @@ contract ValidityDisputeOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
-    string constant RESULT = "../../WorkingHistory/groth16_s6/out_s6_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s7/out_s7_batch_a/onchain.txt";
     /// The exported batch's STARK proof with its public values, as the agent hands it on.
     string constant STARK = "../../Circuits/target/proof_128_keccak.bin";
     uint64 constant DOMAIN = 8453;
@@ -91,7 +91,7 @@ contract ValidityDisputeOnChain is Script {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 8 hours);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 30 hours);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);

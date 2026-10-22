@@ -20,7 +20,7 @@ use p3_field::{BasedVectorSpace, PrimeField64};
 use p3_uni_stark::prove;
 
 use crate::naysay::{config, record_ops, sides, Air, Op, RProof, Recording};
-use crate::prover::{deployed_pcs, Challenge, P2Pcs as Pcs, Val, ROWS};
+use crate::prover::{EXT_DEGREE, deployed_pcs, Challenge, P2Pcs as Pcs, Val, ROWS};
 use crate::trace::composed_case;
 
 type Expr = SymbolicExpr<BaseLeaf<Val>>;
@@ -277,7 +277,7 @@ pub fn profile(vectors: &str) -> Profile {
     let (_, ops, verdict) = record_ops(&air, &proof, &pv);
     assert!(verdict.is_ok(), "honest proof must verify");
     let outs: Vec<Val> = ops.iter().filter_map(|o| if let Op::Out(v) = o { Some(*v) } else { None }).collect();
-    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&outs[2 * i..2 * i + 2]).expect("two");
+    let ext = |i: usize| Challenge::from_basis_coefficients_slice(&outs[EXT_DEGREE * i..EXT_DEGREE * (i + 1)]).expect("one coefficient per degree");
     let (alpha, zeta) = (ext(0), ext(1));
     let ov = &proof.opened_values;
     let next = ov.trace_next.as_deref().expect("next row");

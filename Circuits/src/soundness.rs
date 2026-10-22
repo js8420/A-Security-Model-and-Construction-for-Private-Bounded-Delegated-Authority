@@ -8,10 +8,12 @@
 //! changes one term, as `SourceCode/Analysis/se_bound.py` sets out. This file
 //! computes the same terms so that the harness prints what the paper states.
 //!
+//! The challenge field is the cubic extension of Goldilocks. Over the
+//! quadratic one the batching term caps the provable figure near 72 bits.
 //! The provable figure is the better of the Johnson and unique-decoding
 //! regimes. The conjectured figure charges the queries the full rate and every
 //! other term its unique-decoding value. Both are round-by-round figures; an
-//! adversary making t oracle queries gains a factor t + 7 on top.
+//! adversary making q oracle queries gains a factor q + 7 on top.
 
 const P: f64 = 18446744069414584321.0;
 const FOLDS: [f64; 3] = [4.0, 4.0, 2.0];
@@ -29,13 +31,15 @@ pub struct Shape {
 }
 
 /// The composed circuit as built.
-pub const COMPOSED: Shape = Shape { rows: 128, width: 14_292, constraints: 14_302, degree: 7, chunks: 16, ext: 2 };
+pub const COMPOSED: Shape = Shape { rows: 128, width: 14_292, constraints: 14_302, degree: 7, chunks: 16, ext: crate::prover::EXT_DEGREE as i32 };
 
-/// Columns the batching challenge combines: the trace with its two random
-/// codewords at two points, and each quotient chunk and the mask, two
-/// coordinates and two random codewords each, at one.
+/// Openings the batching challenge combines: the trace with its two random
+/// codewords at two points, and at one point each quotient chunk's base
+/// coordinates and the mask's polynomials, one per degree of the extension,
+/// each with the two random codewords.
 fn batched(s: &Shape) -> f64 {
-    (2 * (s.width + 2) + s.chunks * 4 + 4) as f64
+    let e = s.ext as usize;
+    (2 * (s.width + 2) + s.chunks * (e + 2) + (e + 2)) as f64
 }
 
 enum Regime {
@@ -65,7 +69,7 @@ fn worst(s: &Shape, r: Regime, queries: usize, log_blowup: usize, pow: usize) ->
                 .fold(0.0, f64::max);
             [
                 l * c / g,
-                l * l * deg / (g - 2.0 * d),
+                l * l * deg / (g - 2.0 * d) + 2.0 * d / g,
                 (n - 1.0) * gap,
                 fold,
                 (rho.sqrt() * (1.0 + 1.0 / (2.0 * m))).powi(q) * grind,
@@ -78,7 +82,7 @@ fn worst(s: &Shape, r: Regime, queries: usize, log_blowup: usize, pow: usize) ->
             };
             [
                 c / g,
-                deg / (g - 2.0 * d),
+                deg / (g - 2.0 * d) + 2.0 * d / g,
                 (n - 1.0) * d / g,
                 FOLDS.iter().map(|a| (a - 1.0) * (d + 1.0) / g).fold(0.0, f64::max),
                 query * grind,
@@ -97,7 +101,10 @@ pub fn provable(s: &Shape, queries: usize, log_blowup: usize, pow: usize) -> f64
     let mut best = worst(s, Regime::Unique, queries, log_blowup, pow);
     for m in 3..4096 {
         let m = m as f64;
-        if rho - 2.0 * m / d <= 0.0 || rho.sqrt() * (1.0 + 1.0 / (2.0 * m)) >= 1.0 {
+        // The Johnson-regime theorem asks 3 <= m < k/2 and
+        // eta = sqrt(rho)(1 + 1/(2m)) - sqrt((k + 2)/|D|) > 0.
+        let eta = rho.sqrt() * (1.0 + 1.0 / (2.0 * m)) - ((k + 2.0) / d).sqrt();
+        if m >= k / 2.0 || rho - 2.0 * m / d <= 0.0 || eta <= 0.0 || rho.sqrt() * (1.0 + 1.0 / (2.0 * m)) >= 1.0 {
             continue;
         }
         best = best.min(worst(s, Regime::Johnson(m), queries, log_blowup, pow));
@@ -116,8 +123,11 @@ mod tests {
 
     #[test]
     fn deployed_matches_the_analysis_script() {
-        assert_eq!(provable(&COMPOSED, 40, 4, 20).floor() as usize, 72);
-        assert_eq!(conjectured(&COMPOSED, 40, 4, 20).floor() as usize, 101);
-        assert_eq!(provable(&COMPOSED, 84, 3, 16).floor() as usize, 85);
+        assert_eq!(provable(&COMPOSED, 44, 4, 20).floor() as usize, 107);
+        assert_eq!(conjectured(&COMPOSED, 44, 4, 20).floor() as usize, 165);
+        assert_eq!(provable(&COMPOSED, 58, 3, 20).floor() as usize, 106);
+        let quadratic = Shape { ext: 2, ..COMPOSED };
+        assert_eq!(provable(&quadratic, 40, 4, 20).floor() as usize, 72);
+        assert_eq!(provable(&quadratic, 40, 3, 20).floor() as usize, 73);
     }
 }

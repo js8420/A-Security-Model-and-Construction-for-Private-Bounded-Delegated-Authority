@@ -11,6 +11,7 @@ interface IERC20 {
 interface IDisputeCount {
     function openCount(uint256 id) external view returns (uint256);
     function acceptWindow() external view returns (uint64);
+    function deliveryWait() external view returns (uint64);
 }
 
 /// The circuit's own permutation, which a claim needs to open H(s).
@@ -87,6 +88,14 @@ contract Reserve {
         /// answered expires.
         uint256 answererStake;
     }
+
+    /// Ether owed to an address: a forfeited bond to the principal, a returned
+    /// bond to the agent, a bounty to whoever brought a slash. Withdrawn by its
+    /// owner, never pushed, so no recipient can block a forfeit or a close.
+    mapping(address => uint256) public credit;
+    /// When each delegation closed; the answerer's stake waits a further
+    /// close delay and delivery wait so that every slash can still land.
+    mapping(uint256 => uint64) private closedAt;
 
     struct Window {
         uint64 start;
@@ -183,6 +192,7 @@ contract Reserve {
     error NotFrozen();
     error NotAnswerer();
     error NotClosed();
+    error NothingToWithdraw();
 
     /// `opening` is the agent's commitment to the payment's hidden fields,
     /// which the agent opens to the principal alone.
@@ -300,6 +310,11 @@ contract Reserve {
         emit Settled(id, digest, amount, payee, time, opening);
     }
 
+    /// What the agent signs. It includes the delegation's current revocation
+    /// epoch, which the agent reads with the rest, so a revocation recorded
+    /// between the signature and the settlement makes the signature fail: the
+    /// payment is refused rather than settled under a root the agent did not
+    /// prove against, which would leave an honest agent unable to answer.
     function signedDigest(
         uint256 id,
         address payee,
@@ -310,7 +325,9 @@ contract Reserve {
         bytes32 opening
     ) public view returns (bytes32) {
         return keccak256(
-            abi.encode(block.chainid, address(this), domain, id, payee, amount, digest, time, elemsHash, opening)
+            abi.encode(
+                block.chainid, address(this), domain, id, delegations[id].epoch, payee, amount, digest, time, elemsHash, opening
+            )
         );
     }
 
@@ -454,17 +471,19 @@ contract Reserve {
         uint256 paid = bounty < amount ? bounty : amount;
         burnt += amount - paid;
         emit AnswererSlashed(id, amount);
-        if (paid != 0) {
-            (bool ok, ) = payable(caller).call{value: paid}("");
-            require(ok, "bounty");
-        }
+        credit[caller] += paid;
     }
 
-    /// Pulled rather than paid at close, so an answerer cannot block a close.
+    /// Pulled rather than paid at close, so an answerer cannot block a close,
+    /// and only once a close delay and a delivery wait have passed since the
+    /// close: a challenge that expired, or a delivery that fell due, before the
+    /// close can still slash the stake for that long after it.
     function unstakeAnswerer(uint256 id) external {
         Delegation storage d = delegations[id];
         if (msg.sender != d.answerer) revert NotAnswerer();
         if (!d.closed) revert NotClosed();
+        uint256 wait = dispute == address(0) ? 0 : IDisputeCount(dispute).deliveryWait();
+        if (block.timestamp <= uint256(closedAt[id]) + closeDelay + wait) revert NotClosed();
         uint256 amount = d.answererStake;
         d.answererStake = 0;
         if (amount != 0) {
@@ -519,6 +538,7 @@ contract Reserve {
         if (d.closed || block.timestamp <= end + closeDelay) revert NotClosable();
         if (dispute != address(0) && IDisputeCount(dispute).openCount(id) != 0) revert NotClosable();
         d.closed = true;
+        closedAt[id] = uint64(block.timestamp);
         uint256 dep = d.deposit;
         d.deposit = 0;
         uint256 bond = d.bondPaid ? 0 : d.bond;
@@ -526,10 +546,16 @@ contract Reserve {
         d.bond = 0;
         emit Closed(id, dep, bond);
         if (dep != 0) require(token.transfer(d.principal, dep), "deposit");
-        if (bond != 0) {
-            (bool ok, ) = payable(d.agent).call{value: bond}("");
-            require(ok, "bond");
-        }
+        credit[d.agent] += bond;
+    }
+
+    /// Pays out the caller's credits.
+    function withdraw() external {
+        uint256 amount = credit[msg.sender];
+        if (amount == 0) revert NothingToWithdraw();
+        credit[msg.sender] = 0;
+        (bool ok, ) = payable(msg.sender).call{value: amount}("");
+        require(ok, "withdraw");
     }
 
     function _forfeit(uint256 id) private {
@@ -539,8 +565,7 @@ contract Reserve {
         uint256 amount = d.bond;
         d.bond = 0;
         emit BondForfeited(id, d.principal, amount);
-        (bool ok, ) = payable(d.principal).call{value: amount}("");
-        require(ok, "bond");
+        credit[d.principal] += amount;
     }
 
     /// The principal computes the accumulator's new root off chain and the

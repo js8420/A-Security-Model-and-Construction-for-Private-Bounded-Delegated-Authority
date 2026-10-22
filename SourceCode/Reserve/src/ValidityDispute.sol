@@ -37,21 +37,23 @@ interface IReserveV {
 /// check. A settlement whose shares its proof did not compute therefore cannot
 /// be answered.
 ///
-/// Many challenges. A settlement is challenged at most once. Each agent has
-/// two deadline queues, one for its principal's challenges and one for
-/// everyone else's. Deadlines in one queue are two slots apart and the two
-/// queues sit on alternate slot boundaries, so no two of an agent's deadlines
-/// fall in one slot: an agent that proves one answer per slot never misses
-/// one, and challenges anyone else opens, the agent's own included, cannot
-/// push back the principal's. One answer proves every open challenge against
-/// settlements of one batch with one Groth16 proof.
+/// Many challenges. A settlement is challenged at most once. Each agent has a
+/// deadline queue for each principal it serves, which that principal's
+/// challenges and its monitor's enter, and one for everyone else's.
+/// Deadlines in one queue are two slots apart, and the principals' queues and
+/// the other sit on alternate slot boundaries, so an agent that proves one
+/// answer per slot for each principal and one more never misses one, and
+/// challenges anyone else opens, the agent's own and those of its other
+/// principals included, cannot push back a principal's. One answer proves
+/// every open challenge against settlements of one batch with one Groth16
+/// proof.
 ///
 /// Bonds. An answer credits each challenger's bond to the agent challenged,
 /// or to its answerer if it has one, whoever sends the answer, so copying an
 /// answer gains nothing. No answer by the deadline credits the bond back to
 /// the challenger and forfeits the agent's bond in the reserve to the
-/// principal. Credits are withdrawn, never pushed, so no recipient can block
-/// an answer or an expiry.
+/// principal, which the principal withdraws from the reserve. Credits are
+/// withdrawn, never pushed, so no recipient can block an answer or an expiry.
 ///
 /// Answerers. An answerer signs a receipt for each batch it holds: the
 /// batch's root, the root of a tree of the payments' openings, each sealed
@@ -119,10 +121,16 @@ contract ValidityDispute {
     /// and the proof may be posted.
     uint64 public immutable deliveryWait;
     /// The size of every chunk of a posted proof but the last.
-    uint256 public constant CHUNK = 262144;
+    /// 96 KiB: a chunk's transaction stays below the 128 KiB a node's
+    /// transaction pool admits and the 120,000 bytes of call data an OP Stack
+    /// portal admits in a deposit, so a posting can be forced in through L1.
+    uint256 public constant CHUNK = 98304;
 
     mapping(bytes32 => Challenge) private challenges;
-    mapping(address => uint64) public lastPrincipalDeadline;
+    /// The last deadline in each principal's queue for an agent: keyed by the
+    /// agent and the delegation's principal, so neither another principal of
+    /// the same agent nor a delegation the agent issues itself lengthens it.
+    mapping(address => mapping(address => uint64)) public lastPrincipalDeadline;
     mapping(address => uint64) public lastPublicDeadline;
     mapping(uint256 => uint256) public openCount;
     mapping(address => uint256) public credit;
@@ -203,8 +211,9 @@ contract ValidityDispute {
         if (challenges[k].status != Status.None) revert AlreadyChallenged();
         _record(id, digest, s);
         if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
-        bool principal = msg.sender == reserve.principalOf(id) || msg.sender == reserve.monitorOf(id);
-        uint64 deadline = _queue(reserve.agentOf(id), principal);
+        address owner = reserve.principalOf(id);
+        bool principal = msg.sender == owner || msg.sender == reserve.monitorOf(id);
+        uint64 deadline = _queue(reserve.agentOf(id), owner, principal);
         challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open, byPrincipal: principal});
         openCount[id] += 1;
         // The principal's challenge stops further settlement until it is
@@ -277,8 +286,8 @@ contract ValidityDispute {
     }
 
     /// What an answerer signs on receiving a batch: the delegation, the
-    /// batch's root, the root of its sealed openings, and when it received
-    /// them.
+    /// batch's root, the root of its sealed openings, the hash of the batch
+    /// proof, and when it received them.
     function receiptDigest(uint256 id, bytes32 root, bytes32 sealedRoot, bytes32 proofHash, uint64 receivedAt)
         public
         view
@@ -421,15 +430,15 @@ contract ValidityDispute {
     /// window away, at least two slots after that queue's previous deadline,
     /// and on that queue's own slot boundaries, even ones for the principal
     /// and odd ones for everyone else.
-    function _queue(address agent, bool principal) private returns (uint64 d) {
+    function _queue(address agent, address owner, bool principal) private returns (uint64 d) {
         uint64 period = 2 * slot;
         uint64 phase = principal ? 0 : slot;
         uint64 x = uint64(block.timestamp) + answerWindow;
-        uint64 last = principal ? lastPrincipalDeadline[agent] : lastPublicDeadline[agent];
+        uint64 last = principal ? lastPrincipalDeadline[agent][owner] : lastPublicDeadline[agent];
         if (last != 0 && last + period > x) x = last + period;
         uint64 m = x % period;
         d = m <= phase ? x + (phase - m) : x + (period - m) + phase;
-        if (principal) lastPrincipalDeadline[agent] = d;
+        if (principal) lastPrincipalDeadline[agent][owner] = d;
         else lastPublicDeadline[agent] = d;
     }
 

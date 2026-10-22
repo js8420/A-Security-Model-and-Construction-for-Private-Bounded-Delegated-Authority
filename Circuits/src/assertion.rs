@@ -31,7 +31,7 @@ use crate::naysay::{
     all_positions, at_root, config, fold, outputs, record_ops, rounds, run_queries, sides, walk, Air, Op,
     Outputs, RProof, Recording,
 };
-use crate::prover::{
+use crate::prover::{EXT_DEGREE, 
     deployed_pcs, Challenge, Compress, Hash, P2Pcs as Pcs, Val, LOG_BLOWUP, LOG_FINAL_POLY_LEN, ROWS,
 };
 use crate::trace::{composed_case, ComposedBreak};
@@ -244,7 +244,7 @@ struct Identity {
 
 fn drawn_ext(ops: &[Op], i: usize) -> Challenge {
     let outs: Vec<Val> = ops.iter().filter_map(|o| if let Op::Out(v) = o { Some(*v) } else { None }).collect();
-    Challenge::from_basis_coefficients_slice(&outs[2 * i..2 * i + 2]).expect("two")
+    Challenge::from_basis_coefficients_slice(&outs[EXT_DEGREE * i..EXT_DEGREE * (i + 1)]).expect("one coefficient per degree")
 }
 
 fn identity(air: &Air, proof: &RProof, pv: &[Val], ops: &[Op]) -> Identity {

@@ -1,15 +1,26 @@
 #!/bin/bash
 # Contract tests and on-chain receipts in one run, after taking real state
 # proofs from Ethereum and Base mainnet for the cross-domain read. Usage:
-# measure_gas.sh TAG. L1_RPC and L2_RPC choose the endpoints.
+# measure_gas.sh TAG. L1_RPC and L2_RPC choose the endpoints. The batch proof
+# the scripts post is exported here from the circuit as built, and the bounty
+# takes its proving time from the Groth16 run the scripts read.
 set -euo pipefail
 export PATH="$HOME/.foundry/bin:$PATH"
-for t in forge anvil cast python3; do
+export PATH="$HOME/.cargo/bin:$PATH"
+for t in forge anvil cast python3 cargo; do
     command -v $t >/dev/null || { echo "missing: $t"; exit 1; }
 done
 tag=${1:?tag}
 here=$(cd "$(dirname "$0")" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
+circuits=$(cd "$here/../../Circuits" && pwd)
+result="$hist/groth16_s7/out_s7_batch_a/onchain.txt"
+[ -f "$result" ] || { echo "missing $result: copy the Groth16 run from Pete first"; exit 1; }
+log=$(mktemp)
+(cd "$circuits" && cargo build --release > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
+if grep -q "^warning" "$log"; then grep -A6 "^warning" "$log"; exit 1; fi
+rm -f "$log"
+(cd "$circuits" && ./target/release/delegation-circuit export-keccak >/dev/null)
 cd "$here"
 
 python3 fetch_state_proofs.py "$hist/state_proofs" | tee "$hist/run_${tag}_state_proofs.txt"
@@ -50,3 +61,4 @@ for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisput
 PY
 
 python3 ../Analysis/posting_cost.py "$hist/receipts_${tag}_ValidityDisputeOnChain.json" | tee "$hist/run_${tag}_posting.txt"
+python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s7" | tee "$hist/run_${tag}_bond.txt"

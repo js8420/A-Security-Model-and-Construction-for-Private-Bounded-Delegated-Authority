@@ -15,7 +15,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  Answerer, Monitor, ProofGate, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
+  Answerer, Monitor, ProofGate, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
   proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
   type Check, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
@@ -182,6 +182,19 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     }
   };
 
+  /** Another party, not the principal or its monitor, challenges a settlement first. */
+  const challengeFirst = async (d: Domain, r: Record) => {
+    await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, recordOf(r)], value: parseEther("0.01") }));
+  };
+
+  /** H(s) as the reserve's claim computes it: the circuit's Poseidon2 on the secret under its own domain separator. */
+  const secretHashOf = async (sec: readonly [bigint, bigint]) => {
+    const st = [sec[0], sec[1], 6n, 0n, 0n, 0n, 0n, 0n] as const;
+    const out = (await pub.readContract({ address: poseidon, abi: artifact("Poseidon2Goldilocks.sol", "Poseidon2Goldilocks").abi, functionName: "permute", args: [st] })) as readonly bigint[];
+    return `0x${(out[2] | (out[3] << 64n) | (out[4] << 128n) | (out[5] << 192n)).toString(16).padStart(64, "0")}` as Hex;
+  };
+  const principalCredit = async () => (await pub.readContract({ address: reserve, abi: reserveFull, functionName: "credit", args: [principal.account.address] })) as bigint;
+
   const stakeOf = async (d: Domain) => ((await pub.readContract({ address: reserve, abi: reserveFull, functionName: "answererOf", args: [d.delegation] })) as [Address, bigint])[1];
 
   const state = async (d: Domain) => {
@@ -194,7 +207,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf };
+  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf, principalCredit };
 }
 
 const lines: string[] = [];
@@ -335,36 +348,51 @@ async function main() {
   const dU = await A.delegate(asked);
   const mU = new Monitor([dU], provenPolicy, proving(gateBoth(), KEYS.seal));
   const u = await settleProven(dU);
-  const answererU = new Answerer();
-  answererU.receive(honest, sealAll(u.os));
+  const answererU = new Answerer(gateBoth());
+  await answererU.receive(honest, sealAll(u.os));
   const dU2 = await A.delegate(asked);
   const mU2 = new Monitor([dU2], provenPolicy, proving(gateBoth(), KEYS.seal));
   await settleProven(dU2);
-  const answererU2 = new Answerer();
-  answererU2.receive(honest, []);
+  const answererU2 = new Answerer(gateBoth());
+  await answererU2.receive(honest, []);
   const dT = await A.delegate(proven);
   const mT = new Monitor([dT], provenPolicy, proving(gateBoth(), KEYS.seal));
   const t = await settleProven(dT);
-  const answererT = new Answerer();
-  answererT.receive(honest, sealAll(t.os));
+  const answererT = new Answerer(gateBoth());
+  await answererT.receive(honest, sealAll(t.os));
   const dS = await A.delegate({ ...proven, answerer: true });
   const mS = new Monitor([dS], provenPolicy, proving(gateBoth(), KEYS.seal));
   const sS = await settleProven(dS);
-  const answererS = new Answerer();
+  const answererS = new Answerer(gateBoth());
   const sealedS = sealAll(sS.os);
-  const heldS = answererS.receive(honest, sealedS);
+  const heldS = await answererS.receive(honest, sealedS);
   const dR = await A.delegate({ ...proven, answerer: true });
   const mR = new Monitor([dR], provenPolicy, proving(gateBoth(), KEYS.seal));
   const sR = await settleProven(dR);
-  const answererR = new Answerer();
+  const answererR = new Answerer(gateBoth());
   const sealedR = sealAll(sR.os);
-  const heldR = answererR.receive(honest, sealedR);
+  const heldR = await answererR.receive(honest, sealedR);
   let twice = false;
   try {
-    answererR.receive(honest, sealedS);
+    await answererR.receive(honest, sealedS);
   } catch {
     twice = true;
   }
+  const refusedBy = async (a: Answerer, proof: Uint8Array, sealed: readonly Sealed[]): Promise<string> => {
+    try {
+      await a.receive(proof, sealed);
+      return "";
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+  const tampered = new Uint8Array(honest);
+  tampered[tampered.length - 9] ^= 1;
+  const answererF = new Answerer(gateBoth());
+  const forgedRefused = await refusedBy(answererF, tampered, []);
+  const swappedRefused = await refusedBy(answererF, honest, [...sealedS].reverse());
+  const shortRefused = await refusedBy(answererF, honest, sealedS.slice(1));
+  const afterRefusals = await refusedBy(answererF, honest, sealedS);
   const receivedAt = await A.now();
 
   const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR];
@@ -402,6 +430,10 @@ async function main() {
   const otherDigest = payments[n - 1].digest;
   check("a sealed opening is bound to its settlement: offered for another settlement of the batch, it does not open", !(await mU.deliverSealed(held.sealed[0], b0.domain, otherDigest)) && (await mU.deliverSealed(held.sealed[0], b0.domain, b0.digest)));
   check("the answerer takes a batch once: a second set of openings for a proof it holds is refused", twice);
+  check("the answerer refuses to receipt a proof a verifier rejects", forgedRefused.startsWith("proof refused by"));
+  check("the answerer refuses sealed openings out of the proof's order", swappedRefused.startsWith("sealed opening"));
+  check("the answerer refuses sealed openings that miss a payment of the proof", shortRefused === "sealed openings do not match the proof's payments");
+  check("a refused batch leaves nothing held: the answerer then takes the honest batch", afterRefusals === "");
 
   await A.advance(Number(DECIDE));
   const rX = await mX.poll();
@@ -499,6 +531,22 @@ async function main() {
     check("its challenge goes unanswered, and the monitor freezes both domains", f.froze && (await A.state(dA)).frozen && (await B.state(dB)).frozen && onA !== "settled", onA);
   }
 
+  section("a challenge by another party first, which does not hold settlement");
+  {
+    const dA = await A.delegate(plain);
+    const m = new Monitor([dA], policy(1_000_000n), proving(null));
+    const pay = engine(ids, UNIT);
+    const p = pay(dA, await A.now(), UNIT);
+    await A.settle(dA, p.s);
+    await m.poll();
+    const rec = m.all().find((r) => r.digest === p.s.digest) as Record;
+    await A.challengeFirst(dA, rec);
+    const held = await A.state(dA);
+    await advanceBoth(Number(DECIDE) + 10);
+    const r = await m.poll();
+    check("a settlement nothing backs, challenged first by another party, whose challenge does not hold settlement: at its decision time the monitor freezes the delegation", held.holds === 0 && !held.frozen && r.froze && r.challenged.length === 0 && (await A.state(dA)).frozen, r.reasons.join("; "));
+  }
+
   section("openings checked in the clear, no proof read");
   {
     const dA = await A.delegate(plain);
@@ -538,6 +586,34 @@ async function main() {
     const why = r.reasons.join("; ");
     check("the same unit consumed on two domains: the later settlement is challenged", r.challenged.some((c) => c.digest === again.s.digest) && why.includes("already consumed"), why);
     check("an opening that disagrees with its own record: that settlement is challenged", r.challenged.some((c) => c.digest === off.s.digest) && why.includes("disagrees") && r.challenged.length === 2, why);
+  }
+
+  section("a unit consumed on two domains, with the shares the circuit forms: the secret from the transcript");
+  {
+    const secret = [123_456_789n, 987_654_321n] as const;
+    const terms = { ...plain, secretHash: await A.secretHashOf(secret) };
+    const dA = await A.delegate(terms);
+    const dB = await B.delegate(terms);
+    const m = new Monitor([dA, dB], policy(1_000_000n), proving(null));
+    const k = [0x1234_5678_9abcn, 0x0fed_cba9_8765n] as const;
+    const nf = 0x5eed_5eedn;
+    const share = (digest: bigint, dom: bigint) => [
+      (secret[0] + k[0] * digest + 7n * k[1] * dom) % P,
+      (secret[1] + k[0] * dom + k[1] * digest) % P,
+      nf,
+    ];
+    const time = await later();
+    const one = { digest: 7_001n, amount: UNIT, payee, time, elems: share(7_001n, 8453n), opening: keccak256("0x11") as Hex };
+    const two = { digest: 7_002n, amount: UNIT, payee, time: time + 1n, elems: share(7_002n, 10n), opening: keccak256("0x12") as Hex };
+    const before = [await A.principalCredit(), await B.principalCredit()];
+    const sent = [await A.settle(dA, one), await B.settle(dB, two)];
+    const r = await m.poll();
+    const after = [await A.principalCredit(), await B.principalCredit()];
+    const paid = after[0] - before[0] === parseEther("0.1") && after[1] - before[1] === parseEther("0.1");
+    const frozen = (await A.state(dA)).frozen && (await B.state(dB)).frozen;
+    check("the monitor recovers the secret from the two shares at once, before any decision time, and claims the bond on both domains, which freezes both", sent.every((x) => x === "settled") && r.froze && paid && frozen && r.challenged.length === 0, r.reasons.join("; "));
+    const wrong = extractSecret([{ digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }, { digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }]);
+    check("Extract skips two entries at one index: one settlement read twice gives no line", wrong.length === 0);
   }
 
   section("the chain shows the same whatever the cause: an adversary with the agent's key and no proof");

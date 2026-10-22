@@ -1,6 +1,6 @@
 //! Known-answer vectors from Plonky3 itself for the independent verifier's
 //! own tests: the Keccak sponge and compression of the commitments, the
-//! Goldilocks field and its quadratic extension, the two-adic generators, and
+//! Goldilocks field and its cubic extension, the two-adic generators, and
 //! the transcript's observe, sample, bit-sample and grinding steps.
 
 use p3_challenger::{CanObserve, CanSample, CanSampleBits, FieldChallenger, GrindingChallenger};
@@ -8,7 +8,7 @@ use p3_field::{BasedVectorSpace, Field, PrimeCharacteristicRing, PrimeField64, T
 use p3_keccak::KeccakF;
 use p3_symmetric::{CryptographicHasher, PseudoCompressionFunction};
 
-use crate::prover::{challenger, Challenge, KCompress, KU64Hash, Val};
+use crate::prover::{challenger, Challenge, KCompress, KU64Hash, Val, EXT_DEGREE};
 
 /// An observed value after which a fresh transcript's first 64-bit draw is at
 /// or above p, found by `find-rejection`.
@@ -31,13 +31,14 @@ fn val(w: u64) -> Val {
     Val::from_u64(w % Val::ORDER_U64)
 }
 
-fn ext(a: u64, b: u64) -> Challenge {
-    Challenge::from_basis_coefficients_slice(&[val(a), val(b)]).expect("two coefficients")
+fn ext(ws: &[u64]) -> Challenge {
+    let c: Vec<Val> = ws.iter().map(|&w| val(w)).collect();
+    Challenge::from_basis_coefficients_slice(&c).expect("one coefficient per degree")
 }
 
 fn coeffs(e: Challenge) -> String {
     let c: &[Val] = e.as_basis_coefficients_slice();
-    format!("[\"{}\",\"{}\"]", c[0].as_canonical_u64(), c[1].as_canonical_u64())
+    format!("[{}]", c.iter().map(|x| format!("\"{}\"", x.as_canonical_u64())).collect::<Vec<_>>().join(","))
 }
 
 fn list(xs: &[u64]) -> String {
@@ -70,10 +71,12 @@ pub fn export(path: &str) {
 
     let mut field = Vec::new();
     for k in 0..24u64 {
-        let w = words(2000 + k, 4);
+        let w = words(2000 + k, 2 + 2 * EXT_DEGREE);
         let (a, b) = if k == 0 { (Val::ORDER_U64 - 1, Val::ORDER_U64 - 2) } else { (w[0] % Val::ORDER_U64, w[1] % Val::ORDER_U64) };
         let (x, y) = (val(a), val(b));
-        let (ea, eb) = (ext(a, w[2]), ext(b, w[3]));
+        let ea_w: Vec<u64> = std::iter::once(a).chain(w[2..1 + EXT_DEGREE].iter().copied()).collect();
+        let eb_w: Vec<u64> = std::iter::once(b).chain(w[1 + EXT_DEGREE..2 * EXT_DEGREE].iter().copied()).collect();
+        let (ea, eb) = (ext(&ea_w), ext(&eb_w));
         field.push(format!(
             "{{\"a\":\"{}\",\"b\":\"{}\",\"add\":\"{}\",\"sub\":\"{}\",\"mul\":\"{}\",\"inv\":\"{}\",\"ea\":{},\"eb\":{},\"emul\":{},\"einv\":{},\"epow\":{}}}",
             x.as_canonical_u64(), y.as_canonical_u64(),
@@ -99,8 +102,9 @@ pub fn export(path: &str) {
     }
     let e: Challenge = t.sample_algebra_element();
     steps.push(format!("{{\"op\":\"sampleExt\",\"value\":{}}}", coeffs(e)));
-    t.observe_algebra_element(ext(5, 6));
-    steps.push("{\"op\":\"observeExt\",\"value\":[\"5\",\"6\"]}".to_string());
+    let observed: Vec<u64> = (5..5 + EXT_DEGREE as u64).collect();
+    t.observe_algebra_element(ext(&observed));
+    steps.push(format!("{{\"op\":\"observeExt\",\"value\":{}}}", list(&observed)));
     for bits in [1usize, 7, 20, 32] {
         let b = t.sample_bits(bits);
         steps.push(format!("{{\"op\":\"sampleBits\",\"bits\":{bits},\"value\":\"{b}\"}}"));

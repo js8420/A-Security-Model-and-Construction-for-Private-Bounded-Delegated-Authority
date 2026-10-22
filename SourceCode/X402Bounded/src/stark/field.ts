@@ -1,6 +1,8 @@
-/** Goldilocks, p = 2^64 - 2^32 + 1, and its quadratic extension F_p[X]/(X^2 - 7). */
+/** Goldilocks, p = 2^64 - 2^32 + 1, and its cubic extension F_p[X]/(X^3 - X - 1). */
 export const P = 0xffffffff00000001n;
-const W = 7n;
+
+/** Degree of the extension the challenges and openings live in. */
+export const DEG = 3;
 
 /** The multiplicative generator the commitment's cosets are shifted by. */
 export const GENERATOR = 7n;
@@ -8,10 +10,11 @@ export const GENERATOR = 7n;
 /** A primitive 2^32-th root of unity; every smaller two-adic generator is a power of it. */
 const ROOT_32 = 0x185629dcda58878cn;
 
-export type E = readonly [bigint, bigint];
-export const E0: E = [0n, 0n];
-export const E1: E = [1n, 0n];
-export const X: E = [0n, 1n];
+/** An element c0 + c1 X + c2 X^2 by its coefficients. */
+export type E = readonly [bigint, bigint, bigint];
+export const E0: E = [0n, 0n, 0n];
+export const E1: E = [1n, 0n, 0n];
+export const X: E = [0n, 1n, 0n];
 
 export const add = (a: bigint, b: bigint): bigint => {
   const s = a + b;
@@ -45,22 +48,45 @@ export function twoAdic(bits: number): bigint {
   return g;
 }
 
-export const eadd = (a: E, b: E): E => [add(a[0], b[0]), add(a[1], b[1])];
-export const esub = (a: E, b: E): E => [sub(a[0], b[0]), sub(a[1], b[1])];
-export const eneg = (a: E): E => [neg(a[0]), neg(a[1])];
-export const emul = (a: E, b: E): E => [
-  (a[0] * b[0] + W * ((a[1] * b[1]) % P)) % P,
-  (a[0] * b[1] + a[1] * b[0]) % P,
-];
-export const escale = (a: E, s: bigint): E => [(a[0] * s) % P, (a[1] * s) % P];
-export const lift = (s: bigint): E => [s, 0n];
-export const eeq = (a: E, b: E): boolean => a[0] === b[0] && a[1] === b[1];
-export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n;
+export const eadd = (a: E, b: E): E => [add(a[0], b[0]), add(a[1], b[1]), add(a[2], b[2])];
+export const esub = (a: E, b: E): E => [sub(a[0], b[0]), sub(a[1], b[1]), sub(a[2], b[2])];
+export const eneg = (a: E): E => [neg(a[0]), neg(a[1]), neg(a[2])];
 
+/** The product reduced by X^3 = X + 1, so X^4 = X^2 + X. */
+export const emul = (a: E, b: E): E => {
+  const c0 = a[0] * b[0];
+  const c1 = a[0] * b[1] + a[1] * b[0];
+  const c2 = a[0] * b[2] + a[1] * b[1] + a[2] * b[0];
+  const c3 = a[1] * b[2] + a[2] * b[1];
+  const c4 = a[2] * b[2];
+  return [(c0 + c3) % P, (c1 + c3 + c4) % P, (c2 + c4) % P];
+};
+export const escale = (a: E, s: bigint): E => [(a[0] * s) % P, (a[1] * s) % P, (a[2] * s) % P];
+export const lift = (s: bigint): E => [s, 0n, 0n];
+export const eeq = (a: E, b: E): boolean => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+export const ezero = (a: E): boolean => a[0] === 0n && a[1] === 0n && a[2] === 0n;
+
+/**
+ * The inverse, by solving a * x = 1: the columns of multiplication by a are
+ * a, aX and aX^2, and Gaussian elimination over F_p solves the system. Zero
+ * has no pivot in its first column and is refused there.
+ */
 export function einv(a: E): E {
-  const norm = sub((a[0] * a[0]) % P, (W * ((a[1] * a[1]) % P)) % P);
-  const n = inv(norm);
-  return [(a[0] * n) % P, (neg(a[1]) * n) % P];
+  const cols = [a, emul(a, X), emul(a, emul(X, X))];
+  const m: bigint[][] = [0, 1, 2].map((r) => [cols[0][r], cols[1][r], cols[2][r], r === 0 ? 1n : 0n]);
+  for (let c = 0; c < 3; c++) {
+    const pivot = m.findIndex((row, r) => r >= c && row[c] !== 0n);
+    if (pivot < 0) throw new Error("inverse of zero");
+    [m[c], m[pivot]] = [m[pivot], m[c]];
+    const iv = inv(m[c][c]);
+    m[c] = m[c].map((v) => (v * iv) % P);
+    for (let r = 0; r < 3; r++) {
+      if (r === c) continue;
+      const f = m[r][c];
+      m[r] = m[r].map((v, k) => sub(v, (f * m[c][k]) % P));
+    }
+  }
+  return [m[0][3], m[1][3], m[2][3]];
 }
 
 export function epow(a: E, e: bigint): E {

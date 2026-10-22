@@ -39,8 +39,7 @@ export class Transcript {
   }
 
   observeExt(v: E) {
-    this.word(v[0]);
-    this.word(v[1]);
+    for (const c of v) this.word(c);
   }
 
   observeCap(cap: readonly Digest[]) {
@@ -74,7 +73,8 @@ export class Transcript {
   sampleExt(): E {
     const a = this.sample();
     const b = this.sample();
-    return [a, b];
+    const c = this.sample();
+    return [a, b, c];
   }
 
   sampleBits(bits: number): number {
