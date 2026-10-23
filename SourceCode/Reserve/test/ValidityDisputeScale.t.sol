@@ -1019,6 +1019,66 @@ contract ValidityDisputeScaleTest is Test {
         _settle(pk, r, d);
     }
 
+    /// The windows the paper sets for Base: w = 36.5 h, theta = 1 h,
+    /// w_a = 32 h, eta = 4 h and w_p = 30 h. The monitor's challenge at its
+    /// decision time, ten hours after the signed time, is admitted; another
+    /// party's at w is too, and one a second later is refused. The principal's
+    /// challenge falls due between w_a and w_a + 2 eta after it opens, an answer
+    /// in its last second is accepted and starts a posting wait of w_p, and
+    /// once that wait has passed with nothing posted the receipt slashes the
+    /// stake. Another party's challenge left unanswered expires and freezes.
+    function testWindowsOfTheBaseDeployment() public {
+        uint64 w = 36 hours + 30 minutes;
+        uint64 wa = 32 hours;
+        uint64 eta = 4 hours;
+        uint64 wp = 30 hours;
+        acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, w + 1 hours);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, w, wa, eta, BOND, wp);
+        acc.setDispute(address(vd));
+        vm.prank(principal);
+        token.approve(address(acc), type(uint256).max);
+
+        (uint256 r, ) = _registerWithAnswerer();
+        uint64 signed = uint64(block.timestamp);
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        _settle(AGENT_PK, r, 7);
+        Settlement memory s5 = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s5), keccak256(_sealed(5)), signed);
+
+        vm.warp(signed + w - 14 hours - 12 hours - 30 minutes);
+        _openBy(principal, r, 5);
+        uint64 opened = uint64(block.timestamp);
+        uint64 due = _deadline(r, 5);
+        assertGe(due, opened + wa);
+        assertLe(due, opened + wa + 2 * eta);
+
+        vm.warp(signed + w);
+        _openBy(challenger, r, 6);
+        vm.warp(signed + w + 1);
+        Settlement memory s7 = _rec(r, 7);
+        vm.prank(challenger);
+        vm.expectRevert(ValidityDispute.WindowClosed.selector);
+        vd.open{value: BOND}(r, 7, s7);
+
+        vm.warp(due);
+        _answerAlone(r, 5);
+        assertEq(vd.challengeOf(r, 5).deadline, due + wp);
+        vm.warp(due + wp);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s5, 0, new bytes32[](0), rc);
+        vm.warp(due + wp + 1);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s5, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+
+        vm.warp(_deadline(r, 6) + 1);
+        vd.expire(r, 6);
+        (bool frozen,) = acc.frozenOf(r);
+        assertTrue(frozen);
+    }
+
     function testDisputeWindowMustFitTheCloseDelay() public {
         Reserve short = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT);
         vm.expectRevert(bytes("close delay"));

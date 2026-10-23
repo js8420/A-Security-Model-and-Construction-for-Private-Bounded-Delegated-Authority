@@ -19,10 +19,11 @@ protocol in five places, and each changes one term:
                 commitment's, with probability at most 2|D|/|G|.
 
 The challenge field is the cubic extension of Goldilocks; over the quadratic
-one the batching term caps the provable figure near 72 bits, which the script
-also prints. The provable figure is the Johnson regime (list decoding,
-multiplicity 3 <= m < k/2 with eta > 0) or the unique-decoding regime,
-whichever is better. The conjectured figure
+one the batching term caps the Johnson-regime figure near 72 bits whatever the
+queries, and the unique-decoding regime passes 100 bits only at about 88
+queries, which the script also prints. The provable figure is the Johnson
+regime (list decoding, multiplicity 3 <= m < k/2 with eta > 0) or the
+unique-decoding regime, whichever is better. The conjectured figure
 takes the query term at the full rate, as the usual conjecture does, and every
 other term at its unique-decoding value, which is the least any analysis
 charges. Each figure is the round-by-round error; against an adversary making
@@ -111,6 +112,17 @@ def best(regime, queries, log_blowup, pow_bits, ext=EXT):
     return out
 
 
+def at_rows(rows, f):
+    """Runs f with the trace height set to rows: zero knowledge at 88 queries
+    over the quadratic extension needs 2(2*2 + 88) = 184 rows, so 256."""
+    global ROWS
+    old, ROWS = ROWS, rows
+    try:
+        f()
+    finally:
+        ROWS = old
+
+
 def bits(x):
     return -math.log2(x)
 
@@ -149,6 +161,7 @@ def main():
     show("58 queries, blowup 8, 20 grinding bits, cubic extension", 58, 3, 20)
     show("the earlier setting: 40 queries, blowup 16, quadratic extension", 40, 4, 20, ext=2)
     show("40 queries, blowup 8, 20 grinding bits, quadratic extension", 40, 3, 20, ext=2)
+    at_rows(256, lambda: show("88 queries, blowup 16, 20 grinding bits, quadratic extension, 256 rows", 88, 4, 20, ext=2))
     show("100 queries, blowup 8, 20 grinding bits, quadratic extension", 100, 3, 20, ext=2)
     print()
     w = best("johnson", 44, 4, 20)[0]

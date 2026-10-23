@@ -9,7 +9,9 @@
 //! computes the same terms so that the harness prints what the paper states.
 //!
 //! The challenge field is the cubic extension of Goldilocks. Over the
-//! quadratic one the batching term caps the provable figure near 72 bits.
+//! quadratic one the batching term caps the Johnson-regime figure near 72
+//! bits whatever the queries, and the unique-decoding regime passes 100 bits
+//! only at about 88 queries, twice the proof's.
 //! The provable figure is the better of the Johnson and unique-decoding
 //! regimes. The conjectured figure charges the queries the full rate and every
 //! other term its unique-decoding value. Both are round-by-round figures; an

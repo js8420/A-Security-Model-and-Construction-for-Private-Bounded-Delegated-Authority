@@ -138,7 +138,8 @@ export function extractSecret(settled: readonly { digest: bigint; domain: bigint
  * issuance. Opening every payment, it is the opening and a proof every
  * verifier accepts. Opening on request, it is the proof alone until the
  * monitor asks for the opening, and the opening as well once the delivery
- * wait after the request has passed.
+ * wait after the request has passed. An answer to the monitor's own
+ * challenge is such a request, dated when the answer landed.
  */
 export class Monitor {
   private readonly from = new Map<string, bigint>();
@@ -376,7 +377,9 @@ export class Monitor {
         const answers = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Answered", args: { id: d.delegation }, ...range });
         for (const l of answers) {
           const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
-          this.answered.set(key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }), b.timestamp);
+          const k = key({ domain: d.name, digest: (l.args as { digest: bigint }).digest });
+          this.answered.set(k, b.timestamp);
+          if (this.challenged.has(k) && !this.requested.has(k)) this.requested.set(k, b.timestamp);
         }
         const expiries = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Expired", args: { id: d.delegation }, ...range });
         for (const l of expiries) this.expired.add(key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }));

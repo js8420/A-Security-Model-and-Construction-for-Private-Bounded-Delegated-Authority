@@ -372,6 +372,11 @@ async function main() {
   const answererR = new Answerer(gateBoth());
   const sealedR = sealAll(sR.os);
   const heldR = await answererR.receive(honest, sealedR);
+  const dQ = await A.delegate({ ...asked, answerer: true });
+  const mQ = new Monitor([dQ], provenPolicy, proving(gateBoth(), KEYS.seal));
+  const sQ = await settleProven(dQ);
+  const answererQ = new Answerer(gateBoth());
+  await answererQ.receive(honest, sealAll(sQ.os));
   let twice = false;
   try {
     await answererR.receive(honest, sealedS);
@@ -395,7 +400,7 @@ async function main() {
   const afterRefusals = await refusedBy(answererF, honest, sealedS);
   const receivedAt = await A.now();
 
-  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR];
+  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR, mQ];
   const early = await Promise.all(all.map((m) => m.poll()));
   check("before the decision time the monitor acts on nothing: no challenge and no freeze under any delegation", early.every((r) => r.challenged.length === 0 && !r.froze));
   check("the honest batch passes both verifiers; the forged one is refused beside a deployed verifier that accepts anything", acceptedX && !acceptedY);
@@ -458,6 +463,7 @@ async function main() {
   check("the offline agent opening every payment, with its answerer: nothing challenged", rT.challenged.length === 0 && !rT.froze, rT.reasons.join("; "));
   const rS = await mS.poll();
   const rR = await mR.poll();
+  const rQ = await mQ.poll();
   check(`two offline agents whose staked answerers have delivered nothing yet: all ${n} challenged under each`, rS.challenged.length === n && rR.challenged.length === n);
 
   for (const r of rY.challenged) await A.answer(dY, r);
@@ -476,6 +482,8 @@ async function main() {
   const chunksS = await A.postProof(dS, answererS.proofOf(sealedS[0].domain, sealedS[0].digest) as Uint8Array);
   for (const r of rR.challenged) await A.answer(dR, r);
   const servedR = await answererR.serve(mR, true);
+  for (const r of rQ.challenged) await A.answer(dQ, r);
+  const servedQ = await answererQ.serve(mQ, true);
   await A.advance(Number(WAIT) + 1);
   const fY = await mY.poll();
   check("no backing proof arrives within the delivery wait, so the monitor freezes the delegation", fY.froze && (await A.state(dY)).frozen, fY.reasons[0] ?? "");
@@ -493,6 +501,8 @@ async function main() {
   const i0 = sealedR.findIndex((x) => x.digest === r0.digest);
   const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, heldR.proofHash, receivedAt));
   check("an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
+  const fQ = await mQ.poll();
+  check("opening on request, an answer to the principal's challenge asks for the opening: an answerer that answers and hands over only the proof leaves the delegation frozen", rQ.challenged.length === n && servedQ.proofs === 1 && mQ.openedCount() === 0 && fQ.froze && (await A.state(dQ)).frozen, fQ.reasons[0] ?? "");
   const zBefore = await A.state(dZ);
   await A.advance(PAST_DEADLINE);
   const fZ = await mZ.poll();

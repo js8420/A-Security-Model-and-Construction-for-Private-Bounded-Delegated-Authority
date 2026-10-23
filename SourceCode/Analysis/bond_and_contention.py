@@ -157,7 +157,9 @@ def profiles(k_w):
 
 
 def hiding_factor(T_d, T_a, W=W_RATE):
-    return (math.ceil(T_d / W) + 1) / (math.ceil(T_a / W) + 1)
+    # f = U / B for a task paying at the rate limit with the cap at the price:
+    # U counts ceil(T_d/W)+1 windows at the limit, B the T_a/W windows it spends.
+    return (math.ceil(T_d / W) + 1) / (T_a / W)
 
 def trade_off(k_w):
     rate, price, T_a = 1440, 0.01, 30 * DAY
