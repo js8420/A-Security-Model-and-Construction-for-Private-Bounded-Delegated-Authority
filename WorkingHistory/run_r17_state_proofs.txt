@@ -1,0 +1,4 @@
+  Ethereum: https://ethereum-rpc.publicnode.com refused: Error: server returned an error response: error code -32602: distance to target block exceeds maximum proof window
+  Base: https://base-rpc.publicnode.com refused: Error: server returned an error response: error code -32602: distance to target block exceeds maximum proof window
+Ethereum block 26265099 from https://eth.drpc.org, account 0x43edB88C4B80fDD2AdFF2412A7BebF9dF42cB40e, slot 0x0000000000000000000000000000000000000000000000000000000000000000: 9 account and 6 storage nodes
+Base block 53043372 from https://mainnet.base.org, account 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, slot 0x0000000000000000000000000000000000000000000000000000000000000000: 9 account and 8 storage nodes

@@ -8,7 +8,7 @@ import {Statement} from "./Statement.sol";
 /// proof, read from the file the prove binary wrote, and the statements of the
 /// batch's payments it commits to.
 abstract contract Groth16Result is Test {
-    string constant RESULT = "../../WorkingHistory/groth16_s7/out_s7_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s8/out_s8_batch_a/onchain.txt";
 
     bytes32 vkey;
     bytes publicValues;

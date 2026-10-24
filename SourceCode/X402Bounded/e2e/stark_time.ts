@@ -36,7 +36,7 @@ const row = (name: string, xs: number[]) => {
 
 async function main() {
   const out: string[] = [];
-  out.push("VERIFICATION TIME, DEPLOYED AGAINST INDEPENDENT, 128-PAYMENT PROOF");
+  out.push("VERIFICATION TIME, DEPLOYED AGAINST INDEPENDENT, 256-PAYMENT PROOF");
   out.push("=".repeat(78));
   out.push(`  ${passes} passes; each ${batches} batches of ${perBatch} runs per verifier, the two alternating`);
   out.push(`  batch by batch, ${coolMs / 1000} s of idle between batches; deployed times are in process`);

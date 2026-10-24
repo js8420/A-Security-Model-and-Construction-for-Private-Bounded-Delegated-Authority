@@ -24,3 +24,4 @@ serde = { version = "1", features = ["derive"] }
 
 [patch.crates-io]
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-6.0.0" }
+p3-fri = { path = "../vendor/p3-fri" }

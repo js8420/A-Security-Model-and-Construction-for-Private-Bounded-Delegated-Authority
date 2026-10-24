@@ -1,5 +1,5 @@
 import { decodeFunctionData, encodePacked, getAddress, hexToBytes, keccak256, parseEventLogs, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
-import { disputeAbi, reserveAbi } from "./abi.js";
+import { ANSWERED, disputeAbi, reserveAbi } from "./abi.js";
 import { commitOpening, unitsOf, type Opening } from "./opening.js";
 import { unseal } from "./seal.js";
 import { proofHash } from "./answerer.js";
@@ -150,6 +150,8 @@ export class Monitor {
   private readonly challenged = new Map<string, bigint>();
   private readonly answered = new Map<string, bigint>();
   private readonly expired = new Set<string>();
+  /** Challenges another party opened and someone answered before the monitor joined them. */
+  private readonly joinedAnswered = new Set<string>();
   private readonly requested = new Map<string, bigint>();
   private claimed = false;
   private frozen = false;
@@ -378,6 +380,7 @@ export class Monitor {
         for (const l of answers) {
           const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
           const k = key({ domain: d.name, digest: (l.args as { digest: bigint }).digest });
+          if (this.joinedAnswered.has(k)) continue;
           this.answered.set(k, b.timestamp);
           if (this.challenged.has(k) && !this.requested.has(k)) this.requested.set(k, b.timestamp);
         }
@@ -437,29 +440,51 @@ export class Monitor {
   }
 
   /**
-   * Opens the principal's challenge, which holds settlement. A settlement is
-   * challenged at most once, so if another party challenged it first the
-   * principal's challenge cannot be opened; this returns false and the
-   * caller freezes the delegation instead.
+   * Step 1's challenge, with the posting deposit. A settlement someone else
+   * challenged first is joined instead: an open challenge then holds it as
+   * the monitor's own would, and an answered one carries the monitor's
+   * request from the join, so step 3 counts the delivery wait from there.
+   * One already expired froze the delegation on its domain, and step 2
+   * freezes it on the others.
    */
-  private async challenge(d: Domain, r: Record): Promise<boolean> {
+  private async challenge(d: Domain, r: Record): Promise<void> {
     const dispute = d.dispute as Address;
     const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengerBond" })) as bigint;
+    const deposit = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingDeposit" })) as bigint;
     const s = { elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch };
     let hash: Hex;
+    let joined = false;
     try {
-      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond });
+      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond + deposit });
     } catch (e) {
-      if (String(e).includes("AlreadyChallenged")) return false;
-      throw e;
+      if (!String(e).includes("AlreadyChallenged")) throw e;
+      try {
+        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: deposit });
+        joined = true;
+      } catch (f) {
+        if (String(f).includes("NotOpen")) {
+          this.challenged.set(key(r), 0n);
+          return;
+        }
+        throw f;
+      }
     }
     const receipt = await d.chain.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`challenge of ${key(r)} reverted`);
-    const ev = parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Challenged" });
-    const mine = ev.find((e) => e.args.digest === r.digest);
-    if (!mine) throw new Error(`challenge of ${key(r)} left no event`);
-    this.challenged.set(key(r), mine.args.deadline);
-    return true;
+    const deadline = joined
+      ? parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Joined" }).find((e) => e.args.digest === r.digest)?.args.deadline
+      : parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Challenged" }).find((e) => e.args.digest === r.digest)?.args.deadline;
+    if (deadline === undefined) throw new Error(`challenge of ${key(r)} left no event`);
+    this.challenged.set(key(r), deadline);
+    if (joined) {
+      const c = await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengeOf", args: [d.delegation, r.digest], blockNumber: receipt.blockNumber });
+      if (c.status === ANSWERED) {
+        const t = (await d.chain.getBlock({ blockNumber: receipt.blockNumber })).timestamp;
+        this.answered.set(key(r), t);
+        this.requested.set(key(r), t);
+        this.joinedAnswered.add(key(r));
+      }
+    }
   }
 
   /**
@@ -511,8 +536,8 @@ export class Monitor {
    * Reads new records, answers and expiries on every domain, then acts. Every
    * record past its decision time and not in order is challenged; on a
    * domain with no dispute contract, if the monitor itself comes too late
-   * to challenge, or if another party challenged the record first, the
-   * delegation is frozen instead. A challenge past its deadline unanswered is expired, and one
+   * to challenge, the delegation is frozen instead; a record another party
+   * challenged first is joined. A challenge past its deadline unanswered is expired, and one
    * answered whose record is still not in order the delivery wait later
    * freezes the delegation on every domain.
    */
@@ -543,11 +568,8 @@ export class Monitor {
         if (why.length === 0) continue;
         reasons.push(`${k}: ${why.join("; ")}`);
         if (d.dispute && now < r.time + (await this.acceptWindow(d))) {
-          if (await this.challenge(d, r)) challenged.push(r);
-          else {
-            reasons.push(`${k}: challenged first by another party, whose challenge does not hold settlement`);
-            freeze = true;
-          }
+          await this.challenge(d, r);
+          challenged.push(r);
         } else freeze = true;
         continue;
       }

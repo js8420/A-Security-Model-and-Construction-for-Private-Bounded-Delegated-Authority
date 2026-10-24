@@ -72,5 +72,5 @@ const constant = [...air.constants.keys()].find((k) => air.constants.get(k) !== 
 need("constant changed", !verifyStark(full, { ...air, constants: new Map(air.constants).set(constant, (air.constants.get(constant) as bigint) + 1n) }).ok);
 need("last constraint dropped", !verifyStark(full, { ...air, roots: air.roots.subarray(0, air.roots.length - 1) }).ok);
 need("two constraints exchanged", !verifyStark(full, { ...air, roots: Uint32Array.from([air.roots[1], air.roots[0], ...air.roots.subarray(2)]) }).ok);
-need("honest 128", verifyStark(full, air).ok);
+need("honest 256", verifyStark(full, air).ok);
 console.log(`all ${n} checks pass`);

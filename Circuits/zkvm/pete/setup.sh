@@ -4,15 +4,12 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ZKVM=$(cd "$HERE/.." && pwd)
-ELF="$ZKVM/program/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier"
 ELFK="$ZKVM/program-keccak/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/dispute-verifier-keccak"
-PROOF="$ZKVM/../target/proof_128.bin"
-PROOFK="$ZKVM/../target/proof_128_keccak.bin"
-PROOFB="$ZKVM/../target/proof_128_keccak_batch.bin"
+PROOFK="$ZKVM/../target/proof_keccak.bin"
 source "$HERE/env.sh"
 
 echo "== inputs"
-sha256sum "$ELF" "$PROOF" "$ELFK" "$PROOFK" "$ELFB" "$PROOFB"
+sha256sum "$ELFK" "$PROOFK"
 
 echo "== tools: gcc 13, Go 1.24, clang 18, protoc (conda-forge, glibc 2.17 sysroot)"
 if [ ! -x "$E/bin/go" ]; then

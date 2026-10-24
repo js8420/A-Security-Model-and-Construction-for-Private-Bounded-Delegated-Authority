@@ -18,10 +18,10 @@ hist=$(cd "$here/../../WorkingHistory" && pwd)
 statement="$here/../Reserve/test/Statement.sol"
 work=$(mktemp -d)
 cp "$statement" "$work/Statement.sol"
-if [ -f "$circuits/target/proof_128_keccak.bin" ]; then cp "$circuits/target/proof_128_keccak.bin" "$work/kept.bin"; fi
+if [ -f "$circuits/target/proof_keccak.bin" ]; then cp "$circuits/target/proof_keccak.bin" "$work/kept.bin"; fi
 restore() {
     cp "$work/Statement.sol" "$statement"
-    if [ -f "$work/kept.bin" ]; then cp "$work/kept.bin" "$circuits/target/proof_128_keccak.bin"; fi
+    if [ -f "$work/kept.bin" ]; then cp "$work/kept.bin" "$circuits/target/proof_keccak.bin"; fi
     rm -rf "$work"
 }
 trap restore EXIT
@@ -32,10 +32,10 @@ if grep -q "^warning" "$log"; then grep -A6 "^warning" "$log"; exit 1; fi
 bin="$circuits/target/release/delegation-circuit"
 cd "$circuits"
 "$bin" export-constraints
-"$bin" export-keccak 128
-cp target/proof_128_keccak.bin "$work/full.bin"
+"$bin" export-keccak 256
+cp target/proof_keccak.bin "$work/full.bin"
 "$bin" export-keccak 4
-cp target/proof_128_keccak.bin "$work/small.bin"
+cp target/proof_keccak.bin "$work/small.bin"
 mkdir "$work/broken"
 "$bin" export-broken "$work/broken"
 

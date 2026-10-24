@@ -74,7 +74,9 @@ export class Transcript {
     const a = this.sample();
     const b = this.sample();
     const c = this.sample();
-    return [a, b, c];
+    const d = this.sample();
+    const e = this.sample();
+    return [a, b, c, d, e];
   }
 
   sampleBits(bits: number): number {

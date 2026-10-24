@@ -21,7 +21,7 @@ contract ValidityDisputeBatchOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
-    string constant RESULT = "../../WorkingHistory/groth16_s7/out_s7_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s8/out_s8_batch_a/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -39,7 +39,7 @@ contract ValidityDisputeBatchOnChain is Script {
         vm.startBroadcast(pk);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
-        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), 1 days, 1 days, 2 hours, 0.01 ether, 30 hours);
+        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), 1 days, 1 days, 2 hours, 0.01 ether, 30 hours, 0.25 ether, 0);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
@@ -57,7 +57,7 @@ contract ValidityDisputeBatchOnChain is Script {
                 ss[i] = _settled(d, id, i);
                 (ids[i], ds[i], at[i], paths[i]) = (id, Statement.digest(d, i), i, Statement.path(d, i));
             }
-            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.01 ether}(id, ds[i], ss[i]);
+            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.26 ether}(id, ds[i], ss[i]);
             vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();

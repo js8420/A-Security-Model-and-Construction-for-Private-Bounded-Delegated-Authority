@@ -7,7 +7,7 @@ import {Groth16Result} from "./Groth16Result.sol";
 
 /// The dispute's validity proof on chain: Succinct's v6.1.0 Groth16 verifier
 /// checking the proof Pete made of the deployed STARK verifier on a batch of
-/// 128 payments.
+/// 256 payments.
 contract SP1Groth16Gas is Groth16Result {
     SP1Verifier verifier;
 

@@ -7,7 +7,7 @@ import { CHECKS, deployedCheck, independentCheck, offsets, type Check } from "./
 
 /**
  * Differential testing of the two verifiers on randomly altered copies of the
- * honest 128-payment proof, from one seed. Four kinds of alteration, in turn:
+ * honest 256-payment proof, from one seed. Four kinds of alteration, in turn:
  * one bit flipped anywhere; one 64-bit word replaced by a random field
  * element; one bit flipped in the commitments, opened values, final
  * polynomial, grinding witness, degree or public values, where the

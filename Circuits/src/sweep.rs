@@ -16,7 +16,7 @@
 //! provable figure.
 
 use crate::prover::{composed_proof_at, composed_verifies, LOG_BLOWUP, NUM_QUERIES, POW_BITS};
-use crate::soundness::{conjectured, provable, COMPOSED};
+use crate::soundness::{conjectured, provable, provable_against, COMPOSED};
 
 /// Gas a byte of call data costs a data-heavy transaction under EIP-7623's
 /// floor, which the measured posting of the batch proof pays.
@@ -272,4 +272,50 @@ pub fn run() {
              best.bytes.div_ceil(CHUNK_BYTES), best.bytes as f64 / BLOB_BYTES as f64);
     println!("  dominates and shrinks only with the query count, which is what");
     println!("  soundness buys, so a smaller proof needs another opening argument.");
+}
+
+
+/// For each of blowup 16 with 20 grinding bits, blowup 16 with 30, and
+/// blowup 32 with 20, the fewest queries over the degree-5 extension that are
+/// provably at least 100 bits against an adversary making 2^64 oracle
+/// queries (`se_bound.py`), beside the earlier setting, which is not, all at
+/// the deployed height. Each round proves and verifies
+/// every setting once, in rotating order, so drift falls on all of them.
+pub fn candidates(rounds: usize) {
+    let settings: [(usize, usize, usize); 4] = [(44, 4, 20), (74, 4, 20), (68, 4, 30), (58, 5, 20)];
+    let mut prove: Vec<Vec<f64>> = vec![Vec::new(); settings.len()];
+    let mut check: Vec<Vec<f64>> = vec![Vec::new(); settings.len()];
+    let mut bytes = [0usize; 4];
+    let mut ok = [true; 4];
+    for round in 0..rounds {
+        for k in 0..settings.len() {
+            let i = (k + round) % settings.len();
+            let (q, b, p) = settings[i];
+            let (whole, _, _, _, pu, vu, good) =
+                composed_proof_at::<{ crate::prover::REGISTERS }, 16, 32, 16, 64>(crate::prover::ROWS, q, b, p);
+            bytes[i] = whole;
+            ok[i] &= good;
+            prove[i].push(pu as f64 / 1000.0);
+            check[i].push(vu as f64 / 1000.0);
+        }
+    }
+    let quart = |v: &mut Vec<f64>| {
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let at = |f: f64| v[((v.len() - 1) as f64 * f).round() as usize];
+        (at(0.25), at(0.5), at(0.75))
+    };
+    println!("DEGREE-5 EXTENSION: SETTINGS AGAINST 2^64 ORACLE QUERIES, {} ROWS, {rounds} ROUNDS", crate::prover::ROWS);
+    println!("{}", "=".repeat(78));
+    println!("  {:>7} {:>6} {:>4} {:>8} {:>7} {:>7} {:>11} {:>23} {:>22} {:>8}",
+             "queries", "blowup", "pow", "rbr", "2^48", "2^64", "proof bytes", "prove ms q1/med/q3", "verify ms q1/med/q3", "verifies");
+    for (i, (q, b, p)) in settings.iter().enumerate() {
+        let (p1, pm, p3) = quart(&mut prove[i]);
+        let (v1, vm, v3) = quart(&mut check[i]);
+        println!("  {:>7} {:>6} {:>4} {:>8.1} {:>7.1} {:>7.1} {:>11} {:>7.0} {:>7.0} {:>7.0} {:>7.2} {:>6.2} {:>7.2} {:>8}",
+                 q, 1usize << b, p,
+                 provable(&COMPOSED, *q, *b, *p),
+                 provable_against(&COMPOSED, *q, *b, *p, 48),
+                 provable_against(&COMPOSED, *q, *b, *p, 64),
+                 bytes[i], p1, pm, p3, v1, vm, v3, ok[i]);
+    }
 }

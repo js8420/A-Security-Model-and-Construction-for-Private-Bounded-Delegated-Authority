@@ -36,6 +36,8 @@ export const reserveAbi = parseAbi([
 export const disputeAbi = parseAbi([
   "struct Settlement { bytes32 elems; uint64 amount; address payee; uint64 time; uint64 epoch; }",
   "function open(uint256 id, uint64 digest, Settlement s) payable",
+  "function join(uint256 id, uint64 digest, Settlement s) payable",
+  "function postingDeposit() view returns (uint256)",
   "function answer(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, bytes proof)",
   "function rootOf(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path) view returns (bytes32)",
   "function challengerBond() view returns (uint256)",
@@ -49,13 +51,22 @@ export const disputeAbi = parseAbi([
   "function deliver(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, Receipt r, bytes opening, bytes32[] sealedPath)",
   "function slashWithholding(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, Receipt r)",
   "function deliveryWait() view returns (uint64)",
+  "struct Challenge { address challenger; uint64 deadline; uint8 status; bool byPrincipal; }",
+  "function challengeOf(uint256 id, uint64 digest) view returns (Challenge)",
   "event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline)",
   "event Answered(uint256 indexed id, uint64 digest)",
+  "event Joined(uint256 indexed id, uint64 digest, uint64 deadline)",
   "event Expired(uint256 indexed id, uint64 digest)",
   "event SealedDelivered(uint256 indexed id, uint64 digest, bytes opening)",
   "event ProofChunk(uint256 indexed id, bytes32 indexed proofHash, address indexed poster, uint256 index)",
   "event ProofPosted(uint256 indexed id, bytes32 indexed proofHash, address poster)",
   "error AlreadyChallenged()",
+  "error NotOpen()",
   "error WindowClosed()",
   "error WrongRecord()",
+  "error TooLate()",
+  "error NotDue()",
 ]);
+
+/** The dispute contract's status of an answered challenge, in its Status enum order. */
+export const ANSWERED = 2;

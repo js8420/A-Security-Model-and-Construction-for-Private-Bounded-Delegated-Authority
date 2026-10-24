@@ -1,0 +1,78 @@
+
+SATISFYING TRACE: PROVE AND VERIFY ROUND TRIP, POLICY AIR
+==============================================================================
+  trace                                            verifies
+  -------------------------------------------- ------------
+  satisfying assignment                                true
+  one gap decomposition corrupted                     false
+  policy composed with C9                              true
+    ... C9 binding broken                             false
+    ... sponge chaining broken                        false
+    ... permutation round state broken                false
+  merkle inclusion, depth 8                            true
+    ... direction bit perturbed                       false
+    ... sibling digest perturbed                      false
+  non-revocation, depth 8                              true
+    ... a gap decomposition perturbed                 false
+    ... run starts inside the revoked range           false
+    ... run reaches the next revoked range            false
+    ... run ends before it starts                     false
+  spend component, depth 16                            true
+    ... published share altered                       false
+    ... key taken from another unit                   false
+    ... nullifier altered                             false
+    ... a unit deactivated                            false
+    ... run start moved                               false
+    ... committed unit count perturbed                false
+    ... units understated                             false
+    ... range base moved                              false
+    ... a slot spanning two units                     false
+    ... run ends past the budget                      false
+    ... a padded slot before a real one               false
+    ... wrong public payload digest                   false
+    ... wrong public domain                           false
+  commitment does not move with the payment            true
+  payload digest does move with the payment            true
+  second-invocation nullifier, depth 16, cover 14         true
+  a policy the commitment does not open to, under the real circuit        false
+    ... the same trace with C9's binding removed         true
+  COMPOSED CIRCUIT, depth 16, cover 14                 true
+    ... run start disagrees with C8's run             false
+    ... amount exceeds the units charged              false
+    ... amount below the units charged                false
+    ... unit size does not divide the budget          false
+    ... cap larger than the budget                    false
+    ... settlement domain not the one the digest covers        false
+    ... shares formed under a domain the payload does not name        false
+    ... honest proof, one published share substituted        false
+    ... honest proof, settled amount differs          false
+    ... honest proof, settled payee differs           false
+    ... honest proof, settlement time differs         false
+    ... honest proof, record's unit size differs        false
+    ... honest proof, record's range base differs        false
+    ... declared range shorter than the budget's units        false
+    ... honest proof, record's H(s) differs           false
+    ... unit keys from a root key the secret does not give        false
+  COMPOSED BATCH, 2 payments in 256 rows               true
+  COMPOSED BATCH, 8 payments in 256 rows               true
+  COMPOSED BATCH, 256 payments in 256 rows             true
+    ... two payments' statements exchanged            false
+    ... every row shifted one payment off its statement        false
+    ... one payment's amount altered                  false
+    ... one payment's share altered                   false
+    ... one payment's run moved off its C8 run        false
+  COMPOSED BATCH, 10 payments padded to 16 by repetition         true
+  payee limbs recompose to the address                 true
+  an answer commits a leaf per payment in the reserve's layout         true
+    ... every payment's path reaches the committed root         true
+    ... a leaf at another position does not           false
+    ... one substituted share changes the leaf's hash and the root         true
+    ... each payment publishes exactly 3 ceil(a/u) values         true
+    ... payments consume disjoint successive runs         true
+  WHOLE CIRCUIT at full parameters                     true
+    ... a policy column perturbed                     false
+    ... a payment field altered, digest not recomputed        false
+
+  Whole circuit proved and verified in 4334 ms at 256 rows.
+
+  48 controls, every one rejected; 21 positive checks, every one holding.

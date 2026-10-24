@@ -1,0 +1,38 @@
+ROUND-BY-ROUND KNOWLEDGE-SOUNDNESS ERROR OF THE PAYMENT PROOF, BITS
+==============================================================================
+  256 rows, batched openings N = 28707, constraints s = 14302, degree 7, 16 chunks, folds (4, 4, 4)
+
+  deployed: 74 queries, blowup 16, 20 grinding bits, degree-5 extension
+    johnson       167.8 bits m=255  constraints 286.2, out-of-domain point 266.9, batching 218.8, folding 232.0, queries 167.8
+    unique         87.5 bits        constraints 306.2, out-of-domain point 305.4, batching 292.2, folding 305.4, queries 87.5
+    conjectured   292.2 bits        constraints 306.2, out-of-domain point 305.4, batching 292.2, folding 305.4, queries 316.0
+  the earlier setting: 44 queries, blowup 16, 20 grinding bits, cubic extension
+    johnson       107.4 bits m=49   constraints 168.3, out-of-domain point 159.1, batching 107.4, folding 120.6, queries 107.4
+    unique         60.1 bits        constraints 178.2, out-of-domain point 177.4, batching 164.2, folding 177.4, queries 60.1
+    conjectured   164.2 bits        constraints 178.2, out-of-domain point 177.4, batching 164.2, folding 177.4, queries 196.0
+  70 queries, blowup 16, 30 grinding bits, degree-5 extension
+    johnson       169.8 bits m=255  constraints 286.2, out-of-domain point 266.9, batching 218.8, folding 232.0, queries 169.8
+    unique         93.9 bits        constraints 306.2, out-of-domain point 305.4, batching 292.2, folding 305.4, queries 93.9
+    conjectured   292.2 bits        constraints 306.2, out-of-domain point 305.4, batching 292.2, folding 305.4, queries 310.0
+  60 queries, blowup 32, 20 grinding bits, degree-5 extension
+    johnson       169.8 bits m=255  constraints 285.2, out-of-domain point 264.9, batching 215.3, folding 228.5, queries 169.8
+    unique         77.3 bits        constraints 306.2, out-of-domain point 304.7, batching 291.2, folding 304.4, queries 77.3
+    conjectured   291.2 bits        constraints 306.2, out-of-domain point 304.7, batching 291.2, folding 304.4, queries 320.0
+
+STATE-RESTORATION (NON-INTERACTIVE) ERROR, (2^h + 7) TIMES THE PROVABLE ROUND-BY-ROUND ERROR
+==============================================================================
+  setting                    rbr    2^32    2^48    2^64
+  deployed, degree 5       167.8   135.8   119.8   103.8
+  earlier, cubic           107.4    75.4    59.4    43.4
+
+THE FEWEST QUERIES REACHING 100 PROVABLE BITS AGAINST 2^64 ORACLE QUERIES
+==============================================================================
+  extension  blowup  grind  queries  2^64 bits  rows zk needs
+          3      16     20      158      100.1            328
+          3      16     30      148      100.2            308
+          3      32     20     none       99.2               
+          3       8     20     none       88.7               
+          5      16     20       74      103.8            168
+          5      16     30       68      101.8            156
+          5      32     20       58      100.8            136
+          5       8     20       98      102.7            216

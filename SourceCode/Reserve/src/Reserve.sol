@@ -167,6 +167,14 @@ contract Reserve {
     mapping(uint256 => uint64[2][]) private revoked;
 
     uint256 public nextId;
+    /// How many principals an agent can answer for on this domain, which it
+    /// declares from its proving capacity, and the principals it has taken
+    /// on. Once an agent has declared, a delegation to it is registered only
+    /// for a principal it took on, so no number of principals it never agreed
+    /// to serve can open queues it must answer in.
+    mapping(address => uint32) public capacityOf;
+    mapping(address => uint32) public servedCount;
+    mapping(address => mapping(address => bool)) public serves;
     /// Answerer stakes slashed, held here for good.
     uint256 public burnt;
 
@@ -193,6 +201,8 @@ contract Reserve {
     error NotAnswerer();
     error NotClosed();
     error NothingToWithdraw();
+    error NotServed();
+    error OverCapacity();
 
     /// `opening` is the agent's commitment to the payment's hidden fields,
     /// which the agent opens to the principal alone.
@@ -205,6 +215,7 @@ contract Reserve {
     event Reclaimed(uint256 indexed id, uint256 deposit);
     event AnswererStaked(uint256 indexed id, uint256 amount);
     event AnswererSlashed(uint256 indexed id, uint256 amount);
+    event Serves(address indexed agent, address indexed principal);
 
     constructor(
         uint64 domainId,
@@ -233,8 +244,25 @@ contract Reserve {
         dispute = dispute_;
     }
 
+    /// The agent declares how many principals it can answer for. It cannot
+    /// declare fewer than it already serves.
+    function declareCapacity(uint32 n) external {
+        if (n < servedCount[msg.sender]) revert OverCapacity();
+        capacityOf[msg.sender] = n;
+    }
+
+    /// The agent takes on a principal, within its declared capacity.
+    function servePrincipal(address principal) external {
+        if (serves[msg.sender][principal]) return;
+        if (servedCount[msg.sender] >= capacityOf[msg.sender]) revert OverCapacity();
+        serves[msg.sender][principal] = true;
+        servedCount[msg.sender] += 1;
+        emit Serves(msg.sender, principal);
+    }
+
     function register(Terms calldata t) external payable returns (uint256 id) {
         if (t.unitSize == 0 || t.rangeLen == 0) revert RangeOutside();
+        if (capacityOf[t.agent] != 0 && !serves[t.agent][msg.sender]) revert NotServed();
         id = nextId++;
         delegations[id] = Delegation({
             principal: msg.sender,

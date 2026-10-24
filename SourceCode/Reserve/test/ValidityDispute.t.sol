@@ -14,7 +14,7 @@ import {Statement} from "./Statement.sol";
 
 /// Challenges against real settlements, answered with the real Groth16 proof.
 /// The delegation is registered with the commitment and revocation root the
-/// batch proof carries, and its settlements are exactly the batch's 128
+/// batch proof carries, and its settlements are exactly the batch's
 /// payments: their amounts, payee, times and shares. Gas is measured as
 /// transaction receipts by script/ValidityDisputeOnChain.s.sol.
 contract ValidityDisputeTest is Groth16Result {
@@ -51,7 +51,7 @@ contract ValidityDisputeTest is Groth16Result {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, ACCEPT, WINDOW, SLOT, CHALLENGER_BOND, 8 hours);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, ACCEPT, WINDOW, SLOT, CHALLENGER_BOND, 8 hours, 0.25 ether, 0);
         acc.setDispute(address(vd));
         vm.deal(principal, 10 ether);
         vm.deal(challenger, 10 ether);
@@ -197,11 +197,11 @@ contract ValidityDisputeTest is Groth16Result {
 
     function testOverlongOrMisplacedPathRefused() public {
         _open(id, 2, recs[2]);
-        bytes32[] memory p = new bytes32[](8);
+        bytes32[] memory p = new bytes32[](vd.MAX_DEPTH() + 1);
         vm.expectRevert(ValidityDispute.BadPath.selector);
         vd.answer(id, _digest(2), recs[2], 2, p, proof);
         vm.expectRevert(ValidityDispute.BadPath.selector);
-        vd.answer(id, _digest(2), recs[2], 128, _path(2), proof);
+        vd.answer(id, _digest(2), recs[2], uint256(1) << _path(2).length, _path(2), proof);
     }
 
     /// Every settlement in one answer must lie under the same root.

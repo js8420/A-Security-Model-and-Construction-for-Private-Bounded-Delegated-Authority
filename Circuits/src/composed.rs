@@ -345,7 +345,7 @@ pub fn check_degree() -> bool {
         label: &str,
     ) -> bool {
         let mut agree = true;
-        for rows in [1usize, 128] {
+        for rows in [1usize, 256] {
             let a = ComposedAir::<R, MD, RD, DEPTH, COVER>::from_public_values(
                 &vec![F::ZERO; GLOBALS + rows * row_width(COVER)],
             );

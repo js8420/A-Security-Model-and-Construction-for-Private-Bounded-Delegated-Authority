@@ -4,21 +4,22 @@
 //! Kindi, whose round-by-round knowledge soundness Atapoor, Delpech de Saint
 //! Guilhem and Kindi prove (ePrint 2024/1553, Theorems 2 and 3). Plonky3
 //! combines the constraints and the opened columns by the powers of one
-//! challenge, folds by arities 4, 4 and 2, and grinds before the queries; each
+//! challenge, folds by arities 4, 4 and 4, and grinds before the queries; each
 //! changes one term, as `SourceCode/Analysis/se_bound.py` sets out. This file
 //! computes the same terms so that the harness prints what the paper states.
 //!
-//! The challenge field is the cubic extension of Goldilocks. Over the
-//! quadratic one the batching term caps the Johnson-regime figure near 72
-//! bits whatever the queries, and the unique-decoding regime passes 100 bits
-//! only at about 88 queries, twice the proof's.
+//! The challenge field is the degree-5 extension of Goldilocks. Over the
+//! cubic one the batching term caps the Johnson-regime figure near 107 bits
+//! round by round, which leaves about 43 bits against 2^64 oracle queries;
+//! over degree 5 the query term decides, and the deployed queries give
+//! more than 100 bits against 2^64.
 //! The provable figure is the better of the Johnson and unique-decoding
 //! regimes. The conjectured figure charges the queries the full rate and every
 //! other term its unique-decoding value. Both are round-by-round figures; an
 //! adversary making q oracle queries gains a factor q + 7 on top.
 
 const P: f64 = 18446744069414584321.0;
-const FOLDS: [f64; 3] = [4.0, 4.0, 2.0];
+const FOLDS: [f64; 3] = [4.0, 4.0, 4.0];
 
 /// What the error depends on besides the FRI parameters.
 #[derive(Clone, Copy)]
@@ -33,7 +34,7 @@ pub struct Shape {
 }
 
 /// The composed circuit as built.
-pub const COMPOSED: Shape = Shape { rows: 128, width: 14_292, constraints: 14_302, degree: 7, chunks: 16, ext: crate::prover::EXT_DEGREE as i32 };
+pub const COMPOSED: Shape = Shape { rows: crate::prover::ROWS, width: 14_292, constraints: 14_302, degree: 7, chunks: 16, ext: crate::prover::EXT_DEGREE as i32 };
 
 /// Openings the batching challenge combines: the trace with its two random
 /// codewords at two points, and at one point each quotient chunk's base
@@ -114,6 +115,12 @@ pub fn provable(s: &Shape, queries: usize, log_blowup: usize, pow: usize) -> f64
     -best.log2()
 }
 
+/// Provable bits against an adversary making 2^h oracle queries: the
+/// round-by-round error times 2^h + 7, the rounds of the protocol.
+pub fn provable_against(s: &Shape, queries: usize, log_blowup: usize, pow: usize, h: i32) -> f64 {
+    provable(s, queries, log_blowup, pow) - (2f64.powi(h) + 7.0).log2()
+}
+
 /// Conjectured bits: queries at the full rate, every other term at its unique-decoding value.
 pub fn conjectured(s: &Shape, queries: usize, log_blowup: usize, pow: usize) -> f64 {
     -worst(s, Regime::Conjectured, queries, log_blowup, pow).log2()
@@ -125,11 +132,20 @@ mod tests {
 
     #[test]
     fn deployed_matches_the_analysis_script() {
-        assert_eq!(provable(&COMPOSED, 44, 4, 20).floor() as usize, 107);
-        assert_eq!(conjectured(&COMPOSED, 44, 4, 20).floor() as usize, 165);
-        assert_eq!(provable(&COMPOSED, 58, 3, 20).floor() as usize, 106);
-        let quadratic = Shape { ext: 2, ..COMPOSED };
-        assert_eq!(provable(&quadratic, 40, 4, 20).floor() as usize, 72);
-        assert_eq!(provable(&quadratic, 40, 3, 20).floor() as usize, 73);
+        use crate::prover::{LOG_BLOWUP, NUM_QUERIES, POW_BITS};
+        let d = provable(&COMPOSED, NUM_QUERIES, LOG_BLOWUP, POW_BITS);
+        let (q, b, g) = (NUM_QUERIES, LOG_BLOWUP, POW_BITS);
+        let script = match (q, b, g) {
+            (74, 4, 20) => (167, 103, 292),
+            (68, 4, 30) => (165, 101, 292),
+            (58, 5, 20) => (164, 100, 291),
+            _ => panic!("no figures from se_bound.py for this setting"),
+        };
+        assert_eq!(d.floor() as usize, script.0);
+        assert_eq!(provable_against(&COMPOSED, q, b, g, 64).floor() as usize, script.1);
+        assert_eq!(conjectured(&COMPOSED, q, b, g).floor() as usize, script.2);
+        let cubic = Shape { ext: 3, ..COMPOSED };
+        assert_eq!(provable(&cubic, 44, 4, 20).floor() as usize, 107);
+        assert_eq!(provable_against(&cubic, 44, 4, 20, 64).floor() as usize, 43);
     }
 }

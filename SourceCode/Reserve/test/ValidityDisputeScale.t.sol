@@ -27,6 +27,12 @@ contract EchoVerifier is ISP1Verifier {
     }
 }
 
+contract FixedL1Block {
+    function basefee() external pure returns (uint256) {
+        return 3 gwei;
+    }
+}
+
 contract RefusesEther {
     function openOn(ValidityDispute vd, uint256 id, uint64 digest, Settlement calldata s) external payable {
         vd.open{value: msg.value}(id, digest, s);
@@ -46,6 +52,7 @@ contract ValidityDisputeScaleTest is Test {
     uint64 constant WINDOW = 1 days;
     uint64 constant SLOT = 2 hours;
     uint64 constant DELIVERY = 8 hours;
+    uint256 constant POSTING = 0.25 ether;
     uint64 constant LIFE = 30 days;
     bytes32 constant PROGRAM = bytes32(uint256(1));
 
@@ -62,7 +69,7 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(100 days);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT + 1 hours);
-        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND, DELIVERY);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND, DELIVERY, POSTING, 0);
         acc.setDispute(address(vd));
         vm.deal(principal, 100 ether);
         vm.deal(challenger, 100 ether);
@@ -98,8 +105,9 @@ contract ValidityDisputeScaleTest is Test {
 
     function _openBy(address who, uint256 r, uint64 d) internal {
         Settlement memory s = _rec(r, d);
+        bool own = who == acc.principalOf(r) || who == acc.monitorOf(r);
         vm.prank(who);
-        vd.open{value: BOND}(r, d, s);
+        vd.open{value: BOND + (own ? POSTING : 0)}(r, d, s);
     }
 
     /// k settlements of one delegation, each challenged by `who`.
@@ -907,16 +915,16 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(left, 0);
     }
 
-    /// Gas of delivering one sealed opening of a batch of 128, whose two
-    /// paths have seven siblings each.
+    /// Gas of delivering one sealed opening of a batch of 256, whose two
+    /// paths have eight siblings each.
     function testDeliveryGas() public {
         (uint256 r, ) = _registerWithAnswerer();
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
         uint256 index = 77;
-        bytes32[] memory path = new bytes32[](7);
-        bytes32[] memory sealedPath = new bytes32[](7);
-        for (uint256 j = 0; j < 7; ++j) {
+        bytes32[] memory path = new bytes32[](8);
+        bytes32[] memory sealedPath = new bytes32[](8);
+        for (uint256 j = 0; j < 8; ++j) {
             path[j] = keccak256(abi.encode("statement sibling", j));
             sealedPath[j] = keccak256(abi.encode("sealed sibling", j));
         }
@@ -928,7 +936,7 @@ contract ValidityDisputeScaleTest is Test {
         bytes memory opening = _sealed(5);
         uint256 g0 = gasleft();
         vd.deliver(r, 5, s, index, path, rc, opening, sealedPath);
-        console.log("deliver sealed opening, batch of 128", g0 - gasleft());
+        console.log("deliver sealed opening, batch of 256", g0 - gasleft());
     }
 
     function _climb(bytes32 h, uint256 index, bytes32[] memory path) internal pure returns (bytes32) {
@@ -1033,7 +1041,7 @@ contract ValidityDisputeScaleTest is Test {
         uint64 eta = 4 hours;
         uint64 wp = 30 hours;
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, w + 1 hours);
-        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, w, wa, eta, BOND, wp);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, w, wa, eta, BOND, wp, POSTING, 0);
         acc.setDispute(address(vd));
         vm.prank(principal);
         token.approve(address(acc), type(uint256).max);
@@ -1077,6 +1085,196 @@ contract ValidityDisputeScaleTest is Test {
         vd.expire(r, 6);
         (bool frozen,) = acc.frozenOf(r);
         assertTrue(frozen);
+    }
+
+    /// A settlement someone else challenged first: the principal joins that
+    /// challenge, which then holds settlement, moves into the principal's
+    /// queue, and on its answer asks for the sealed opening.
+    function testPrincipalJoinsAChallengeSomeoneElseOpened() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        (, uint32 before) = acc.frozenOf(r);
+        assertEq(before, 0);
+        Settlement memory s = _rec(r, 5);
+        vm.prank(principal);
+        uint256 g0 = gasleft();
+        vd.join{value: POSTING}(r, 5, s);
+        console.log("join another party's challenge", g0 - gasleft());
+        (, uint32 held) = acc.frozenOf(r);
+        assertEq(held, 1);
+        assertLe(_deadline(r, 5), uint64(block.timestamp) + WINDOW + 2 * SLOT);
+        vm.expectRevert(Reserve.Held.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        _answerAlone(r, 5);
+        (, uint32 after_) = acc.frozenOf(r);
+        assertEq(after_, 0);
+        assertEq(vd.challengeOf(r, 5).deadline, uint64(block.timestamp) + DELIVERY);
+        assertEq(vd.postingPool(r), POSTING);
+    }
+
+    function testOnlyThePrincipalJoinsAndOnlyWithTheDeposit() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        Settlement memory s = _rec(r, 5);
+        vm.deal(address(0xD00D), 1 ether);
+        vm.prank(address(0xD00D));
+        vm.expectRevert(ValidityDispute.NotPrincipal.selector);
+        vd.join{value: POSTING}(r, 5, s);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.BondTooSmall.selector);
+        vd.join{value: POSTING - 1}(r, 5, s);
+        vm.prank(principal);
+        vd.join{value: POSTING}(r, 5, s);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.AlreadyChallenged.selector);
+        vd.join{value: POSTING}(r, 5, s);
+    }
+
+    /// Someone else challenged and the answerer answered before the
+    /// principal's decision time: the principal joins the answered challenge,
+    /// nothing is held, and the join asks for the sealed opening and the
+    /// proof, due within the delivery wait from the join and slashable after.
+    function testPrincipalJoinsAnAnsweredChallenge() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp));
+        _openBy(challenger, r, 5);
+        _answerAlone(r, 5);
+        vm.expectRevert(ValidityDispute.NotDue.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        vm.warp(block.timestamp + 3600);
+        vm.prank(principal);
+        vd.join{value: POSTING}(r, 5, s);
+        (, uint32 held) = acc.frozenOf(r);
+        assertEq(held, 0);
+        assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Answered));
+        assertEq(vd.challengeOf(r, 5).deadline, uint64(block.timestamp) + DELIVERY);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.AlreadyChallenged.selector);
+        vd.join{value: POSTING}(r, 5, s);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// The same, with the answerer delivering after the join: the duty ends.
+    function testAnsweredChallengeJoinedThenDelivered() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp));
+        _openBy(challenger, r, 5);
+        _answerAlone(r, 5);
+        vm.prank(principal);
+        vd.join{value: POSTING}(r, 5, s);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        _post(r, _proof(100));
+        assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Delivered));
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+    }
+
+    function testJoinAfterTheAcceptanceWindowRefused() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        Settlement memory s = _rec(r, 5);
+        vm.warp(block.timestamp + ACCEPT + 1);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.WindowClosed.selector);
+        vd.join{value: POSTING}(r, 5, s);
+    }
+
+    /// The named answerer's postings after an answer to the principal's
+    /// challenge are refunded from the pool at the domain's base fee; anyone
+    /// else's are not.
+    function testPostingIsRefundedFromThePool() public {
+        (uint256 r, , ) = _answered();
+        vm.fee(1 gwei);
+        vm.txGasPrice(2 gwei);
+        address ans = vm.addr(ANSWERER_PK);
+        bytes memory b = _proof(vd.CHUNK() + 100);
+        vm.startPrank(address(0xD00D));
+        _post(r, b);
+        vm.stopPrank();
+        assertEq(vd.credit(address(0xD00D)), 0);
+        assertEq(vd.postingPool(r), POSTING);
+        vm.startPrank(ans);
+        _post(r, _proof(200));
+        vm.stopPrank();
+        uint256 paid = vd.credit(ans) - BOND;
+        assertGt(paid, 0);
+        assertEq(vd.postingPool(r), POSTING - paid);
+        assertFalse(vd.postingLapsed(r));
+    }
+
+    /// A posting the pool cannot pay for empties it and lapses the duty: the
+    /// answerer is not slashed for what it was not paid to post.
+    function testAnEmptyPoolLapsesTheDuty() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.fee(1e18);
+        vm.txGasPrice(1e18);
+        bytes memory chunk = _proof(vd.CHUNK());
+        vm.prank(vm.addr(ANSWERER_PK));
+        vd.postProof(r, keccak256("partial"), 0, chunk, false);
+        assertTrue(vd.postingLapsed(r));
+        assertEq(vd.postingPool(r), 0);
+        vm.fee(0);
+        vm.txGasPrice(0);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+    }
+
+    /// A posting forced in through Ethereum pays nothing on the domain; it is
+    /// refunded at the Ethereum base fee the domain records.
+    function testForcedPostingIsRefundedAtTheEthereumFee() public {
+        (uint256 r, , ) = _answered();
+        vm.etch(0x4200000000000000000000000000000000000015, address(new FixedL1Block()).code);
+        vm.txGasPrice(0);
+        address ans = vm.addr(ANSWERER_PK);
+        bytes memory chunk = _proof(300);
+        bytes32 h = _proofHash(chunk);
+        vm.prank(ans);
+        vd.postProof(r, h, 0, chunk, true);
+        uint256 n = abi.encodeCall(ValidityDispute.postProof, (r, h, 0, chunk, true)).length;
+        assertEq(vd.credit(ans) - BOND, (21000 + 40 * n) * 3 gwei);
+    }
+
+    /// Once no delivery is due, what is left of the pool is the principal's.
+    function testUnspentPostingReturnsToThePrincipal() public {
+        (uint256 r, , ) = _answered();
+        vm.expectRevert(ValidityDispute.TooEarly.selector);
+        vd.returnPosting(r);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vd.returnPosting(r);
+        assertEq(vd.credit(principal), POSTING);
+        vm.expectRevert(ValidityDispute.NothingToReturn.selector);
+        vd.returnPosting(r);
+    }
+
+    /// An agent that has declared its capacity is registered to only by the
+    /// principals it took on, and takes on no more than it declared.
+    function testAgentCapacityLimitsItsPrincipals() public {
+        address agent = vm.addr(AGENT_PK);
+        vm.startPrank(agent);
+        acc.declareCapacity(1);
+        acc.servePrincipal(principal);
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.servePrincipal(address(0xB0B5));
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.declareCapacity(0);
+        vm.stopPrank();
+        _register(AGENT_PK, 10);
+        vm.prank(address(0xB0B5));
+        vm.expectRevert(Reserve.NotServed.selector);
+        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
     }
 
     function testDisputeWindowMustFitTheCloseDelay() public {

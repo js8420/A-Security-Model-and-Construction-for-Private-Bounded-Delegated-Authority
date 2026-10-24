@@ -4,13 +4,19 @@ import type { Digest } from "./proof.js";
 const RATE = 17;
 const MASK = 0xffffffffn;
 
+/** "merkle1" in ASCII, the last capacity lane's starting value. */
+const TAG = 0x31656c6b72656dn;
+
 /**
- * The deployed leaf and node hash: a sponge over Keccak-f[1600] whose first
- * 17 lanes are overwritten by the input, 64 bits a lane, permuted after every
- * full block and after a final partial one, then read out as four lanes.
+ * The deployed leaf and node hash: a sponge over Keccak-f[1600] that starts
+ * with the tag in its last lane, whose first 17 lanes are overwritten by the
+ * input, 64 bits a lane, permuted after every full block and after a final
+ * partial one, then read out as four lanes.
  */
 export function sponge(words: Iterable<bigint>): Digest {
   const s = new Uint32Array(50);
+  s[48] = Number(TAG & MASK);
+  s[49] = Number(TAG >> 32n);
   let i = 0;
   for (const w of words) {
     s[2 * i] = Number(w & MASK);

@@ -20,6 +20,16 @@ interface IReserveV {
     function termsOf(uint256 id) external view returns (uint64, uint64, uint64, bytes32);
 }
 
+/// OP Stack predeploys: the L1 data fee of a transaction's call data, and the
+/// Ethereum base fee the domain last recorded.
+interface IGasPriceOracle {
+    function getL1Fee(bytes memory data) external view returns (uint256);
+}
+
+interface IL1Block {
+    function basefee() external view returns (uint256);
+}
+
 /// Challenge answered by a validity proof, never by the proof itself.
 ///
 /// A STARK proves a batch of payments, one per row, and stays off chain.
@@ -66,6 +76,25 @@ interface IReserveV {
 /// a principal nothing to pay an answerer to stay silent with, and burning
 /// the rest leaves nobody a reason to silence one.
 ///
+/// Joining. A settlement is challenged at most once, so a principal that
+/// finds a settlement already challenged by someone else joins that
+/// challenge. An open one holds settlement from then on, its deadline moves
+/// into the principal's queue if that is sooner, and an answer to it carries
+/// the principal's request below. An answered one carries the request from
+/// the join. The principal therefore acts the same way whoever challenged
+/// first, and whether or not that challenge was already answered.
+///
+/// Posting costs. A principal's challenge, or its join, carries a posting
+/// deposit into the delegation's pool. While a delivery is due, the named
+/// answerer's postings are refunded from the pool at the gas they cost: on
+/// the domain at its base fee plus the L1 data fee, and for a posting forced
+/// in through Ethereum, its call data and the portal's work at the Ethereum
+/// base fee the domain records. If the pool runs out the duty lapses and no
+/// withholding can be slashed; what is left once every delivery has fallen
+/// due goes back to the principal. Which refund applies turns on the gas
+/// price, so the answerer estimates gas at the price it pays: an estimate at
+/// a zero price takes the branch of a forced posting and comes out low.
+///
 /// Delivery. An answer to the principal's challenge is also its request for
 /// what backs the settlement: within the delivery wait the sealed opening
 /// must be posted here, at the settlement's position in the receipted tree,
@@ -102,9 +131,11 @@ contract ValidityDispute {
     /// uint64 array.
     uint256 public constant LEAF_VALUES = 26;
     /// A batch is at most one payment per trace row.
-    uint256 public constant MAX_DEPTH = 7;
+    uint256 public constant MAX_DEPTH = 8;
     uint256 private constant LANE = 0xFFFFFFFFFFFFFFFF;
     uint256 private constant LIMB = 0xFFFFFFFFFFFFFF;
+    /// Gas the refund itself spends after it measures, an upper bound.
+    uint256 private constant REFUND_GAS = 40_000;
 
     IReserveV public immutable reserve;
     ISP1Verifier public immutable verifier;
@@ -120,6 +151,13 @@ contract ValidityDispute {
     /// How long after answering the principal's challenge the sealed opening
     /// and the proof may be posted.
     uint64 public immutable deliveryWait;
+    /// What a principal's challenge adds to the delegation's posting pool.
+    uint256 public immutable postingDeposit;
+    /// L1 gas of the portal's work for one forced posting, beyond its call
+    /// data: measured on a fork of Ethereum, set at deployment.
+    uint256 public immutable depositGas;
+    address private constant GAS_PRICE_ORACLE = 0x420000000000000000000000000000000000000F;
+    address private constant L1_BLOCK = 0x4200000000000000000000000000000000000015;
     /// The size of every chunk of a posted proof but the last.
     /// 96 KiB: a chunk's transaction stays below the 128 KiB a node's
     /// transaction pool admits and the 120,000 bytes of call data an OP Stack
@@ -133,6 +171,14 @@ contract ValidityDispute {
     mapping(address => mapping(address => uint64)) public lastPrincipalDeadline;
     mapping(address => uint64) public lastPublicDeadline;
     mapping(uint256 => uint256) public openCount;
+    /// Posting deposits a delegation's principal has paid in and not yet spent.
+    mapping(uint256 => uint256) public postingPool;
+    /// The latest delivery deadline under a delegation.
+    mapping(uint256 => uint64) public dutyUntil;
+    /// Whether a refund found the pool empty while a delivery was due.
+    mapping(uint256 => bool) public postingLapsed;
+    /// Gas left when a refunded call began, kept for the call alone.
+    uint256 private transient gasAtStart;
     mapping(address => uint256) public credit;
     /// The sealed-opening root a delivery was made under.
     mapping(bytes32 => bytes32) public deliveredUnder;
@@ -167,6 +213,8 @@ contract ValidityDispute {
     error NotWithheld();
     error BadChunk();
     error ProofMismatch();
+    error NotPrincipal();
+    error NothingToReturn();
 
     event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline);
     event Answered(uint256 indexed id, uint64 digest);
@@ -175,6 +223,8 @@ contract ValidityDispute {
     event SealedDelivered(uint256 indexed id, uint64 digest, bytes opening);
     event ProofChunk(uint256 indexed id, bytes32 indexed proofHash, address indexed poster, uint256 index);
     event ProofPosted(uint256 indexed id, bytes32 indexed proofHash, address poster);
+    event Joined(uint256 indexed id, uint64 digest, uint64 deadline);
+    event PostingRefunded(uint256 indexed id, address poster, uint256 amount);
 
     constructor(
         address reserve_,
@@ -184,7 +234,9 @@ contract ValidityDispute {
         uint64 answerWindow_,
         uint64 slot_,
         uint256 bond,
-        uint64 deliveryWait_
+        uint64 deliveryWait_,
+        uint256 postingDeposit_,
+        uint256 depositGas_
     ) {
         reserve = IReserveV(reserve_);
         verifier = ISP1Verifier(verifier_);
@@ -194,6 +246,8 @@ contract ValidityDispute {
         slot = slot_;
         challengerBond = bond;
         deliveryWait = deliveryWait_;
+        postingDeposit = postingDeposit_;
+        depositGas = depositGas_;
     }
 
     function key(uint256 id, uint64 digest) public pure returns (bytes32) {
@@ -206,13 +260,14 @@ contract ValidityDispute {
 
     /// `s` opens the reserve's record of the settlement.
     function open(uint256 id, uint64 digest, Settlement calldata s) external payable {
-        if (msg.value != challengerBond) revert BondTooSmall();
         bytes32 k = key(id, digest);
         if (challenges[k].status != Status.None) revert AlreadyChallenged();
         _record(id, digest, s);
         if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
         address owner = reserve.principalOf(id);
         bool principal = msg.sender == owner || msg.sender == reserve.monitorOf(id);
+        if (msg.value != challengerBond + (principal ? postingDeposit : 0)) revert BondTooSmall();
+        if (principal) postingPool[id] += postingDeposit;
         uint64 deadline = _queue(reserve.agentOf(id), owner, principal);
         challenges[k] = Challenge({challenger: msg.sender, deadline: deadline, status: Status.Open, byPrincipal: principal});
         openCount[id] += 1;
@@ -221,6 +276,45 @@ contract ValidityDispute {
         // agent for the price of a bond.
         if (principal) reserve.hold(id);
         emit Challenged(id, digest, msg.sender, deadline);
+    }
+
+    /// The principal, or its monitor address, joins a challenge someone else
+    /// opened, within the acceptance window, with a posting deposit. An open
+    /// challenge then holds settlement and falls due no later than the
+    /// principal's own queue would place it. A challenge already answered
+    /// stays answered, and the join is the principal's request for what backs
+    /// the settlement, due within the delivery wait from the join.
+    function join(uint256 id, uint64 digest, Settlement calldata s) external payable {
+        Challenge storage c = challenges[key(id, digest)];
+        if (c.status != Status.Open && c.status != Status.Answered) revert NotOpen();
+        if (c.byPrincipal) revert AlreadyChallenged();
+        _record(id, digest, s);
+        if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
+        address owner = reserve.principalOf(id);
+        if (msg.sender != owner && msg.sender != reserve.monitorOf(id)) revert NotPrincipal();
+        if (msg.value != postingDeposit) revert BondTooSmall();
+        postingPool[id] += postingDeposit;
+        c.byPrincipal = true;
+        if (c.status == Status.Answered) {
+            c.deadline = uint64(block.timestamp) + deliveryWait;
+            if (c.deadline > dutyUntil[id]) dutyUntil[id] = c.deadline;
+        } else {
+            uint64 d = _queue(reserve.agentOf(id), owner, true);
+            if (d < c.deadline) c.deadline = d;
+            reserve.hold(id);
+        }
+        emit Joined(id, digest, c.deadline);
+    }
+
+    /// What is left of the posting pool goes back to the principal once no
+    /// delivery under the delegation is still due.
+    function returnPosting(uint256 id) external {
+        if (block.timestamp <= dutyUntil[id]) revert TooEarly();
+        if (openCount[id] != 0) revert TooEarly();
+        uint256 left = postingPool[id];
+        if (left == 0) revert NothingToReturn();
+        postingPool[id] = 0;
+        credit[reserve.principalOf(id)] += left;
     }
 
     /// `index` and `path` place the settlement's leaf in the batch the proof
@@ -303,6 +397,7 @@ contract ValidityDispute {
     /// hashed in at the end. The chunks travel in the transactions' call
     /// data, which anyone can read back; only the chained hash is stored.
     function postProof(uint256 id, bytes32 proofHash, uint256 index, bytes calldata chunk, bool last) external {
+        uint256 g0 = gasleft();
         Posting storage p = postings[msg.sender][id][proofHash];
         if (postedAt[id][proofHash] != 0 || index != p.chunks) revert BadChunk();
         if (chunk.length == 0 || chunk.length > CHUNK || (!last && chunk.length != CHUNK)) revert BadChunk();
@@ -315,6 +410,35 @@ contract ValidityDispute {
             postedAt[id][proofHash] = uint64(block.timestamp);
             emit ProofPosted(id, proofHash, msg.sender);
         }
+        _refund(id, g0);
+    }
+
+    /// Refunds the named answerer's posting while a delivery under the
+    /// delegation is due, from the principal's pool. The call data is
+    /// charged as if every byte were non-zero, under EIP-7623's floor, which
+    /// bounds what the transaction paid for it.
+    function _refund(uint256 id, uint256 g0) private {
+        (address answerer, ) = reserve.answererOf(id);
+        if (msg.sender != answerer || block.timestamp > dutyUntil[id]) return;
+        uint256 n = msg.data.length;
+        uint256 fee;
+        if (tx.gasprice != 0) {
+            uint256 exec = g0 - gasleft() + REFUND_GAS;
+            uint256 data = 16 * n + exec > 40 * n ? 16 * n + exec : 40 * n;
+            fee = (21000 + data) * block.basefee;
+            if (GAS_PRICE_ORACLE.code.length != 0) fee += IGasPriceOracle(GAS_PRICE_ORACLE).getL1Fee(msg.data);
+        } else if (L1_BLOCK.code.length != 0) {
+            // A deposit forced in through Ethereum pays no gas on the domain.
+            fee = (21000 + 40 * n + depositGas) * IL1Block(L1_BLOCK).basefee();
+        }
+        uint256 pool = postingPool[id];
+        if (fee > pool) {
+            fee = pool;
+            postingLapsed[id] = true;
+        }
+        postingPool[id] = pool - fee;
+        credit[msg.sender] += fee;
+        emit PostingRefunded(id, msg.sender, fee);
     }
 
     /// A receipt as the answerer signed it.
@@ -356,6 +480,7 @@ contract ValidityDispute {
         bytes calldata opening,
         bytes32[] calldata sealedPath
     ) external {
+        gasAtStart = gasleft();
         bytes32 k = key(id, digest);
         Challenge storage c = challenges[k];
         if (c.status != Status.Answered || !c.byPrincipal) revert NotDue();
@@ -366,6 +491,7 @@ contract ValidityDispute {
         c.status = Status.Delivered;
         deliveredUnder[k] = r.sealedRoot;
         emit SealedDelivered(id, digest, opening);
+        _refund(id, gasAtStart);
     }
 
     /// Slashes the answerer that held a settlement's batch before the
@@ -388,6 +514,7 @@ contract ValidityDispute {
         if (!c.byPrincipal || (c.status != Status.Answered && c.status != Status.Delivered)) revert NotWithheld();
         bool swapped = c.status == Status.Delivered && deliveredUnder[k] != r.sealedRoot;
         if (!swapped) {
+            if (postingLapsed[id]) revert NotWithheld();
             uint64 at = postedAt[id][r.proofHash];
             bool missing = c.status == Status.Answered || at == 0 || at > c.deadline;
             if (block.timestamp <= c.deadline || !missing) revert NotWithheld();
@@ -457,6 +584,7 @@ contract ValidityDispute {
         openCount[id] -= 1;
         if (c.byPrincipal) {
             c.deadline = uint64(block.timestamp) + deliveryWait;
+            if (c.deadline > dutyUntil[id]) dutyUntil[id] = c.deadline;
             reserve.release(id);
         }
         (address answerer, ) = reserve.answererOf(id);

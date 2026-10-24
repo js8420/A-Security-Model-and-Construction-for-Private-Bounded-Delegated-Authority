@@ -1,0 +1,71 @@
+WHERE THE DISPUTE VERIFIER'S INSTRUCTIONS GO
+==============================================================================
+  instructions executed                             666366668
+  the proof verifies                                     true
+  samples, one per 1000 instructions                     83295
+
+  phase                                      share   instructions
+  reading the proof (bincode)               14.30%       95320954
+  symbolic constraint analysis               0.00%              0
+  Merkle path checks                        10.07%       67080671
+  transcript (duplex challenger)             0.00%              0
+  constraint evaluation at zeta              6.37%       42448425
+  FRI folding and openings                  67.94%      452708530
+  quotient recomposition                     0.00%              0
+  other verifier work                        0.00%              0
+  guest main, outside the verifier           0.00%              0
+  unattributed                               1.32%        8808088
+
+  functions by inclusive share
+  100.00%  __start
+  100.00%  main
+  100.00%  dispute_verifier_keccak[43050b6d28b79ab9]::main
+   84.23%  p3_uni_stark[2fb74774b168fa23]::verifier::verify_with_preprocessed::<..>
+   84.23%  p3_uni_stark[2fb74774b168fa23]::verifier::verify::<..>
+   63.22%  <..>::verify
+   60.93%  p3_fri[58df8abb13e67073]::verifier::verify_fri::<..>
+   55.51%  p3_fri[58df8abb13e67073]::verifier::open_input::<..>
+   47.66%  <..>::fold::<..>
+   27.15%  <..>::try_map::<..>
+   16.26%  <..>::from_iter
+   15.72%  p3_field[1eb5c1c83023d5d6]::extension::binomial_extension::quintic_mul::<..>
+   14.30%  <..>::visit_seq::<..>
+   14.30%  <..>::deserialize_tuple::<..>
+   13.84%  <..>::deserialize_struct::<..>
+   13.13%  <..>::evaluate_periodic_column_at::<..>
+   13.05%  <..>::interpolate_coset::<..>
+   11.64%  p3_field[1eb5c1c83023d5d6]::batch_inverse::batch_multiplicative_inverse::<..>
+   10.07%  <..>::verify_batch
+    9.90%  <..>::next_element_seed::<..>
+    9.66%  <..>::hash_iter::<..>
+    9.40%  <..>::next
+    7.86%  <..>::deserialize::<..>
+    6.37%  p3_uni_stark[2fb74774b168fa23]::verifier::verify_constraints::<..>
+    6.37%  <..>::eval
+
+  functions by self share
+   27.15%  <..>::try_map::<..>
+   18.69%  <..>::fold::<..>
+   15.72%  p3_field[1eb5c1c83023d5d6]::extension::binomial_extension::quintic_mul::<..>
+    7.86%  <..>::deserialize::<..>
+    7.45%  <..>::next
+    3.45%  <..>::visit_seq::<..>
+    2.75%  <..>::observe_slice
+    2.23%  <..>::hash_iter::<..>
+    2.07%  <..>::update
+    1.68%  <..>::alloc
+    1.44%  p3_field[1eb5c1c83023d5d6]::batch_inverse::batch_multiplicative_inverse::<..>
+    1.41%  <..>::interpolate_coset::<..>
+    1.24%  <..>::dealloc
+    1.12%  memcpy
+    0.94%  <..>::ext_square
+    0.65%  <..>::deserialize_tuple::<..>
+    0.54%  <..>::eval
+    0.48%  <..>::internal_linear_layer::<..>
+    0.37%  <..>::try_inverse
+    0.30%  <..>::collect
+    0.27%  memset
+    0.27%  <..>::external_linear_layer::<..>
+    0.23%  <..>::verify_batch
+    0.20%  <..>::assert_zero::<..>
+    0.18%  p3_poseidon2_air[4bbb6f2bef0c9414]::air::eval_full_round::<..>

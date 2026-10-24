@@ -263,7 +263,7 @@ pub(crate) fn all_positions(events: &[Event], log_global: usize, queries: usize)
     (0..queries).map(|_| c.sample_bits(log_global)).collect()
 }
 
-/// One real 128-row proof of the composed circuit and its public values,
+/// One real proof, of the deployed row count, of the composed circuit and its public values,
 /// written with bincode for the zkVM verifier to read. Returns the bytes
 /// written and whether the proof verifies natively.
 pub fn export(path: &str) -> (usize, bool) {

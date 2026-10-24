@@ -614,8 +614,6 @@ dependencies = [
 [[package]]
 name = "p3-fri"
 version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6207d9c658afdad926ebc6a5a344c98cfea59baa2eaaf7cd4a528ba02304bae9"
 dependencies = [
  "itertools 0.15.0",
  "p3-challenger 0.6.3",

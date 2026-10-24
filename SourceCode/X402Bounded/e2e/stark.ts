@@ -82,7 +82,7 @@ async function main() {
   check(`constraint graph: ${air.ops.length} nodes, ${air.roots.length} constraints, width ${air.width}`, air.width > 0);
   check("its degree equals the degree the AIR states", maxDegree(air) === PARAMS.statedDegree, String(maxDegree(air)));
 
-  for (const [name, b] of [["128 payments", full], ["4 payments", small]] as const) {
+  for (const [name, b] of [["256 payments", full], ["4 payments", small]] as const) {
     const r = await both(b);
     check(`honest proof of ${name}: the deployed verifier accepts`, r.d.ok);
     check(`honest proof of ${name}: the independent verifier accepts`, r.i.ok, r.i.ok ? "" : r.i.reason);
@@ -114,7 +114,7 @@ async function main() {
   const buggy: Check = async () => ({ ok: true });
   const honestGate = new ProofGate([{ name: "deployed", check: deployed }, { name: "independent", check: independent }], air.globals, air.rowWidth);
   const h = await honestGate.deliver(full);
-  check("the gate accepts the honest batch and states its 128 payments", h.accepted && h.payments.length === 128 && h.terms !== null);
+  check("the gate accepts the honest batch and states its 256 payments", h.accepted && h.payments.length === 256 && h.terms !== null);
   const alone = new ProofGate([{ name: "deployed, with a bug that accepts", check: buggy }], air.globals, air.rowWidth);
   const a = await alone.deliver(forged);
   check("a verifier bug alone: the batch whose hidden cap exceeds the budget is accepted and states its payment", a.accepted && a.payments.length > 0);
@@ -142,7 +142,7 @@ async function main() {
   console.log("INDEPENDENT STARK VERIFIER AGAINST THE DEPLOYED ONE");
   console.log("=".repeat(78));
   for (const l of lines) console.log(l);
-  console.log(`  verification of the 128-payment proof, ${reps} interleaved runs each, ms (q1 / median / q3):`);
+  console.log(`  verification of the 256-payment proof, ${reps} interleaved runs each, ms (q1 / median / q3):`);
   console.log(`    deployed Plonky3, in process   ${dq.q1.toFixed(1)} / ${dq.median.toFixed(1)} / ${dq.q3.toFixed(1)}`);
   console.log(`    independent, TypeScript        ${iq.q1.toFixed(1)} / ${iq.median.toFixed(1)} / ${iq.q3.toFixed(1)}`);
   console.log(`  ${failures === 0 ? "all checks pass" : `${failures} checks fail`}`);

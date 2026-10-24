@@ -78,7 +78,9 @@ class Reader {
     const a = this.f();
     const b = this.f();
     const c = this.f();
-    return [a, b, c];
+    const d = this.f();
+    const e = this.f();
+    return [a, b, c, d, e];
   }
 
   vec<T>(item: () => T): T[] {

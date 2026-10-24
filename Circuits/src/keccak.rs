@@ -12,7 +12,7 @@ use crate::naysay::Air;
 use crate::prover::{config, p2_config, Config as KConfig, ROWS};
 use crate::trace::{composed_batch, composed_case};
 
-/// One 128-row proof of a batch of k payments under the Keccak configuration,
+/// One proof of the deployed row count for a batch of k payments under the Keccak configuration,
 /// for the zkVM verifier built against the same configuration. Returns the
 /// bytes written, whether it verifies natively, and the seconds proving took.
 pub fn export(path: &str, k: usize) -> (usize, bool, f64) {

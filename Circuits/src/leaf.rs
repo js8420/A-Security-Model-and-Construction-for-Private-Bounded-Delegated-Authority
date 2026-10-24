@@ -318,7 +318,7 @@ pub fn profile(vectors: &str) -> Profile {
     writeln!(s, "pragma solidity ^0.8.28;").ok();
     writeln!(s).ok();
     writeln!(s, "/// Constraints of the composed circuit compiled to programs, with the values").ok();
-    writeln!(s, "/// they read on a real 128-row proof and the value the verifier's folder").ok();
+    writeln!(s, "/// they read on a real proof of the deployed size and the value the verifier's folder").ok();
     writeln!(s, "/// gives them. Written by `cargo run --release -- leaf`.").ok();
     writeln!(s, "library ConstraintVectors {{").ok();
     for (name, i) in [("WORST", worst), ("READS", worst_reads), ("MEDIAN", median)] {
@@ -339,7 +339,11 @@ pub fn profile(vectors: &str) -> Profile {
         writeln!(s, "    }}").ok();
     }
     writeln!(s, "}}").ok();
-    std::fs::write(vectors, s).expect("write vectors");
+    // The contract evaluates over the degree-two extension, so its vectors
+    // are written only by a build whose challenges are drawn from that field.
+    if EXT_DEGREE == 2 {
+        std::fs::write(vectors, s).expect("write vectors");
+    }
 
     Profile {
         constraints: progs.len(),

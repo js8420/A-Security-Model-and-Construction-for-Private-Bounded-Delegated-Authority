@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// Constraints of the composed circuit compiled to programs, with the values
-/// they read on a real 128-row proof and the value the verifier's folder
+/// they read on a real proof of the deployed size and the value the verifier's folder
 /// gives them. Written by `cargo run --release -- leaf`.
 library ConstraintVectors {
     uint256 internal constant WORST_INDEX = 13940;

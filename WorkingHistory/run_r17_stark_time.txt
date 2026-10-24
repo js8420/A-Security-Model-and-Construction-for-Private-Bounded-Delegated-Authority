@@ -1,0 +1,16 @@
+VERIFICATION TIME, DEPLOYED AGAINST INDEPENDENT, 256-PAYMENT PROOF
+==============================================================================
+  2 passes; each 12 batches of 25 runs per verifier, the two alternating
+  batch by batch, 20 s of idle between batches; deployed times are in process
+  pass 1, ms:                       runs      min       q1   median       q3      max
+    deployed Plonky3                 300    211.3    224.3    225.5    227.5    260.6
+    independent, TypeScript          300   2486.6   2610.6   2640.3   2681.6   2877.3
+    per-batch medians, deployed:    225.6 225.9 233.6 225.7 226.0 225.5 224.1 223.0 226.4 224.9 224.4 224.3
+    per-batch medians, independent: 2655.8 2686.8 2661.2 2635.0 2631.6 2652.2 2623.1 2648.1 2622.1 2633.4 2617.3 2628.5
+    interquartile ranges overlap: no; median ratio 11.7
+  pass 2, ms:                       runs      min       q1   median       q3      max
+    deployed Plonky3                 300    217.1    223.6    224.3    226.2    297.2
+    independent, TypeScript          300   2462.9   2600.1   2628.3   2669.1   3055.9
+    per-batch medians, deployed:    223.7 224.8 224.4 224.1 224.5 225.0 225.4 224.3 218.1 224.1 227.1 223.6
+    per-batch medians, independent: 2623.7 2686.3 2618.7 2628.1 2619.7 2634.7 2632.4 2626.9 2635.4 2635.7 2615.4 2625.0
+    interquartile ranges overlap: no; median ratio 11.7

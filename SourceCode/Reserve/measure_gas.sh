@@ -14,7 +14,7 @@ tag=${1:?tag}
 here=$(cd "$(dirname "$0")" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
 circuits=$(cd "$here/../../Circuits" && pwd)
-result="$hist/groth16_s7/out_s7_batch_a/onchain.txt"
+result="$hist/groth16_s8/out_s8_batch_a/onchain.txt"
 [ -f "$result" ] || { echo "missing $result: copy the Groth16 run from Pete first"; exit 1; }
 log=$(mktemp)
 (cd "$circuits" && cargo build --release > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
@@ -25,6 +25,14 @@ cd "$here"
 
 python3 fetch_state_proofs.py "$hist/state_proofs" | tee "$hist/run_${tag}_state_proofs.txt"
 forge test -vv > "$hist/run_${tag}_forge.txt" 2>&1 || true
+# The L1 gas of forcing one proof chunk in through Base's portal, on a fork of
+# Ethereum at its latest block: the first endpoint that serves the fork.
+for rpc in ${L1_RPC:-} https://ethereum-rpc.publicnode.com https://eth.drpc.org https://eth.llamarpc.com https://1rpc.io/eth; do
+    if L1_FORK=$rpc forge test --match-contract ForcedPostingGas -vv > "$hist/run_${tag}_forced.txt" 2>&1; then
+        grep -E "fork block|base fee|portal execution" "$hist/run_${tag}_forced.txt"
+        break
+    fi
+done
 grep -E "Suite result|^Ran |FAIL|rror" "$hist/run_${tag}_forge.txt" || { echo "forge test printed no results:"; tail -20 "$hist/run_${tag}_forge.txt"; exit 1; }
 
 key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -61,4 +69,4 @@ for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisput
 PY
 
 python3 ../Analysis/posting_cost.py "$hist/receipts_${tag}_ValidityDisputeOnChain.json" | tee "$hist/run_${tag}_posting.txt"
-python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s7" | tee "$hist/run_${tag}_bond.txt"
+python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s8" "$hist/run_${tag}_forced.txt" | tee "$hist/run_${tag}_bond.txt"

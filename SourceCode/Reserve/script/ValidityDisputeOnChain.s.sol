@@ -28,9 +28,9 @@ contract ValidityDisputeOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
-    string constant RESULT = "../../WorkingHistory/groth16_s7/out_s7_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s8/out_s8_batch_a/onchain.txt";
     /// The exported batch's STARK proof with its public values, as the agent hands it on.
-    string constant STARK = "../../Circuits/target/proof_128_keccak.bin";
+    string constant STARK = "../../Circuits/target/proof_keccak.bin";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -59,7 +59,7 @@ contract ValidityDisputeOnChain is Script {
         _settle(d);
         (bool ok, ) = address(sp1).call(abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof)));
         require(ok, "verifyProof");
-        vd.open{value: 0.01 ether}(id, digest, rec);
+        vd.open{value: 0.26 ether}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
         bytes memory stark = vm.readFileBinary(STARK);
@@ -74,7 +74,7 @@ contract ValidityDisputeOnChain is Script {
         // seconds; three blocks later it has passed.
         _deploy(d, vm.addr(pk), 0, 1);
         _settle(d);
-        vd.open{value: 0.01 ether}(id, digest, rec);
+        vd.open{value: 0.26 ether}(id, digest, rec);
         for (uint256 i = 0; i < 3; ++i) token.mint(vm.addr(pk), 1);
         // The script runs every call locally first, in one block; the warp
         // moves only that local clock past the deadline. On the node the three
@@ -91,7 +91,7 @@ contract ValidityDisputeOnChain is Script {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 30 hours);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 30 hours, 0.25 ether, 0);
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);

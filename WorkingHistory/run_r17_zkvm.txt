@@ -1,0 +1,14 @@
+DISPUTE BY VALIDITY PROOF: THE VERIFIER INSIDE SP1, KECCAK COMMITMENTS
+==============================================================================
+  proof bytes read                                   10340683
+  the proof verifies inside the zkVM                     true
+  committed root                               0x45b82068cfcdcfcd4cfb1e7a20074b22d30577b8a936e279790f43a2bc8ac725
+  instructions executed                             666398457
+  light execution, seconds                               13.5
+  counting execution, seconds                             0.5
+  instructions, gas metering                        666398457
+  trace chunks metered                                      2
+  prover gas                                        754886272
+  syscalls                                              82791
+  gas metering, seconds                                  15.0
+  a tampered proof is refused inside the zkVM            true

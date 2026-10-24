@@ -20,7 +20,7 @@ node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)
 statement="$here/../Reserve/test/Statement.sol"
 work=$(mktemp -d)
 cp "$statement" "$work/Statement.sol"
-if [ -f "$circuits/target/proof_128_keccak.bin" ]; then cp "$circuits/target/proof_128_keccak.bin" "$work/kept.bin"; fi
+if [ -f "$circuits/target/proof_keccak.bin" ]; then cp "$circuits/target/proof_keccak.bin" "$work/kept.bin"; fi
 a=""
 b=""
 c=""
@@ -29,7 +29,7 @@ cleanup() {
     if [ -n "$b" ]; then kill $b 2>/dev/null || true; fi
     if [ -n "$c" ]; then kill $c 2>/dev/null || true; fi
     cp "$work/Statement.sol" "$statement"
-    if [ -f "$work/kept.bin" ]; then cp "$work/kept.bin" "$circuits/target/proof_128_keccak.bin"; fi
+    if [ -f "$work/kept.bin" ]; then cp "$work/kept.bin" "$circuits/target/proof_keccak.bin"; fi
     rm -rf "$work"
 }
 trap cleanup EXIT
@@ -38,7 +38,7 @@ log="$work/build.txt"
 (cd "$circuits" && cargo build --release > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
 if grep -q "^warning" "$log"; then grep -A6 "^warning" "$log"; exit 1; fi
 bin="$circuits/target/release/delegation-circuit"
-(cd "$circuits" && "$bin" export-constraints >/dev/null && "$bin" export-keccak 4 >/dev/null && cp target/proof_128_keccak.bin "$work/small.bin")
+(cd "$circuits" && "$bin" export-constraints >/dev/null && "$bin" export-keccak 4 >/dev/null && cp target/proof_keccak.bin "$work/small.bin")
 cp "$work/Statement.sol" "$statement"
 (cd "$here/../Reserve" && forge build > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
 cd "$here"

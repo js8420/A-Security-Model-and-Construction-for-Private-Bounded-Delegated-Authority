@@ -9,7 +9,7 @@ import { Transcript } from "./transcript.js";
 
 /** The deployed parameters. A proof made under any others is refused rather than interpreted. */
 export const PARAMS = {
-  queries: 44,
+  queries: 74,
   logBlowup: 4,
   queryPowBits: 20,
   commitPowBits: 0,
@@ -93,8 +93,8 @@ export function lagrange(xs: readonly bigint[], ys: readonly E[], z: E): E {
   return out;
 }
 
-/** The extension element whose basis coefficients are the given extension values: c0 + c1 X + c2 X^2. */
-const fromBasis = (c: readonly E[]): E => eadd(c[0], emul(eadd(c[1], emul(c[2], X)), X));
+/** The extension element whose basis coefficients are the given extension values: c0 + c1 X + ... + c4 X^4. */
+const fromBasis = (c: readonly E[]): E => c.reduceRight((acc, ci) => eadd(ci, emul(acc, X)), E0);
 
 /** Periodic column j of the batch: payment r's value j, for r over the batch. */
 function periodicColumns(pv: readonly bigint[], globals: number, rowWidth: number): bigint[][] {

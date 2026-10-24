@@ -1,0 +1,1000 @@
+{"family":"draw","variant":0,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":1,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":2,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":3,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":4,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":5,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":6,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":7,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":8,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":9,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":10,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":11,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":12,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":13,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":14,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":15,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":16,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":17,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":18,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":19,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":20,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":21,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":22,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":23,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":24,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":25,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":26,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":27,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":28,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":29,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":30,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":31,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":32,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":33,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":34,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":35,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":36,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":37,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":38,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":39,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":40,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":41,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":42,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":43,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":44,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":45,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":46,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":47,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":48,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":49,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":50,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":51,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":52,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":53,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":54,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":55,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":56,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":57,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":58,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":59,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":60,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":61,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":62,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":63,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":64,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":65,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":66,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":67,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":68,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":69,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":70,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":71,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":72,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":73,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":74,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":75,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":76,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":77,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":78,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":79,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":80,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":81,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":82,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":83,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":84,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":85,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":86,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":87,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":88,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":89,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":90,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":91,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":92,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":93,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":94,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":95,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":96,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":97,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":98,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":99,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":100,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":101,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":102,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":103,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":104,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":105,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":106,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":107,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":108,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":109,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":110,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":111,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":112,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":113,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":114,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":115,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":116,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":117,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":118,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":119,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":120,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":121,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":122,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":123,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":124,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":125,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":126,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":127,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":128,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":129,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":130,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":131,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":132,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":133,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":134,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":135,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":136,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":137,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":138,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":139,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":140,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":141,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":142,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":143,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":144,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":145,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":146,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":147,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":148,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":149,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":150,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":151,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":152,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":153,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":154,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":155,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":156,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":157,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":158,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":159,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":160,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":161,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":162,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":163,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":164,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":165,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":166,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":167,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":168,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":169,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":170,"where":"draw 20","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":171,"where":"draw 21","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":172,"where":"draw 22","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":173,"where":"draw 23","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":174,"where":"draw 24","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":175,"where":"draw 25","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":176,"where":"draw 26","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":177,"where":"draw 27","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":178,"where":"draw 28","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":179,"where":"draw 29","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"draw","variant":180,"where":"draw 0","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":181,"where":"draw 1","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":182,"where":"draw 2","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":183,"where":"draw 3","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":184,"where":"draw 4","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"draw","variant":185,"where":"draw 5","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":186,"where":"draw 6","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":187,"where":"draw 7","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":188,"where":"draw 8","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":189,"where":"draw 9","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":190,"where":"draw 10","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":191,"where":"draw 11","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":192,"where":"draw 12","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":193,"where":"draw 13","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":194,"where":"draw 14","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":195,"where":"draw 15","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":196,"where":"draw 16","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":197,"where":"draw 17","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":198,"where":"draw 18","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"draw","variant":199,"where":"draw 19","made":true,"deployed":"fold opening","independent":"fold opening","reason":"fold commitment opening: root differs"}
+{"family":"codeword","variant":0,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 6953664","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":1,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 25267147","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":2,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 46271","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":3,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 40815","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":4,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 15803","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":5,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 36691","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":6,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 48070","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":7,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 57271","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":8,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 25461","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":9,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 20124","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":10,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 33473","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":11,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 51207","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":12,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 13759","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":13,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 10834","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":14,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 875","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":15,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 22338","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":16,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 28583","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":17,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 27758","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":18,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 26472","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":19,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 5710","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":20,"where":"quotient or randomisation extension, one entry: extension 10 (8192 x 7), seed or entry 21267","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":21,"where":"quotient or randomisation extension, half the entries: extension 10 (8192 x 7), seed or entry 6422","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":22,"where":"quotient or randomisation extension, one entry: extension 11 (8192 x 7), seed or entry 10363","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":23,"where":"quotient or randomisation extension, half the entries: extension 11 (8192 x 7), seed or entry 52251","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":24,"where":"quotient or randomisation extension, one entry: extension 12 (8192 x 7), seed or entry 27248","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":25,"where":"quotient or randomisation extension, half the entries: extension 12 (8192 x 7), seed or entry 46411","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":26,"where":"quotient or randomisation extension, one entry: extension 13 (8192 x 7), seed or entry 50321","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":27,"where":"quotient or randomisation extension, half the entries: extension 13 (8192 x 7), seed or entry 25719","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":28,"where":"quotient or randomisation extension, one entry: extension 14 (8192 x 7), seed or entry 17180","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":29,"where":"quotient or randomisation extension, half the entries: extension 14 (8192 x 7), seed or entry 1375","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":30,"where":"quotient or randomisation extension, one entry: extension 15 (8192 x 7), seed or entry 14480","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":31,"where":"quotient or randomisation extension, half the entries: extension 15 (8192 x 7), seed or entry 40371","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":32,"where":"quotient or randomisation extension, one entry: extension 16 (8192 x 7), seed or entry 25123","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":33,"where":"quotient or randomisation extension, half the entries: extension 16 (8192 x 7), seed or entry 53173","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":34,"where":"quotient or randomisation extension, one entry: extension 17 (8192 x 7), seed or entry 11467","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":35,"where":"quotient or randomisation extension, half the entries: extension 17 (8192 x 7), seed or entry 46293","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":36,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 45892248","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":37,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 68255712","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":38,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 16261","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":39,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 9339","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":40,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 19566","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":41,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 56851","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":42,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 22344","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":43,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 22728","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":44,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 23986","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":45,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 56362","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":46,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 23395","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":47,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 43042","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":48,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 39551","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":49,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 11400","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":50,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 56708","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":51,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 4062","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":52,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 50225","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":53,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 42389","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":54,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 25474","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":55,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 14751","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":56,"where":"quotient or randomisation extension, one entry: extension 10 (8192 x 7), seed or entry 15164","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":57,"where":"quotient or randomisation extension, half the entries: extension 10 (8192 x 7), seed or entry 23528","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":58,"where":"quotient or randomisation extension, one entry: extension 11 (8192 x 7), seed or entry 15345","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":59,"where":"quotient or randomisation extension, half the entries: extension 11 (8192 x 7), seed or entry 12378","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":60,"where":"quotient or randomisation extension, one entry: extension 12 (8192 x 7), seed or entry 46060","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":61,"where":"quotient or randomisation extension, half the entries: extension 12 (8192 x 7), seed or entry 40910","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":62,"where":"quotient or randomisation extension, one entry: extension 13 (8192 x 7), seed or entry 12987","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":63,"where":"quotient or randomisation extension, half the entries: extension 13 (8192 x 7), seed or entry 20946","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":64,"where":"quotient or randomisation extension, one entry: extension 14 (8192 x 7), seed or entry 44740","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":65,"where":"quotient or randomisation extension, half the entries: extension 14 (8192 x 7), seed or entry 33672","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":66,"where":"quotient or randomisation extension, one entry: extension 15 (8192 x 7), seed or entry 23314","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":67,"where":"quotient or randomisation extension, half the entries: extension 15 (8192 x 7), seed or entry 29365","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":68,"where":"quotient or randomisation extension, one entry: extension 16 (8192 x 7), seed or entry 10592","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":69,"where":"quotient or randomisation extension, half the entries: extension 16 (8192 x 7), seed or entry 20937","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":70,"where":"quotient or randomisation extension, one entry: extension 17 (8192 x 7), seed or entry 10324","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":71,"where":"quotient or randomisation extension, half the entries: extension 17 (8192 x 7), seed or entry 31012","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":72,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 69593754","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":73,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 46005490","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":74,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 30174","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":75,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 30820","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":76,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 42322","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":77,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 50105","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":78,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 10190","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":79,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 25473","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":80,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 32700","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":81,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 48229","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":82,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 7601","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":83,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 30172","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":84,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 47314","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":85,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 54548","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":86,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 22200","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":87,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 18441","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":88,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 301","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":89,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 54019","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":90,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 21137","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":91,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 4360","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":92,"where":"quotient or randomisation extension, one entry: extension 10 (8192 x 7), seed or entry 29900","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":93,"where":"quotient or randomisation extension, half the entries: extension 10 (8192 x 7), seed or entry 39174","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":94,"where":"quotient or randomisation extension, one entry: extension 11 (8192 x 7), seed or entry 42645","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":95,"where":"quotient or randomisation extension, half the entries: extension 11 (8192 x 7), seed or entry 56007","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":96,"where":"quotient or randomisation extension, one entry: extension 12 (8192 x 7), seed or entry 32759","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":97,"where":"quotient or randomisation extension, half the entries: extension 12 (8192 x 7), seed or entry 44455","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":98,"where":"quotient or randomisation extension, one entry: extension 13 (8192 x 7), seed or entry 55703","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":99,"where":"quotient or randomisation extension, half the entries: extension 13 (8192 x 7), seed or entry 23708","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":100,"where":"quotient or randomisation extension, one entry: extension 14 (8192 x 7), seed or entry 55168","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":101,"where":"quotient or randomisation extension, half the entries: extension 14 (8192 x 7), seed or entry 34323","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":102,"where":"quotient or randomisation extension, one entry: extension 15 (8192 x 7), seed or entry 41539","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":103,"where":"quotient or randomisation extension, half the entries: extension 15 (8192 x 7), seed or entry 13005","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":104,"where":"quotient or randomisation extension, one entry: extension 16 (8192 x 7), seed or entry 48504","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":105,"where":"quotient or randomisation extension, half the entries: extension 16 (8192 x 7), seed or entry 24126","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":106,"where":"quotient or randomisation extension, one entry: extension 17 (8192 x 7), seed or entry 14741","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":107,"where":"quotient or randomisation extension, half the entries: extension 17 (8192 x 7), seed or entry 52941","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":108,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 38174482","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"codeword","variant":109,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 75470338","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":110,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 35233","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":111,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 17396","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":112,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 56391","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":113,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 56149","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":114,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 6308","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":115,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 38448","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":116,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 20885","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":117,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 31959","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":118,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 13243","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":119,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 47028","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":120,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 3872","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":121,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 54639","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":122,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 45759","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":123,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 14149","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":124,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 14379","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":125,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 45067","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":126,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 25374","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":127,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 28935","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":128,"where":"quotient or randomisation extension, one entry: extension 10 (8192 x 7), seed or entry 26876","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":129,"where":"quotient or randomisation extension, half the entries: extension 10 (8192 x 7), seed or entry 45092","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":130,"where":"quotient or randomisation extension, one entry: extension 11 (8192 x 7), seed or entry 11778","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":131,"where":"quotient or randomisation extension, half the entries: extension 11 (8192 x 7), seed or entry 30632","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":132,"where":"quotient or randomisation extension, one entry: extension 12 (8192 x 7), seed or entry 36452","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":133,"where":"quotient or randomisation extension, half the entries: extension 12 (8192 x 7), seed or entry 17094","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":134,"where":"quotient or randomisation extension, one entry: extension 13 (8192 x 7), seed or entry 38244","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":135,"where":"quotient or randomisation extension, half the entries: extension 13 (8192 x 7), seed or entry 31353","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":136,"where":"quotient or randomisation extension, one entry: extension 14 (8192 x 7), seed or entry 32437","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":137,"where":"quotient or randomisation extension, half the entries: extension 14 (8192 x 7), seed or entry 1549","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":138,"where":"quotient or randomisation extension, one entry: extension 15 (8192 x 7), seed or entry 4083","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":139,"where":"quotient or randomisation extension, half the entries: extension 15 (8192 x 7), seed or entry 24566","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":140,"where":"quotient or randomisation extension, one entry: extension 16 (8192 x 7), seed or entry 30865","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":141,"where":"quotient or randomisation extension, half the entries: extension 16 (8192 x 7), seed or entry 43077","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":142,"where":"quotient or randomisation extension, one entry: extension 17 (8192 x 7), seed or entry 37546","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":143,"where":"quotient or randomisation extension, half the entries: extension 17 (8192 x 7), seed or entry 36346","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":144,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 2049715","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":145,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 3415413","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":146,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 21034","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":147,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 18305","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":148,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 5589","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":149,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 2085","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":150,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 4888","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":151,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 19248","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":152,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 11644","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":153,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 6409","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":154,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 15598","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":155,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 50349","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":156,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 19625","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":157,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 27561","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":158,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 48721","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":159,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 23148","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":160,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 32617","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":161,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 50910","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":162,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 15942","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":163,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 3621","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":164,"where":"quotient or randomisation extension, one entry: extension 10 (8192 x 7), seed or entry 14006","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":165,"where":"quotient or randomisation extension, half the entries: extension 10 (8192 x 7), seed or entry 33462","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":166,"where":"quotient or randomisation extension, one entry: extension 11 (8192 x 7), seed or entry 45705","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":167,"where":"quotient or randomisation extension, half the entries: extension 11 (8192 x 7), seed or entry 12001","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":168,"where":"quotient or randomisation extension, one entry: extension 12 (8192 x 7), seed or entry 27725","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":169,"where":"quotient or randomisation extension, half the entries: extension 12 (8192 x 7), seed or entry 54288","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":170,"where":"quotient or randomisation extension, one entry: extension 13 (8192 x 7), seed or entry 35935","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":171,"where":"quotient or randomisation extension, half the entries: extension 13 (8192 x 7), seed or entry 10951","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":172,"where":"quotient or randomisation extension, one entry: extension 14 (8192 x 7), seed or entry 39582","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":173,"where":"quotient or randomisation extension, half the entries: extension 14 (8192 x 7), seed or entry 36674","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":174,"where":"quotient or randomisation extension, one entry: extension 15 (8192 x 7), seed or entry 56466","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":175,"where":"quotient or randomisation extension, half the entries: extension 15 (8192 x 7), seed or entry 41802","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":176,"where":"quotient or randomisation extension, one entry: extension 16 (8192 x 7), seed or entry 31648","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":177,"where":"quotient or randomisation extension, half the entries: extension 16 (8192 x 7), seed or entry 44208","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":178,"where":"quotient or randomisation extension, one entry: extension 17 (8192 x 7), seed or entry 23614","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":179,"where":"quotient or randomisation extension, half the entries: extension 17 (8192 x 7), seed or entry 15450","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":180,"where":"trace extension, one entry: extension 0 (8192 x 14294), seed or entry 26703817","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":181,"where":"trace extension, half the entries: extension 0 (8192 x 14294), seed or entry 43107951","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":182,"where":"quotient or randomisation extension, one entry: extension 1 (8192 x 7), seed or entry 1334","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":183,"where":"quotient or randomisation extension, half the entries: extension 1 (8192 x 7), seed or entry 12295","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":184,"where":"quotient or randomisation extension, one entry: extension 2 (8192 x 7), seed or entry 29507","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":185,"where":"quotient or randomisation extension, half the entries: extension 2 (8192 x 7), seed or entry 22554","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":186,"where":"quotient or randomisation extension, one entry: extension 3 (8192 x 7), seed or entry 43514","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":187,"where":"quotient or randomisation extension, half the entries: extension 3 (8192 x 7), seed or entry 45051","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":188,"where":"quotient or randomisation extension, one entry: extension 4 (8192 x 7), seed or entry 22995","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":189,"where":"quotient or randomisation extension, half the entries: extension 4 (8192 x 7), seed or entry 44751","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":190,"where":"quotient or randomisation extension, one entry: extension 5 (8192 x 7), seed or entry 18764","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":191,"where":"quotient or randomisation extension, half the entries: extension 5 (8192 x 7), seed or entry 24673","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":192,"where":"quotient or randomisation extension, one entry: extension 6 (8192 x 7), seed or entry 4881","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":193,"where":"quotient or randomisation extension, half the entries: extension 6 (8192 x 7), seed or entry 33955","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":194,"where":"quotient or randomisation extension, one entry: extension 7 (8192 x 7), seed or entry 44163","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":195,"where":"quotient or randomisation extension, half the entries: extension 7 (8192 x 7), seed or entry 10689","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":196,"where":"quotient or randomisation extension, one entry: extension 8 (8192 x 7), seed or entry 34311","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":197,"where":"quotient or randomisation extension, half the entries: extension 8 (8192 x 7), seed or entry 518","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"codeword","variant":198,"where":"quotient or randomisation extension, one entry: extension 9 (8192 x 7), seed or entry 55853","made":true,"deployed":"accepted","independent":"accepted","reason":""}
+{"family":"codeword","variant":199,"where":"quotient or randomisation extension, half the entries: extension 9 (8192 x 7), seed or entry 9352","made":true,"deployed":"final polynomial","independent":"final polynomial","reason":"final polynomial disagrees with the fold"}
+{"family":"trace","variant":0,"where":"trace row 195 column 11049","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":1,"where":"trace row 71 column 12756","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":2,"where":"trace row 133 column 6326","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":3,"where":"trace row 27 column 6375","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":4,"where":"trace row 249 column 8839","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":5,"where":"trace row 40 column 12232","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":6,"where":"trace row 139 column 8927","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":7,"where":"trace row 173 column 3966","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":8,"where":"trace row 190 column 14249","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":9,"where":"trace row 208 column 5626","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":10,"where":"trace row 49 column 2817","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":11,"where":"trace row 64 column 5395","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":12,"where":"trace row 187 column 5533","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":13,"where":"trace row 93 column 14117","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":14,"where":"trace row 174 column 12958","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":15,"where":"trace row 209 column 7835","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":16,"where":"trace row 235 column 11550","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":17,"where":"trace row 190 column 2421","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":18,"where":"trace row 229 column 13292","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":19,"where":"trace row 199 column 7035","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":20,"where":"trace row 60 column 8822","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":21,"where":"trace row 97 column 2095","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":22,"where":"trace row 45 column 6043","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":23,"where":"trace row 56 column 3303","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":24,"where":"trace row 149 column 3533","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":25,"where":"trace row 56 column 1635","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":26,"where":"trace row 128 column 7876","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":27,"where":"trace row 132 column 3729","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":28,"where":"trace row 41 column 4199","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":29,"where":"trace row 52 column 7347","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":30,"where":"trace row 178 column 10672","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":31,"where":"trace row 50 column 138","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":32,"where":"trace row 57 column 4980","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":33,"where":"trace row 15 column 6942","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":34,"where":"trace row 8 column 5979","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":35,"where":"trace row 252 column 8199","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":36,"where":"trace row 173 column 13802","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":37,"where":"trace row 8 column 13973","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":38,"where":"trace row 7 column 12792","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":39,"where":"trace row 208 column 6992","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":40,"where":"trace row 77 column 2905","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":41,"where":"trace row 121 column 13490","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":42,"where":"trace row 209 column 13988","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":43,"where":"trace row 135 column 1242","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":44,"where":"trace row 101 column 3062","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":45,"where":"trace row 122 column 10368","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":46,"where":"trace row 71 column 3453","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":47,"where":"trace row 221 column 12649","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":48,"where":"trace row 198 column 10322","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":49,"where":"trace row 202 column 9206","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":50,"where":"trace row 133 column 135","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":51,"where":"trace row 15 column 7474","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":52,"where":"trace row 99 column 1029","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":53,"where":"trace row 23 column 9524","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":54,"where":"trace row 49 column 13666","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":55,"where":"trace row 167 column 10133","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":56,"where":"trace row 2 column 2989","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":57,"where":"trace row 99 column 8237","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":58,"where":"trace row 24 column 8553","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":59,"where":"trace row 206 column 4189","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":60,"where":"trace row 44 column 12287","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":61,"where":"trace row 160 column 11993","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":62,"where":"trace row 249 column 1370","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":63,"where":"trace row 242 column 11987","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":64,"where":"trace row 237 column 14062","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":65,"where":"trace row 144 column 9509","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":66,"where":"trace row 52 column 2053","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":67,"where":"trace row 26 column 7727","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":68,"where":"trace row 249 column 4551","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":69,"where":"trace row 147 column 6802","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":70,"where":"trace row 132 column 9853","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":71,"where":"trace row 6 column 8958","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":72,"where":"trace row 111 column 5160","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":73,"where":"trace row 20 column 11450","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":74,"where":"trace row 6 column 6680","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":75,"where":"trace row 64 column 5469","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":76,"where":"trace row 173 column 13889","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":77,"where":"trace row 251 column 1057","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":78,"where":"trace row 147 column 7610","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":79,"where":"trace row 43 column 6462","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":80,"where":"trace row 148 column 8778","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":81,"where":"trace row 32 column 5331","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":82,"where":"trace row 50 column 358","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":83,"where":"trace row 155 column 2673","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":84,"where":"trace row 24 column 9990","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":85,"where":"trace row 201 column 12411","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":86,"where":"trace row 88 column 11202","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":87,"where":"trace row 43 column 10497","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":88,"where":"trace row 177 column 5423","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":89,"where":"trace row 50 column 8031","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":90,"where":"trace row 65 column 10470","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":91,"where":"trace row 246 column 1304","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":92,"where":"trace row 173 column 8231","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":93,"where":"trace row 8 column 7592","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":94,"where":"trace row 156 column 4265","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":95,"where":"trace row 53 column 8154","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":96,"where":"trace row 7 column 5202","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":97,"where":"trace row 94 column 8538","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":98,"where":"trace row 3 column 1491","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":99,"where":"trace row 53 column 9495","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":100,"where":"trace row 168 column 12379","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":101,"where":"trace row 133 column 10053","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":102,"where":"trace row 131 column 1807","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":103,"where":"trace row 41 column 1620","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":104,"where":"trace row 43 column 14216","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":105,"where":"trace row 85 column 614","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":106,"where":"trace row 92 column 11032","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":107,"where":"trace row 39 column 11435","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":108,"where":"trace row 180 column 2601","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":109,"where":"trace row 208 column 12421","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":110,"where":"trace row 103 column 9620","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":111,"where":"trace row 35 column 12898","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":112,"where":"trace row 137 column 7426","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":113,"where":"trace row 124 column 5900","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":114,"where":"trace row 133 column 7372","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":115,"where":"trace row 141 column 3867","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":116,"where":"trace row 169 column 809","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":117,"where":"trace row 187 column 11432","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":118,"where":"trace row 252 column 691","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":119,"where":"trace row 28 column 9161","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":120,"where":"trace row 243 column 3130","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":121,"where":"trace row 238 column 9605","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":122,"where":"trace row 97 column 5477","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":123,"where":"trace row 254 column 8695","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":124,"where":"trace row 163 column 13729","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":125,"where":"trace row 92 column 3704","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":126,"where":"trace row 213 column 12944","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":127,"where":"trace row 5 column 8238","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":128,"where":"trace row 134 column 7714","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":129,"where":"trace row 37 column 7631","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":130,"where":"trace row 110 column 6354","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":131,"where":"trace row 126 column 9711","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":132,"where":"trace row 72 column 13588","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":133,"where":"trace row 89 column 11774","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":134,"where":"trace row 216 column 12065","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":135,"where":"trace row 57 column 679","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":136,"where":"trace row 139 column 1174","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":137,"where":"trace row 157 column 9409","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":138,"where":"trace row 25 column 1462","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":139,"where":"trace row 220 column 8427","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":140,"where":"trace row 72 column 4263","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":141,"where":"trace row 106 column 10104","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":142,"where":"trace row 143 column 9834","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":143,"where":"trace row 44 column 8299","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":144,"where":"trace row 122 column 1916","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":145,"where":"trace row 238 column 10694","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":146,"where":"trace row 48 column 4944","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":147,"where":"trace row 229 column 13692","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":148,"where":"trace row 153 column 12082","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":149,"where":"trace row 32 column 2343","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":150,"where":"trace row 173 column 1016","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":151,"where":"trace row 204 column 6153","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":152,"where":"trace row 119 column 3841","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":153,"where":"trace row 38 column 216","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":154,"where":"trace row 245 column 2449","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":155,"where":"trace row 244 column 1575","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":156,"where":"trace row 161 column 6087","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":157,"where":"trace row 73 column 2552","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":158,"where":"trace row 248 column 4672","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":159,"where":"trace row 248 column 6401","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":160,"where":"trace row 117 column 11534","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":161,"where":"trace row 230 column 9657","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":162,"where":"trace row 32 column 1901","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":163,"where":"trace row 101 column 8961","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":164,"where":"trace row 53 column 8730","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":165,"where":"trace row 191 column 10080","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":166,"where":"trace row 165 column 4800","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":167,"where":"trace row 187 column 12403","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":168,"where":"trace row 53 column 2367","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":169,"where":"trace row 220 column 7506","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":170,"where":"trace row 15 column 14264","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":171,"where":"trace row 212 column 10022","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":172,"where":"trace row 20 column 1772","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":173,"where":"trace row 35 column 14057","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":174,"where":"trace row 135 column 2794","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":175,"where":"trace row 23 column 4635","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":176,"where":"trace row 13 column 9547","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":177,"where":"trace row 157 column 4622","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":178,"where":"trace row 82 column 7190","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":179,"where":"trace row 116 column 6835","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":180,"where":"trace row 64 column 7482","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":181,"where":"trace row 81 column 175","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":182,"where":"trace row 109 column 6359","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":183,"where":"trace row 32 column 5695","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":184,"where":"trace row 174 column 6351","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":185,"where":"trace row 25 column 6162","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":186,"where":"trace row 110 column 9286","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":187,"where":"trace row 221 column 7115","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":188,"where":"trace row 244 column 12645","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":189,"where":"trace row 53 column 4583","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":190,"where":"trace row 127 column 2562","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":191,"where":"trace row 60 column 716","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":192,"where":"trace row 251 column 3054","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":193,"where":"trace row 148 column 6037","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":194,"where":"trace row 110 column 2289","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":195,"where":"trace row 236 column 13126","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":196,"where":"trace row 215 column 12807","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":197,"where":"trace row 71 column 969","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":198,"where":"trace row 16 column 12158","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"trace","variant":199,"where":"trace row 104 column 12124","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":0,"where":"public value 21649","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":1,"where":"public value 44236","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":2,"where":"public value 7534","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":3,"where":"public value 45013","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":4,"where":"public value 4582","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":5,"where":"public value 11178","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":6,"where":"public value 39689","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":7,"where":"public value 20191","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":8,"where":"public value 48893","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":9,"where":"public value 26951","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":10,"where":"public value 39947","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":11,"where":"public value 22423","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":12,"where":"public value 45428","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":13,"where":"public value 20365","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":14,"where":"public value 25462","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":15,"where":"public value 22866","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":16,"where":"public value 7129","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":17,"where":"public value 42565","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":18,"where":"public value 41579","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":19,"where":"public value 16678","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":20,"where":"public value 5287","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":21,"where":"public value 36955","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":22,"where":"public value 724","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":23,"where":"public value 50211","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":24,"where":"public value 11229","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":25,"where":"public value 2827","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":26,"where":"public value 1452","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":27,"where":"public value 26884","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":28,"where":"public value 38244","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":29,"where":"public value 38388","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":30,"where":"public value 43356","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":31,"where":"public value 26355","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":32,"where":"public value 18017","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":33,"where":"public value 7702","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":34,"where":"public value 6312","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":35,"where":"public value 50097","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":36,"where":"public value 9392","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":37,"where":"public value 22279","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":38,"where":"public value 14809","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":39,"where":"public value 26974","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":40,"where":"public value 47548","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":41,"where":"public value 3959","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":42,"where":"public value 48977","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":43,"where":"public value 17309","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":44,"where":"public value 3219","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":45,"where":"public value 41271","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":46,"where":"public value 47424","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":47,"where":"public value 33652","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":48,"where":"public value 16238","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":49,"where":"public value 1785","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":50,"where":"public value 32451","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":51,"where":"public value 43688","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":52,"where":"public value 25235","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":53,"where":"public value 9942","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":54,"where":"public value 5603","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":55,"where":"public value 5679","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":56,"where":"public value 33534","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":57,"where":"public value 2943","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":58,"where":"public value 32132","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":59,"where":"public value 51058","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":60,"where":"public value 49743","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":61,"where":"public value 10735","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":62,"where":"public value 28840","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":63,"where":"public value 40394","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":64,"where":"public value 35766","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":65,"where":"public value 37164","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":66,"where":"public value 7693","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":67,"where":"public value 37382","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":68,"where":"public value 28242","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":69,"where":"public value 50193","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":70,"where":"public value 12491","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":71,"where":"public value 23671","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":72,"where":"public value 10090","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":73,"where":"public value 28681","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":74,"where":"public value 45046","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":75,"where":"public value 32230","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":76,"where":"public value 14175","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":77,"where":"public value 43877","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":78,"where":"public value 31176","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":79,"where":"public value 4465","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":80,"where":"public value 29049","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":81,"where":"public value 42556","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":82,"where":"public value 47402","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":83,"where":"public value 9944","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":84,"where":"public value 17215","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":85,"where":"public value 36669","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":86,"where":"public value 40060","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":87,"where":"public value 50677","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":88,"where":"public value 34156","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":89,"where":"public value 10457","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":90,"where":"public value 45397","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":91,"where":"public value 25601","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":92,"where":"public value 41762","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":93,"where":"public value 18663","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":94,"where":"public value 44506","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":95,"where":"public value 27606","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":96,"where":"public value 3567","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":97,"where":"public value 46191","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":98,"where":"public value 1250","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":99,"where":"public value 19508","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":100,"where":"public value 26739","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":101,"where":"public value 9377","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":102,"where":"public value 22440","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":103,"where":"public value 43272","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":104,"where":"public value 47131","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":105,"where":"public value 21071","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":106,"where":"public value 23809","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":107,"where":"public value 18861","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":108,"where":"public value 36552","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":109,"where":"public value 47057","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":110,"where":"public value 30089","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":111,"where":"public value 14220","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":112,"where":"public value 39838","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":113,"where":"public value 12652","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":114,"where":"public value 6730","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":115,"where":"public value 4522","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":116,"where":"public value 33599","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":117,"where":"public value 14527","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":118,"where":"public value 24221","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":119,"where":"public value 43271","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":120,"where":"public value 11820","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":121,"where":"public value 4349","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":122,"where":"public value 42413","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":123,"where":"public value 44802","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":124,"where":"public value 6659","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":125,"where":"public value 19202","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":126,"where":"public value 50932","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":127,"where":"public value 12609","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":128,"where":"public value 15184","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":129,"where":"public value 17253","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":130,"where":"public value 35913","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":131,"where":"public value 34209","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":132,"where":"public value 18108","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":133,"where":"public value 22323","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":134,"where":"public value 17552","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":135,"where":"public value 44224","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":136,"where":"public value 31889","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":137,"where":"public value 7311","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":138,"where":"public value 49551","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":139,"where":"public value 50319","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":140,"where":"public value 19129","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":141,"where":"public value 38048","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":142,"where":"public value 10413","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":143,"where":"public value 45197","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":144,"where":"public value 13895","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":145,"where":"public value 40836","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":146,"where":"public value 20256","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":147,"where":"public value 21769","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":148,"where":"public value 23308","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":149,"where":"public value 14847","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":150,"where":"public value 29085","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":151,"where":"public value 38758","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":152,"where":"public value 38342","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":153,"where":"public value 749","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":154,"where":"public value 27661","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":155,"where":"public value 12749","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":156,"where":"public value 48149","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":157,"where":"public value 14292","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":158,"where":"public value 12136","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":159,"where":"public value 15007","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":160,"where":"public value 48937","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":161,"where":"public value 10975","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":162,"where":"public value 10298","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":163,"where":"public value 48931","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":164,"where":"public value 20343","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":165,"where":"public value 11439","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":166,"where":"public value 114","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":167,"where":"public value 34889","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":168,"where":"public value 6549","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":169,"where":"public value 51891","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":170,"where":"public value 27770","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":171,"where":"public value 38441","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":172,"where":"public value 21116","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":173,"where":"public value 12038","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":174,"where":"public value 34520","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":175,"where":"public value 5293","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":176,"where":"public value 31248","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":177,"where":"public value 45598","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":178,"where":"public value 44654","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":179,"where":"public value 6058","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":180,"where":"public value 47716","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":181,"where":"public value 37323","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":182,"where":"public value 31941","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":183,"where":"public value 17367","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":184,"where":"public value 37426","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":185,"where":"public value 29351","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":186,"where":"public value 24872","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":187,"where":"public value 49654","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":188,"where":"public value 50588","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":189,"where":"public value 48821","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":190,"where":"public value 11766","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":191,"where":"public value 30622","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":192,"where":"public value 50239","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":193,"where":"public value 36283","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":194,"where":"public value 20813","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":195,"where":"public value 10018","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":196,"where":"public value 21339","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":197,"where":"public value 36793","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":198,"where":"public value 15023","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"public","variant":199,"where":"public value 47052","made":true,"deployed":"constraints","independent":"constraints","reason":"constraints do not match the quotient at the out-of-domain point"}
+{"family":"grinding","variant":0,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":1,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":2,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":3,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":4,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":5,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":6,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":7,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":8,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":9,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":10,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":11,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":12,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":13,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":14,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":15,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":16,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":17,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":18,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":19,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":20,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":21,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":22,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":23,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":24,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":25,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":26,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":27,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":28,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":29,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":30,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":31,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":32,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":33,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":34,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":35,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":36,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":37,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":38,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":39,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":40,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":41,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":42,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":43,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":44,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":45,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":46,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":47,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":48,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":49,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":50,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":51,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":52,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":53,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":54,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":55,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":56,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":57,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":58,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":59,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":60,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":61,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":62,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":63,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":64,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":65,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":66,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":67,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":68,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":69,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":70,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":71,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":72,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":73,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":74,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":75,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":76,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":77,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":78,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":79,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":80,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":81,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":82,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":83,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":84,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":85,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":86,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":87,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":88,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":89,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":90,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":91,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":92,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":93,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":94,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":95,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":96,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":97,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":98,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":99,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":100,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":101,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":102,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":103,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":104,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":105,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":106,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":107,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":108,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":109,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":110,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":111,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":112,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":113,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":114,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":115,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":116,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":117,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":118,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":119,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":120,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":121,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":122,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":123,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":124,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":125,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":126,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":127,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":128,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":129,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":130,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":131,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":132,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":133,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":134,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":135,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":136,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":137,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":138,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":139,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":140,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":141,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":142,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":143,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":144,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":145,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":146,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":147,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":148,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":149,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":150,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":151,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":152,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":153,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":154,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":155,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":156,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":157,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":158,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":159,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":160,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":161,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":162,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":163,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":164,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":165,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":166,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":167,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":168,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":169,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":170,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":171,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":172,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":173,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":174,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":175,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":176,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":177,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":178,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":179,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":180,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":181,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":182,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":183,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":184,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":185,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":186,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":187,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":188,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":189,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":190,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":191,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":192,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":193,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":194,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":195,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":196,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":197,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":198,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}
+{"family":"grinding","variant":199,"where":"query grinding witness","made":true,"deployed":"grinding","independent":"grinding","reason":"query grinding"}

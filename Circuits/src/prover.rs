@@ -5,7 +5,7 @@ use p3_air::BaseAir;
 use p3_challenger::{DuplexChallenger, HashChallenger, SerializingChallenger64};
 use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
-use p3_field::extension::CubicTrinomialExtensionField;
+use p3_field::extension::BinomialExtensionField;
 use p3_field::Field;
 use p3_fri::{FriParameters, HidingFriPcs, TwoAdicFriPcs};
 use p3_goldilocks::{default_goldilocks_poseidon2_8, Goldilocks, Poseidon2Goldilocks};
@@ -32,7 +32,7 @@ pub(crate) type Val = Goldilocks;
 /// quadratic extension the batching of the opened columns by one challenge
 /// caps the provable soundness near 72 bits (`soundness.rs`); over this one
 /// the queries bind, at 107 bits.
-pub(crate) type Challenge = CubicTrinomialExtensionField<Val>;
+pub(crate) type Challenge = BinomialExtensionField<Val, 5>;
 pub(crate) type Perm = Poseidon2Goldilocks<8>;
 pub(crate) type Hash = PaddingFreeSponge<Perm, 8, 4, 4>;
 pub(crate) type Compress = TruncatedPermutation<Perm, 2, 4, 8>;
@@ -63,7 +63,7 @@ const CODEWORD_SEED: u64 = 0x5350_454e_4400_0002;
 // a precompile and has none for Poseidon2 over Goldilocks, so a dispute answer
 // costs 6.6 times less prover gas, and a payment proves faster as well. The
 // circuit is unchanged and still proves Poseidon2 inside.
-pub(crate) type KU64Hash = PaddingFreeSponge<KeccakF, 25, 17, 4>;
+pub(crate) type KU64Hash = crate::tagged::TaggedSponge<KeccakF, 25, 17, 4>;
 pub(crate) type KFieldHash = SerializingHasher<KU64Hash>;
 pub(crate) type KCompress = CompressionFunctionFromHasher<KU64Hash, 2, 4>;
 pub(crate) type ValMmcs = MerkleTreeHidingMmcs<
@@ -201,13 +201,13 @@ fn config_plain() -> PlainConfig {
 /// that way; everything that means "as built" reads this.
 pub const REGISTERS: usize = 0;
 
-pub const NUM_QUERIES: usize = 44;
+pub const NUM_QUERIES: usize = 74;
 pub const LOG_BLOWUP: usize = 4;
 pub const POW_BITS: usize = 20;
 pub const LOG_FINAL_POLY_LEN: usize = 3;
 
 /// Degree of the challenge field over Goldilocks.
-pub const EXT_DEGREE: usize = 3;
+pub const EXT_DEGREE: usize = 5;
 
 /// The hiding commitment blinds a trace of height n with n random rows, so
 /// each column has n random values to hide what a proof opens of it: one
@@ -220,7 +220,7 @@ pub const EXT_DEGREE: usize = 3;
 pub const ZK_MIN_ROWS: usize = (2 * (2 * EXT_DEGREE + NUM_QUERIES)).next_power_of_two();
 
 /// The height every proof in the paper is made at.
-pub const ROWS: usize = 128;
+pub const ROWS: usize = 256;
 const _: () = assert!(ROWS >= ZK_MIN_ROWS, "trace too short for zero knowledge");
 
 /// The hiding configuration at a chosen FRI setting. `config` is this at the
@@ -827,7 +827,7 @@ pub fn cost_structure(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<
     // The same rows, each a different payment: what batching costs over one
     // payment repeated, which is the statement's public values and nothing
     // in the trace.
-    variant!("composed, one proof per 128 payments", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::from_public_values(&pv_b),
+    variant!("composed, one proof per 256 payments", ComposedAir::<{ REGISTERS }, 16, 32, 16, 64>::from_public_values(&pv_b),
              tr_b.clone(), &zk, &pv_b);
 
     // The arrangement the manuscript describes, timed as one thing. Adding the

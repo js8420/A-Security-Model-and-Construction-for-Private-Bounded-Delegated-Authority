@@ -56,7 +56,7 @@ const withWord = (b: Uint8Array, at: number, v: bigint) => {
 const bump = (b: Uint8Array, at: number) => withWord(b, at, (word(b, at) + 1n) % P);
 
 const big = (x: string) => BigInt(x);
-const ext = (x: readonly string[]): E => [big(x[0]), big(x[1]), big(x[2])];
+const ext = (x: readonly string[]): E => [big(x[0]), big(x[1]), big(x[2]), big(x[3]), big(x[4])];
 const sameD = (a: Digest, b: readonly string[]) => a.every((x, i) => x === big(b[i]));
 const throws = (f: () => unknown) => {
   try {
@@ -93,9 +93,9 @@ for (const v of vectors.field) {
   need("extension mul", eeq(emul(ext(v.ea), ext(v.eb)), ext(v.emul)));
   need("extension inverse", eeq(einv(ext(v.ea)), ext(v.einv)));
   need("extension power", eeq(epow(ext(v.ea), b), ext(v.epow)));
-  need("extension negation", ezero(esub(eneg(ext(v.ea)), esub([0n, 0n, 0n], ext(v.ea)))));
+  need("extension negation", ezero(esub(eneg(ext(v.ea)), esub([0n, 0n, 0n, 0n, 0n], ext(v.ea)))));
   need("squarings", eeq(esquarings(ext(v.ea), 5), epow(ext(v.ea), 32n)));
-  need("scale", eeq(escale(ext(v.ea), b), emul(ext(v.ea), [b, 0n, 0n])));
+  need("scale", eeq(escale(ext(v.ea), b), emul(ext(v.ea), [b, 0n, 0n, 0n, 0n])));
 }
 need("neg of zero", neg(0n) === 0n);
 need("inverse of zero refused", throws(() => inv(0n)));
@@ -107,9 +107,9 @@ const refusal = (f: () => unknown): string => {
     return (e as Error).message;
   }
 };
-need("extension inverse of zero refused as such", refusal(() => einv([0n, 0n, 0n])) === "inverse of zero");
-for (const a of [[0n, 1n, 0n], [0n, 0n, 1n], [0n, 5n, 7n], [3n, 0n, 0n]] as E[]) {
-  need(`extension inverse with a row exchange: ${a.join(", ")}`, eeq(emul(a, einv(a)), [1n, 0n, 0n]));
+need("extension inverse of zero refused as such", refusal(() => einv([0n, 0n, 0n, 0n, 0n])) === "inverse of zero");
+for (const a of [[0n, 1n, 0n, 0n, 0n], [0n, 0n, 1n, 0n, 0n], [0n, 0n, 0n, 1n, 0n], [0n, 0n, 0n, 0n, 1n], [0n, 5n, 7n, 0n, 2n], [3n, 0n, 0n, 0n, 0n]] as E[]) {
+  need(`extension inverse with a row exchange: ${a.join(", ")}`, eeq(emul(a, einv(a)), [1n, 0n, 0n, 0n, 0n]));
 }
 const batch = vectors.field.slice(1, 9).map((v) => ext(v.ea));
 need("batch inverse", ebatchInv(batch).every((x, i) => eeq(x, einv(batch[i]))));
@@ -199,8 +199,8 @@ need("bit reversal", bitrev(1, 3) === 4 && bitrev(6, 3) === 3 && bitrev(5, 4) ==
   need("one row and no salts refused", "one salt per matrix" === ok([t8.root], 8, 3, t8.rows[3], [], t8.path(3)));
 }
 
-need("extension equality reads every coordinate", !eeq([1n, 2n, 3n], [4n, 2n, 3n]) && !eeq([1n, 2n, 3n], [1n, 4n, 3n]) && !eeq([1n, 2n, 3n], [1n, 2n, 4n]) && eeq([4n, 5n, 6n], [4n, 5n, 6n]));
-need("extension zero reads every coordinate", !ezero([0n, 0n, 5n]) && !ezero([0n, 5n, 0n]) && !ezero([5n, 0n, 0n]) && ezero([0n, 0n, 0n]));
+need("extension equality reads every coordinate", [0, 1, 2, 3, 4].every((i) => !eeq([1n, 2n, 3n, 4n, 5n], [1n, 2n, 3n, 4n, 5n].map((v, j) => (j === i ? v + 7n : v)) as unknown as E)) && eeq([4n, 5n, 6n, 7n, 8n], [4n, 5n, 6n, 7n, 8n]));
+need("extension zero reads every coordinate", [0, 1, 2, 3, 4].every((i) => !ezero([0n, 0n, 0n, 0n, 0n].map((v, j) => (j === i ? 5n : v)) as unknown as E)) && ezero([0n, 0n, 0n, 0n, 0n]));
 need("a draw of p - 1 is a field element and one of p is not", canonical(P - 1n) && !canonical(P) && !canonical(P + 1n));
 need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 && new Transcript().sampleBits(52) >= 0);
 {
@@ -229,15 +229,15 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
 {
   const g = twoAdic(2);
   const pts = [1n, g, mul(g, g), mul(mul(g, g), g)];
-  const ys: E[] = [[3n, 1n, 2n], [5n, 9n, 10n], [7n, 2n, 3n], [11n, 4n, 5n]];
-  const z: E = [123456789n, 987654321n, 987654322n];
+  const ys: E[] = [[3n, 1n, 2n, 0n, 0n], [5n, 9n, 10n, 0n, 0n], [7n, 2n, 3n, 0n, 0n], [11n, 4n, 5n, 0n, 0n]];
+  const z: E = [123456789n, 987654321n, 987654322n, 0n, 0n];
   const w = subgroupWeights(4, z);
   need("subgroup weights, one per point", w.length === 4);
-  const viaWeights = w.reduce((acc, wi, i) => eadd(acc, emul(wi, ys[i])), [0n, 0n, 0n] as E);
+  const viaWeights = w.reduce((acc, wi, i) => eadd(acc, emul(wi, ys[i])), [0n, 0n, 0n, 0n, 0n] as E);
   need("subgroup interpolation agrees with Lagrange's formula", eeq(viaWeights, lagrange(pts, ys, z)));
   for (let i = 0; i < 4; i++) {
     const at = subgroupWeights(4, lift(pts[i]));
-    need(`subgroup weights at point ${i} pick that point alone`, at.every((x, j) => eeq(x, j === i ? [1n, 0n, 0n] : [0n, 0n, 0n])));
+    need(`subgroup weights at point ${i} pick that point alone`, at.every((x, j) => eeq(x, j === i ? [1n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n])));
     need(`Lagrange interpolation at node ${i} is its value`, eeq(lagrange(pts, ys, lift(pts[i])), ys[i]));
   }
 }
@@ -300,8 +300,8 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
   need("the degree of every node kind", degrees.every((d, r) => maxDegree(one(r)) === d));
 
   const at = {
-    local: [[11n, 12n, 13n], [13n, 14n, 15n]] as E[], next: [[21n, 22n, 23n], [23n, 24n, 25n]] as E[], periodic: [[31n, 32n, 33n]] as E[], publics: [41n],
-    firstRow: [51n, 52n, 53n] as E, lastRow: [61n, 62n, 63n] as E, transition: [71n, 72n, 73n] as E,
+    local: [[11n, 12n, 13n, 0n, 0n], [13n, 14n, 15n, 0n, 0n]] as E[], next: [[21n, 22n, 23n, 0n, 0n], [23n, 24n, 25n, 0n, 0n]] as E[], periodic: [[31n, 32n, 33n, 0n, 0n]] as E[], publics: [41n],
+    firstRow: [51n, 52n, 53n, 0n, 0n] as E, lastRow: [61n, 62n, 63n, 0n, 0n] as E, transition: [71n, 72n, 73n, 0n, 0n] as E,
   };
   const v: E[] = [];
   const val = (n: Node): E => {
@@ -309,11 +309,11 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
       case 0: return at.local[n.a as number];
       case 1: return at.next[n.a as number];
       case 2: return at.periodic[n.a as number];
-      case 3: return [at.publics[n.a as number], 0n, 0n];
+      case 3: return [at.publics[n.a as number], 0n, 0n, 0n, 0n];
       case 4: return at.firstRow;
       case 5: return at.lastRow;
       case 6: return at.transition;
-      case 7: return [n.c as bigint, 0n, 0n];
+      case 7: return [n.c as bigint, 0n, 0n, 0n, 0n];
       case 8: return eadd(v[n.a as number], v[n.b as number]);
       case 9: return esub(v[n.a as number], v[n.b as number]);
       case 10: return eneg(v[n.a as number]);
@@ -321,8 +321,8 @@ need("bit samples of zero and of 52 bits", new Transcript().sampleBits(0) === 0 
     }
   };
   nodes.forEach((n) => v.push(val(n)));
-  const alpha: E = [7n, 3n, 4n];
-  const expect = v.reduce((acc, x) => eadd(emul(acc, alpha), x), [0n, 0n, 0n] as E);
+  const alpha: E = [7n, 3n, 4n, 0n, 0n];
+  const expect = v.reduce((acc, x) => eadd(emul(acc, alpha), x), [0n, 0n, 0n, 0n, 0n] as E);
   need("folding every node kind, base and extension values mixed", eeq(fold(g, at, alpha), expect));
   for (let r = 0; r < nodes.length; r++) need(`node ${r} alone folds to its value`, eeq(fold(one(r), at, alpha), v[r]));
 
@@ -400,13 +400,13 @@ const shaped = (change: (p: ReturnType<typeof copy>, pv: bigint[]) => void) => {
 const reshaped = (name: string, why: string, change: (p: ReturnType<typeof copy>, pv: bigint[]) => void) => refusedFor(name, shaped(change), why);
 const at = <T>(xs: T[] | null) => xs as T[];
 reshaped("trace opening one value short", "trace opening width", (p) => at(p.traceLocal).pop());
-reshaped("trace opening one value long", "trace opening width", (p) => at(p.traceLocal).push([1n, 2n, 3n]));
+reshaped("trace opening one value long", "trace opening width", (p) => at(p.traceLocal).push([1n, 2n, 3n, 0n, 0n]));
 reshaped("next-row opening missing", "next-row opening width", (p) => { p.traceNext = null; });
 reshaped("next-row opening one value short", "next-row opening width", (p) => at(p.traceNext).pop());
-reshaped("a preprocessed opening present", "unexpected preprocessed trace", (p) => { p.preprocessedLocal = [[1n, 0n, 0n]]; });
-reshaped("a preprocessed next-row opening present", "unexpected preprocessed trace", (p) => { p.preprocessedNext = [[1n, 0n, 0n]]; });
+reshaped("a preprocessed opening present", "unexpected preprocessed trace", (p) => { p.preprocessedLocal = [[1n, 0n, 0n, 0n, 0n]]; });
+reshaped("a preprocessed next-row opening present", "unexpected preprocessed trace", (p) => { p.preprocessedNext = [[1n, 0n, 0n, 0n, 0n]]; });
 reshaped("one quotient chunk missing", "quotient chunk shape", (p) => p.quotientChunks.pop());
-reshaped("a quotient chunk of four values", "quotient chunk shape", (p) => p.quotientChunks[0].push([0n, 0n, 0n]));
+reshaped("a quotient chunk of four values", "quotient chunk shape", (p) => p.quotientChunks[0].push([0n, 0n, 0n, 0n, 0n]));
 reshaped("a quotient chunk of two values", "quotient chunk shape", (p) => p.quotientChunks[3].pop());
 reshaped("random opening missing", "random opening shape", (p) => { p.random = null; });
 reshaped("random opening of two values", "random opening shape", (p) => at(p.random).pop());
@@ -424,9 +424,9 @@ reshaped("arity three in every query", "arity out of range", (p) => p.queries.fo
 reshaped("arity zero in every query", "arity out of range", (p) => p.queries.forEach((q) => { q.steps[0].logArity = 0; }));
 reshaped("arity three in the second fold of every query", "arity out of range", (p) => p.queries.forEach((q) => { q.steps[1].logArity = 3; }));
 const arities = base.proof.queries[0].steps.map((x) => x.logArity);
-const one = arities.indexOf(1);
-need("the deployed fold schedule has a fold of arity two and one of arity one", arities.includes(2) && one >= 0);
-reshaped("a fold of arity one raised to two in every query", "fold schedule does not reach the final polynomial", (p) => p.queries.forEach((q) => { q.steps[one].logArity = 2; }));
+const last = arities.length - 1;
+need("the deployed fold schedule folds by four at every step", arities.every((a) => a === 2));
+reshaped("the last fold's arity lowered to two in every query", "fold schedule does not reach the final polynomial", (p) => p.queries.forEach((q) => { q.steps[last].logArity = 1; }));
 reshaped("one fold step missing in every query", "fold count", (p) => p.queries.forEach((q) => q.steps.pop()));
 reshaped("one fold step missing in one query", "fold count", (p) => p.queries[7].steps.pop());
 reshaped("one fold sibling missing", "sibling count", (p) => p.queries[0].steps[0].siblings.pop());
@@ -434,7 +434,7 @@ reshaped("one input opening missing", "input opening count", (p) => p.queries[0]
 reshaped("one input row missing", "opened matrix count", (p) => p.queries[0].inputs[2].rows.pop());
 reshaped("one opened value missing from a row", "input commitment opening: root differs", (p) => p.queries[0].inputs[1].rows[0].pop());
 reshaped("final polynomial one coefficient short", "final polynomial length", (p) => p.finalPoly.pop());
-reshaped("final polynomial one coefficient long", "final polynomial length", (p) => p.finalPoly.push([0n, 0n, 0n]));
+reshaped("final polynomial one coefficient long", "final polynomial length", (p) => p.finalPoly.push([0n, 0n, 0n, 0n, 0n]));
 reshaped("degree one", "degree out of range", (p) => { p.degreeBits = 1; });
 reshaped("degree twenty-nine", "degree out of range", (p) => { p.degreeBits = 29; });
 passes("degree two", shaped((p) => { p.degreeBits = 2; }), "degree out of range");
@@ -447,7 +447,7 @@ reshaped("three payments in the public values", "batch size not a power of two",
 reshaped("256 payments in the public values", "batch larger than the trace", (_, pv) => pv.push(...pv.slice(air.globals)));
 need("the honest proof of one payment is accepted", verifyStark(one1, air).ok);
 {
-  const z: E = [5n, 6n, 7n];
+  const z: E = [5n, 6n, 7n, 0n, 0n];
   const leafRows = Array.from({ length: 8 }, (_, k) => [BigInt(k), BigInt(k + 100), BigInt(k + 200)]);
   const leafSalts = Array.from({ length: 8 }, (_, k) => [BigInt(k + 300), BigInt(k + 400)]);
   let level: Digest[] = leafRows.map((r, k) => sponge([...r, ...leafSalts[k]]));
@@ -462,14 +462,14 @@ need("the honest proof of one payment is accepted", verifyStark(one1, air).ok);
   const input = [{ rows: [leafRows[3]], salts: [leafSalts[3]], siblings: path }];
   const run = (values: E[]) => {
     try {
-      openInput(input, [{ cap: [level[0]], mats: [{ points: [{ z, values }] }] }], 3, 3, new Batching([2n, 1n, 2n]));
+      openInput(input, [{ cap: [level[0]], mats: [{ points: [{ z, values }] }] }], 3, 3, new Batching([2n, 1n, 2n, 0n, 0n]));
       return "accepted";
     } catch (e) {
       return (e as Error).message;
     }
   };
-  need("an input row of three columns against three claimed values is accepted", run([[1n, 0n, 0n], [2n, 0n, 0n], [3n, 0n, 0n]]) === "accepted");
-  need("an input row of three columns against two claimed values is refused", run([[1n, 0n, 0n], [2n, 0n, 0n]]) === "claimed value count");
+  need("an input row of three columns against three claimed values is accepted", run([[1n, 0n, 0n, 0n, 0n], [2n, 0n, 0n, 0n, 0n], [3n, 0n, 0n, 0n, 0n]]) === "accepted");
+  need("an input row of three columns against two claimed values is refused", run([[1n, 0n, 0n, 0n, 0n], [2n, 0n, 0n, 0n, 0n]]) === "claimed value count");
 }
 need("quotient degree as Plonky3 sets it", [1, 2, 3, 4, 5, 7, 8, 9, 16, 17].map(logQuotientDegree).join() === "0,1,2,2,3,3,3,4,4,5");
 need("five broken", broken.length === 5);
@@ -478,5 +478,5 @@ const constant = [...air.constants.keys()].find((k) => air.constants.get(k) !== 
 need("constant changed", !verifyStark(full, { ...air, constants: new Map(air.constants).set(constant, (air.constants.get(constant) as bigint) + 1n) }).ok);
 need("last constraint dropped", !verifyStark(full, { ...air, roots: air.roots.subarray(0, air.roots.length - 1) }).ok);
 need("two constraints exchanged", !verifyStark(full, { ...air, roots: Uint32Array.from([air.roots[1], air.roots[0], ...air.roots.subarray(2)]) }).ok);
-need("honest 128", verifyStark(full, air).ok);
+need("honest 256", verifyStark(full, air).ok);
 console.log(`all ${n} checks pass`);

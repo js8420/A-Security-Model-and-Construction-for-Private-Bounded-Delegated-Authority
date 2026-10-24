@@ -7,6 +7,7 @@ import {
   encodePacked,
   http,
   keccak256,
+  encodeFunctionData,
   parseEther,
   type Abi,
   type Address,
@@ -94,7 +95,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const reserve = await deploy("Reserve.sol", "Reserve", [domainId, token, ZERO, poseidon, 3600n, 2n * 86400n]);
   const vkey = keccak256("0x01");
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
-  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, ACCEPT_WINDOW, ANSWER_WINDOW, SLOT, parseEther("0.01"), WAIT]);
+  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, ACCEPT_WINDOW, ANSWER_WINDOW, SLOT, parseEther("0.01"), WAIT, parseEther("0.25"), 0n]);
   await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "setDispute", args: [vd] }));
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
@@ -169,7 +170,13 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
 
   /** The answerer posts a settlement's sealed opening on chain under its receipt. */
   const deliver = async (d: Domain, r: Record, rc: { sealedRoot: Hex; proofHash: Hex; receivedAt: bigint; signature: Hex }, opening: Hex, sealedPath: Hex[]) => {
-    await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] }));
+    // The refund branch the named answerer takes depends on the gas price, so
+    // the estimate is made at the price the transaction pays: one made at a
+    // zero price takes the branch of a deposit forced in from Ethereum.
+    const fees = await pub.estimateFeesPerGas();
+    const data = encodeFunctionData({ abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] });
+    const gas = await pub.estimateGas({ account: answering.account, to: vd, data, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+    await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath], gas, ...fees }));
   };
 
   /** Anyone holding the receipt slashes an answerer that withheld; returns whether it went through. */
@@ -541,7 +548,7 @@ async function main() {
     check("its challenge goes unanswered, and the monitor freezes both domains", f.froze && (await A.state(dA)).frozen && (await B.state(dB)).frozen && onA !== "settled", onA);
   }
 
-  section("a challenge by another party first, which does not hold settlement");
+  section("a challenge by another party first, which the monitor joins");
   {
     const dA = await A.delegate(plain);
     const m = new Monitor([dA], policy(1_000_000n), proving(null));
@@ -551,10 +558,75 @@ async function main() {
     await m.poll();
     const rec = m.all().find((r) => r.digest === p.s.digest) as Record;
     await A.challengeFirst(dA, rec);
-    const held = await A.state(dA);
+    const before = await A.state(dA);
     await advanceBoth(Number(DECIDE) + 10);
     const r = await m.poll();
-    check("a settlement nothing backs, challenged first by another party, whose challenge does not hold settlement: at its decision time the monitor freezes the delegation", held.holds === 0 && !held.frozen && r.froze && r.challenged.length === 0 && (await A.state(dA)).frozen, r.reasons.join("; "));
+    const joined = await A.state(dA);
+    check("a settlement nothing backs, challenged first by another party, whose challenge holds nothing: at its decision time the monitor joins that challenge, which then holds the delegation", before.holds === 0 && r.challenged.length === 1 && !r.froze && joined.holds === 1 && !joined.frozen, r.reasons.join("; "));
+    await advanceBoth(PAST_DEADLINE);
+    const f = await m.poll();
+    check("no answer follows; past its deadline the monitor expires the joined challenge and the delegation is frozen", f.froze && (await A.state(dA)).frozen, f.reasons.join("; "));
+  }
+  {
+    const dA = await A.delegate(plain);
+    const dB = await B.delegate(plain);
+    const m = new Monitor([dA, dB], policy(1_000_000n), proving(null));
+    const pay = engine(ids, UNIT);
+    const p = pay(dA, await A.now(), UNIT);
+    await A.settle(dA, p.s);
+    await m.poll();
+    const rec = m.all().find((r) => r.digest === p.s.digest) as Record;
+    // The other party challenges shortly before the decision time, so its
+    // deadline is still ahead then, as the deployed windows ensure for any
+    // challenge (w_a exceeds the decision delay).
+    await advanceBoth(Number(DECIDE) - 300);
+    await A.challengeFirst(dA, rec);
+    await advanceBoth(310);
+    const r = await m.poll();
+    const held = (await A.state(dA)).holds;
+    await A.answer(dA, rec);
+    m.deliverOpening(p.opening);
+    await advanceBoth(Number(WAIT) + 1);
+    const g = await m.poll();
+    const later = await B.settle(dB, pay(dB, await B.now(), UNIT).s);
+    check("an honest agent that delivered late, challenged first by another party: the monitor joins, the agent answers and delivers its opening, and nothing is frozen on either domain", r.challenged.length === 1 && held === 1 && !g.froze && !(await A.state(dA)).frozen && (await A.state(dA)).holds === 0 && later === "settled", g.reasons.join("; "));
+  }
+  {
+    const dA = await A.delegate(plain);
+    const dB = await B.delegate(plain);
+    const m = new Monitor([dA, dB], policy(1_000_000n), proving(null));
+    const pay = engine(ids, UNIT);
+    const p = pay(dA, await A.now(), UNIT);
+    await A.settle(dA, p.s);
+    await m.poll();
+    const rec = m.all().find((r) => r.digest === p.s.digest) as Record;
+    await A.challengeFirst(dA, rec);
+    await A.answer(dA, rec);
+    await advanceBoth(Number(DECIDE) + 10);
+    const r = await m.poll();
+    const held = (await A.state(dA)).holds;
+    await advanceBoth(Number(WAIT) - 60);
+    m.deliverOpening(p.opening);
+    await advanceBoth(61);
+    const g = await m.poll();
+    const later = await B.settle(dB, pay(dB, await B.now(), UNIT).s);
+    check("challenged first by another party and answered at once, its opening not yet delivered: at the decision time the monitor joins the answered challenge, nothing is held, the delivery wait runs from the join, and the opening delivered within it leaves nothing frozen", r.challenged.length === 1 && held === 0 && !g.froze && !(await A.state(dA)).frozen && later === "settled", g.reasons.join("; "));
+  }
+  {
+    const dA = await A.delegate(plain);
+    const m = new Monitor([dA], policy(1_000_000n), proving(null));
+    const pay = engine(ids, UNIT);
+    const p = pay(dA, await A.now(), UNIT);
+    await A.settle(dA, p.s);
+    await m.poll();
+    const rec = m.all().find((r) => r.digest === p.s.digest) as Record;
+    await A.challengeFirst(dA, rec);
+    await A.answer(dA, rec);
+    await advanceBoth(Number(DECIDE) + 10);
+    const r = await m.poll();
+    await advanceBoth(Number(WAIT) + 1);
+    const g = await m.poll();
+    check("the same, with the opening never delivered: the delivery wait after the join ends with the delegation frozen", r.challenged.length === 1 && g.froze && (await A.state(dA)).frozen, g.reasons.join("; "));
   }
 
   section("openings checked in the clear, no proof read");

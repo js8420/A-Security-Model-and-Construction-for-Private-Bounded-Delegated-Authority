@@ -25,7 +25,11 @@ const COMMITTED_BYTES: usize = 32;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let path = args.get(1).cloned().unwrap_or_else(|| "../../target/proof_128_keccak.bin".into());
+    if args.get(1).map(String::as_str) == Some("verdicts") {
+        verdicts(&args[2..]);
+        return;
+    }
+    let path = args.get(1).cloned().unwrap_or_else(|| "../../target/proof_keccak.bin".into());
     let proof = std::fs::read(&path).expect("exported proof");
     let input = |p: &[u8]| {
         let mut s = SP1Stdin::new();
@@ -93,4 +97,26 @@ fn main() {
     println!("  syscalls                                     {:>14}", report.total_syscall_count());
     println!("  gas metering, seconds                        {:>14.1}", gas_secs);
     println!("  a tampered proof is refused inside the zkVM  {:>14}", refused);
+}
+
+/// The guest's verdict on each proof file named, one line each, for comparison
+/// with the native verifier's on the same files.
+fn verdicts(paths: &[String]) {
+    let program = Arc::new(Program::from(&ELF).expect("elf"));
+    for path in paths {
+        let proof = std::fs::read(path).expect("proof file");
+        let mut s = SP1Stdin::new();
+        s.write_vec(proof);
+        let mut ex = MinimalExecutorEnum::new(program.clone(), false, None);
+        for b in &s.buffer {
+            ex.with_input(b);
+        }
+        let accepted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            while ex.execute_chunk().is_some() {}
+            ex.exit_code()
+        }))
+        .map(|code| code == 0)
+        .unwrap_or(false);
+        println!("{} {path}", if accepted { "accept" } else { "refuse" });
+    }
 }

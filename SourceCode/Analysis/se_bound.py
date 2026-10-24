@@ -11,7 +11,7 @@ protocol in five places, and each changes one term:
                 challenge: the proximity gap is that of a curve of degree N - 1
                 (Ben-Sasson, Carmon, Ishai, Kopparty, Saraf 2020), N - 1 times
                 the gap of a line.
-  folding       arities 4, 4 and 2: a fold of arity a is a curve of degree a - 1.
+  folding       arities 4, 4 and 4 at 256 rows: a fold of arity a is a curve of degree a - 1.
   grinding      the query round is drawn only after a 20-bit proof of work, so
                 each oracle query reaches it with probability 2^-20.
   out of domain the point is not resampled, so it lands where a quotient by
@@ -36,14 +36,15 @@ import math
 P = 2**64 - 2**32 + 1
 
 # The deployed proof, as the second verifier reads it.
-ROWS = 128              # trace rows
+ROWS = 256              # trace rows
 WIDTH = 14292 + 2       # AIR columns plus the hiding commitment's two random codewords
 CONSTRAINTS = 14302     # constraints the AIR asserts
 DEGREE = 7              # their degree
 CHUNKS = 16             # quotient chunks
-EXT = 3                 # degree of the challenge field over Goldilocks
+EXT = 5                 # degree of the challenge field over Goldilocks
+DEPLOYED = (74, 4, 20)  # queries, log2 blowup, grinding bits
 CODEWORDS = 2           # random codewords the hiding commitment appends to each matrix
-FOLDS = (4, 4, 2)       # FRI fold arities
+FOLDS = (4, 4, 4)       # FRI fold arities at 256 rows
 ROUNDS = 7              # constraint challenge, out-of-domain point, batching, three folds, queries
 
 
@@ -112,17 +113,6 @@ def best(regime, queries, log_blowup, pow_bits, ext=EXT):
     return out
 
 
-def at_rows(rows, f):
-    """Runs f with the trace height set to rows: zero knowledge at 88 queries
-    over the quadratic extension needs 2(2*2 + 88) = 184 rows, so 256."""
-    global ROWS
-    old, ROWS = ROWS, rows
-    try:
-        f()
-    finally:
-        ROWS = old
-
-
 def bits(x):
     return -math.log2(x)
 
@@ -146,35 +136,48 @@ def show(label, queries, log_blowup, pow_bits, ext=EXT):
         print(f"    {regime:<12} {bits(w):6.1f} bits{mm:<6}  {parts}")
 
 
-SWEEP = [(44, 4, 20), (40, 4, 20), (50, 4, 20), (44, 3, 20), (54, 3, 20), (58, 3, 20),
-         (40, 3, 8), (44, 2, 20), (40, 2, 8), (40, 1, 8)]
+SWEEP = [(q, lb, g, e) for e in (3, 5) for lb, g in ((4, 20), (4, 30), (5, 20), (3, 20))
+         for q in range(40, 101, 2)]
+
+
+def against(w, h):
+    """Bits of the state-restoration error against 2^h oracle queries."""
+    return bits((2**h + ROUNDS) * w)
 
 
 def main():
+    q0, lb0, g0 = DEPLOYED
     print("ROUND-BY-ROUND KNOWLEDGE-SOUNDNESS ERROR OF THE PAYMENT PROOF, BITS")
     print("=" * 78)
-    print(f"  batched openings N = {batched()}, constraints s = {CONSTRAINTS}, degree {DEGREE}, "
+    print(f"  {ROWS} rows, batched openings N = {batched()}, constraints s = {CONSTRAINTS}, degree {DEGREE}, "
           f"{CHUNKS} chunks, folds {FOLDS}")
     print()
-    show("deployed: 44 queries, blowup 16, 20 grinding bits, cubic extension", 44, 4, 20)
-    show("40 queries, blowup 16, 20 grinding bits, cubic extension", 40, 4, 20)
-    show("58 queries, blowup 8, 20 grinding bits, cubic extension", 58, 3, 20)
-    show("the earlier setting: 40 queries, blowup 16, quadratic extension", 40, 4, 20, ext=2)
-    show("40 queries, blowup 8, 20 grinding bits, quadratic extension", 40, 3, 20, ext=2)
-    at_rows(256, lambda: show("88 queries, blowup 16, 20 grinding bits, quadratic extension, 256 rows", 88, 4, 20, ext=2))
-    show("100 queries, blowup 8, 20 grinding bits, quadratic extension", 100, 3, 20, ext=2)
+    show(f"deployed: {q0} queries, blowup {2**lb0}, {g0} grinding bits, degree-5 extension", q0, lb0, g0)
+    show("the earlier setting: 44 queries, blowup 16, 20 grinding bits, cubic extension", 44, 4, 20, ext=3)
+    show("70 queries, blowup 16, 30 grinding bits, degree-5 extension", 70, 4, 30)
+    show("60 queries, blowup 32, 20 grinding bits, degree-5 extension", 60, 5, 20)
     print()
-    w = best("johnson", 44, 4, 20)[0]
-    print("STATE-RESTORATION ERROR AT THE DEPLOYED SETTING, (q + 7) TIMES THE ABOVE")
+    print("STATE-RESTORATION (NON-INTERACTIVE) ERROR, (2^h + 7) TIMES THE PROVABLE ROUND-BY-ROUND ERROR")
     print("=" * 78)
-    for h in (32, 48, 64):
-        print(f"  2^{h} oracle queries   {bits((2**h + ROUNDS) * w):6.1f} bits")
+    rows = [("deployed, degree 5", q0, lb0, g0, 5), ("earlier, cubic", 44, 4, 20, 3)]
+    print(f"  {'setting':<22} {'rbr':>7} {'2^32':>7} {'2^48':>7} {'2^64':>7}")
+    for name, q, lb, g, e in rows:
+        w = 2.0**-provable(q, lb, g, e)
+        print(f"  {name:<22} {bits(w):7.1f} {against(w, 32):7.1f} {against(w, 48):7.1f} {against(w, 64):7.1f}")
     print()
-    print("THE SWEEP OF THE FRI PARAMETERS, CUBIC EXTENSION, WHOLE BITS ROUNDED DOWN")
+    print("THE FEWEST QUERIES REACHING 100 PROVABLE BITS AGAINST 2^64 ORACLE QUERIES")
     print("=" * 78)
-    print(f"  {'queries':>7} {'blowup':>7} {'grind':>6} {'conjectured':>12} {'provable':>9} {'rows zk needs':>14}")
-    for q, lb, g in SWEEP:
-        print(f"  {q:>7} {2**lb:>7} {g:>6} {math.floor(conjectured(q, lb, g)):>12} {math.floor(provable(q, lb, g)):>9} {2 * (2 * EXT + q):>14}")
+    print(f"  {'extension':>9} {'blowup':>7} {'grind':>6} {'queries':>8} {'2^64 bits':>10} {'rows zk needs':>14}")
+    for e in (3, 5):
+        for lb, g in ((4, 20), (4, 30), (5, 20), (3, 20)):
+            hit = next(((q, against(2.0**-provable(q, lb, g, e), 64)) for q in range(40, 161, 2)
+                        if against(2.0**-provable(q, lb, g, e), 64) >= 100), None)
+            if hit:
+                q, b = hit
+                print(f"  {e:>9} {2**lb:>7} {g:>6} {q:>8} {b:>10.1f} {2 * (2 * e + q):>14}")
+            else:
+                top = max(against(2.0**-provable(q, lb, g, e), 64) for q in range(40, 161, 20))
+                print(f"  {e:>9} {2**lb:>7} {g:>6} {'none':>8} {top:>10.1f} {'':>14}")
 
 
 if __name__ == "__main__":
