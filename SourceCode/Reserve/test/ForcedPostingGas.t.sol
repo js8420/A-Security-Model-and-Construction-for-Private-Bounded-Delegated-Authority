@@ -7,31 +7,48 @@ interface IOptimismPortal {
     function depositTransaction(address to, uint256 value, uint64 gasLimit, bool isCreation, bytes memory data) external payable;
 }
 
-/// What forcing one proof chunk in through Ethereum costs the answerer on L1
-/// beyond its call data: the portal's work, including the gas it burns to buy
-/// the deposit's L2 gas. Runs against a fork of Ethereum mainnet when L1_FORK
-/// names an endpoint, and is skipped otherwise.
+/// What forcing a transaction in through Ethereum costs on L1 beyond its
+/// call data: the portal's work, including the gas it burns to buy the
+/// deposit's L2 gas. Measured for one proof chunk, one answer and one
+/// delivery, each with the L2 gas it needs and call data of its size. Runs
+/// against a fork of Ethereum mainnet when L1_FORK names an endpoint, and is
+/// skipped otherwise.
 contract ForcedPostingGas is Test {
     /// Base's portal on Ethereum.
     address constant PORTAL = 0x49048044D57e1C92A77f79988d21Fa8fAF74E97e;
-    /// L2 gas a full chunk's postProof needs, above the largest measured.
-    uint64 constant L2_GAS = 4_000_000;
     uint256 constant CHUNK = 98304;
 
+    /// L2 gas a full chunk's postProof needs, above the largest measured.
     function testPortalGasForOneChunk() public {
+        _measure("chunk", 4_000_000, CHUNK + 228);
+    }
+
+    /// L2 gas one answer needs, above the measured answer of a batch's
+    /// settlement, and the call data of that answer.
+    function testPortalGasForOneAnswer() public {
+        _measure("answer", 500_000, 1028);
+    }
+
+    /// L2 gas one delivery needs, binding its batch included, and the call
+    /// data of a delivery in a batch of 256.
+    function testPortalGasForOneDelivery() public {
+        _measure("delivery", 300_000, 1604);
+    }
+
+    function _measure(string memory what, uint64 l2Gas, uint256 size) internal {
         string memory rpc = vm.envOr("L1_FORK", string(""));
         if (bytes(rpc).length == 0) vm.skip(true);
         vm.createSelectFork(rpc);
-        bytes memory data = new bytes(CHUNK + 228);
+        bytes memory data = new bytes(size);
         for (uint256 i = 0; i < data.length; ++i) data[i] = bytes1(uint8(1 + (i % 255)));
         address sender = address(0xF0CED);
         vm.deal(sender, 1 ether);
         vm.prank(sender, sender);
         uint256 g0 = gasleft();
-        IOptimismPortal(PORTAL).depositTransaction(address(0xD15), 0, L2_GAS, false, data);
+        IOptimismPortal(PORTAL).depositTransaction(address(0xD15), 0, l2Gas, false, data);
         uint256 used = g0 - gasleft();
         console.log("fork block", block.number);
         console.log("L1 base fee, wei", block.basefee);
-        console.log("portal execution gas for one chunk", used);
+        console.log(string.concat("portal execution gas for one ", what), used);
     }
 }

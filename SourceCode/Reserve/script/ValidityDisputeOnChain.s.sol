@@ -59,7 +59,7 @@ contract ValidityDisputeOnChain is Script {
         _settle(d);
         (bool ok, ) = address(sp1).call(abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof)));
         require(ok, "verifyProof");
-        vd.open{value: 0.26 ether}(id, digest, rec);
+        vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
         bytes memory stark = vm.readFileBinary(STARK);
@@ -74,7 +74,7 @@ contract ValidityDisputeOnChain is Script {
         // seconds; three blocks later it has passed.
         _deploy(d, vm.addr(pk), 0, 1);
         _settle(d);
-        vd.open{value: 0.26 ether}(id, digest, rec);
+        vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, digest, rec);
         for (uint256 i = 0; i < 3; ++i) token.mint(vm.addr(pk), 1);
         // The script runs every call locally first, in one block; the warp
         // moves only that local clock past the deadline. On the node the three

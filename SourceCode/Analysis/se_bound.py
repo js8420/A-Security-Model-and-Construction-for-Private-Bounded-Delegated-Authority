@@ -178,6 +178,27 @@ def main():
             else:
                 top = max(against(2.0**-provable(q, lb, g, e), 64) for q in range(40, 161, 20))
                 print(f"  {e:>9} {2**lb:>7} {g:>6} {'none':>8} {top:>10.1f} {'':>14}")
+    print()
+    print("THE CAP THE BATCHING TERM SETS ON THE JOHNSON-REGIME FIGURE, WHATEVER THE QUERIES")
+    print("=" * 78)
+    print(f"  {'extension':>9} {'blowup':>7} {'cap, rbr':>9} {'at 2^64':>8}")
+    for e in (2, 3, 5):
+        for lb in (4, 5):
+            print(f"  {e:>9} {2**lb:>7} {cap(lb, e):>9.1f} {against(2.0**-cap(lb, e), 64):>8.1f}")
+
+
+def cap(log_blowup, ext):
+    """Bits of the Johnson-regime figure with the query term removed, the best
+    over the multiplicity: what no number of queries can pass."""
+    out = None
+    for m in range(3, 4096):
+        if not johnson_ok(m, log_blowup):
+            continue
+        t = terms("johnson", 1, log_blowup, 0, ext, m)
+        del t["queries"]
+        w = max(t.values())
+        out = w if out is None or w < out else out
+    return bits(out)
 
 
 if __name__ == "__main__":

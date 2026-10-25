@@ -57,7 +57,7 @@ contract ValidityDisputeBatchOnChain is Script {
                 ss[i] = _settled(d, id, i);
                 (ids[i], ds[i], at[i], paths[i]) = (id, Statement.digest(d, i), i, Statement.path(d, i));
             }
-            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.26 ether}(id, ds[i], ss[i]);
+            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, ds[i], ss[i]);
             vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();

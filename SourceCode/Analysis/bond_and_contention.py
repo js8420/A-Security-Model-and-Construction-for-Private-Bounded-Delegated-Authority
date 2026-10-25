@@ -2,13 +2,16 @@
 adversary or a censoring set of proposers can impose on a forced transaction
 on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
 protocol constants, so one run is the result. The bounty adds to the price
-of proving an answer, which the Groth16 runs on Pete measured, what sending the
-answer costs on Base, as posting_cost.py measured it, and rounds the sum up to
-the next 10 cents. Posting the batch proof and delivering a sealed opening are
-refunded from the principal's posting deposit, which the script sizes from
-the measured posting and the measured L1 gas of forcing one chunk in through
-the portal. The answer window and the slot are checked against the slowest
-proving run.
+of proving an answer, which the Groth16 runs on Pete measured, what including
+the answer costs at the highest fee the bounty is sized for, which is forcing
+it in through Ethereum at the base fee the posting deposit is sized for, and
+rounds the sum up to the next 10 cents; the answer's quiet cost on Base, as
+posting_cost.py measured it, is printed beside it. Posting the batch proof and
+delivering its sealed openings are refunded from the principal's posting
+deposit, one for each batch, which the script sizes from the measured postings
+and the measured L1 gas of forcing a chunk, an answer and a delivery in
+through the portal. The answer window and the slot are checked against the
+slowest proving run.
 
 Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR WorkingHistory/run_TAG_forced.txt
 where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run;
@@ -45,12 +48,16 @@ SLOT = 4.0
 W_RATE = DAY
 # The challenger's bond, which is also the bounty a slash pays: the price of
 # proving one answer, 64 vCPU at 3.616 USD an hour for the measured proving
-# time, plus the measured cost on Base of sending the answer, rounded up to
-# the next 10 cents.
+# time, plus the cost of forcing the answer in through Ethereum at
+# DEPOSIT_FEE_GWEI, rounded up to the next 10 cents.
 VCPU_HOUR_64 = 3.616
 # The Ethereum base fee, in gwei, up to which the posting deposit covers
-# forcing the whole proof in through the portal.
+# forcing the whole proof and every delivery in through the portal, and the
+# bounty covers forcing an answer in.
 DEPOSIT_FEE_GWEI = 1.0
+# The most settlements of one batch, so the most deliveries one batch's
+# deposit refunds.
+BATCH = 256
 
 
 def runs(folder):
@@ -90,39 +97,55 @@ def posted(path):
     return usd["proof, all chunks"], usd["one answer"], usd["one delivery"]
 
 
-def proof_posting(path):
-    """The proof's postings: transactions, total call data bytes, and the ETH price."""
-    tx = size = usd = None
+def call_data(path):
+    """Transactions and call data bytes of the proof's postings, of one answer
+    and of one delivery, and the ETH price."""
+    rows = {}
+    usd = None
     for line in open(path, encoding="utf8"):
-        m = re.match(r"\s+proof, all chunks\s+(\d+) tx\s+[\d,]+ gas\s+([\d,]+) bytes", line)
+        m = re.match(r"\s+(proof, all chunks|one answer|one delivery)\s+(\d+) tx\s+[\d,]+ gas\s+([\d,]+) bytes", line)
         if m:
-            tx, size = int(m.group(1)), int(m.group(2).replace(",", ""))
+            rows[m.group(1)] = (int(m.group(2)), int(m.group(3).replace(",", "")))
         m = re.match(r"\s+ETH / USD, Chainlink on Base\s+([\d.]+)", line)
         if m:
             usd = float(m.group(1))
-    if tx is None or usd is None:
-        raise SystemExit(f"no proof posting or ETH price in {path}")
-    return tx, size, usd
+    if set(rows) != {"proof, all chunks", "one answer", "one delivery"} or usd is None:
+        raise SystemExit(f"no postings, answer, delivery or ETH price in {path}")
+    return rows["proof, all chunks"], rows["one answer"][1], rows["one delivery"][1], usd
 
 
 def portal_gas(path):
+    """The portal's L1 gas for one forced chunk, answer and delivery."""
+    out = {}
     for line in open(path, encoding="utf8"):
-        m = re.search(r"portal execution gas for one chunk (\d+)", line)
+        m = re.search(r"portal execution gas for one (chunk|answer|delivery) (\d+)", line)
         if m:
-            return int(m.group(1))
-    raise SystemExit(f"no portal gas in {path}")
+            out[m.group(1)] = int(m.group(2))
+    if set(out) != {"chunk", "answer", "delivery"}:
+        raise SystemExit(f"no portal gas for a chunk, an answer and a delivery in {path}")
+    return out["chunk"], out["answer"], out["delivery"]
+
+
+def forced(n_bytes, portal):
+    """L1 gas of forcing one transaction in: the base cost, call data at the
+    EIP-7623 floor on every byte, and the portal's work."""
+    return 21000 + 40 * n_bytes + portal
 
 
 POSTING, SENDING, DELIVERING = posted(sys.argv[1])
-CHUNKS, POSTED_BYTES, ETH_USD = proof_posting(sys.argv[1])
-PORTAL_GAS = portal_gas(sys.argv[3])
-FORCED_L1_GAS = CHUNKS * (21000 + PORTAL_GAS) + 40 * POSTED_BYTES
+(CHUNKS, POSTED_BYTES), ANSWER_BYTES, DELIVERY_BYTES, ETH_USD = call_data(sys.argv[1])
+PORTAL_CHUNK, PORTAL_ANSWER, PORTAL_DELIVERY = portal_gas(sys.argv[3])
+FORCED_PROOF_GAS = CHUNKS * (21000 + PORTAL_CHUNK) + 40 * POSTED_BYTES
+FORCED_DELIVERY_GAS = forced(DELIVERY_BYTES, PORTAL_DELIVERY)
+FORCED_L1_GAS = FORCED_PROOF_GAS + BATCH * FORCED_DELIVERY_GAS
 DEPOSIT_ETH = FORCED_L1_GAS * DEPOSIT_FEE_GWEI * 1e-9
+FORCED_ANSWER_GAS = forced(ANSWER_BYTES, PORTAL_ANSWER)
+FORCED_ANSWER = FORCED_ANSWER_GAS * DEPOSIT_FEE_GWEI * 1e-9 * ETH_USD
 RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
-COST = PROVING + SENDING
+COST = PROVING + max(SENDING, FORCED_ANSWER)
 BETA = math.ceil(round(COST * 10, 9)) / 10
 
 def windows():
@@ -306,23 +329,29 @@ if __name__ == "__main__":
     rows = [
         (f"proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour", f"{PROVING:.4f}"),
         ("sending the answer on Base, measured", f"{SENDING:.4f}"),
-        ("sum", f"{COST:.4f}"),
+        (f"forcing it in through Ethereum at {DEPOSIT_FEE_GWEI:.0f} gwei, {FORCED_ANSWER_GAS:,} L1 gas", f"{FORCED_ANSWER:.4f}"),
+        ("sum of the proving and the dearer inclusion", f"{COST:.4f}"),
         ("bounty and challenger's bond beta, rounded up", f"{BETA:.2f}"),
     ]
     for label, v in rows:
         print(f"  {label:<66}{v:>10}")
     print()
-    print("THE POSTING DEPOSIT A PRINCIPAL'S CHALLENGE CARRIES")
+    print("THE POSTING DEPOSIT, ONE FOR EACH BATCH")
     print("=" * 78)
-    print(f"  posting the batch proof and a sealed opening on Base, measured, USD {POSTING + DELIVERING:10.4f}")
+    quiet = POSTING + BATCH * DELIVERING
+    print(f"  posting the batch proof and {BATCH} sealed openings on Base, measured, USD {quiet:10.4f}")
     print(f"  the proof's postings: {CHUNKS} transactions, {POSTED_BYTES:,} bytes of call data")
-    print(f"  portal's L1 gas for one forced chunk, beyond its call data, measured {PORTAL_GAS:>10,}")
-    print(f"  forcing every chunk in through Ethereum, L1 gas  {FORCED_L1_GAS:>14,}")
+    print(f"  portal's L1 gas beyond call data, measured: one chunk {PORTAL_CHUNK:,}, one answer {PORTAL_ANSWER:,}, one delivery {PORTAL_DELIVERY:,}")
+    print(f"  forcing every chunk in through Ethereum, L1 gas      {FORCED_PROOF_GAS:>14,}")
+    print(f"  forcing {BATCH} deliveries in, {FORCED_DELIVERY_GAS:,} L1 gas each  {BATCH * FORCED_DELIVERY_GAS:>14,}")
+    print(f"  together, L1 gas                                     {FORCED_L1_GAS:>14,}")
     for gwei in (1.0, 10.0):
         eth = FORCED_L1_GAS * gwei * 1e-9
         print(f"    at {gwei:4.0f} gwei: {eth:.4f} ETH = {eth * ETH_USD:,.2f} USD")
+    proof_only = FORCED_PROOF_GAS * DEPOSIT_FEE_GWEI * 1e-9
+    print(f"  the proof alone at {DEPOSIT_FEE_GWEI:.0f} gwei: {proof_only:.4f} ETH = {proof_only * ETH_USD:,.2f} USD")
     print(f"  deposit, covering the forced path at {DEPOSIT_FEE_GWEI:.0f} gwei: {DEPOSIT_ETH:.4f} ETH = {DEPOSIT_ETH * ETH_USD:,.2f} USD")
-    print(f"  the quiet posting uses {100 * (POSTING + DELIVERING) / (DEPOSIT_ETH * ETH_USD):.2f}% of it")
+    print(f"  the quiet posting uses {100 * quiet / (DEPOSIT_ETH * ETH_USD):.2f}% of it")
     print()
     k_w = windows()
     profiles(k_w)

@@ -1,0 +1,24 @@
+No files changed, compilation skipped
+
+Ran 3 tests for test/ForcedPostingGas.t.sol:ForcedPostingGas
+[PASS] testPortalGasForOneAnswer() (gas: 797759)
+Logs:
+  fork block 26272284
+  L1 base fee, wei 44692981
+  portal execution gas for one answer 510225
+
+[PASS] testPortalGasForOneChunk() (gas: 30808912)
+Logs:
+  fork block 26272284
+  L1 base fee, wei 44692981
+  portal execution gas for one chunk 4158189
+
+[PASS] testPortalGasForOneDelivery() (gas: 753686)
+Logs:
+  fork block 26272284
+  L1 base fee, wei 44692981
+  portal execution gas for one delivery 310520
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.07s (3.22s CPU time)
+
+Ran 1 test suite in 1.10s (1.07s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)

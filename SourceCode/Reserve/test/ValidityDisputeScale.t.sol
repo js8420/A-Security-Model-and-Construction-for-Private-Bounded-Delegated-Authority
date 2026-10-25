@@ -106,8 +106,9 @@ contract ValidityDisputeScaleTest is Test {
     function _openBy(address who, uint256 r, uint64 d) internal {
         Settlement memory s = _rec(r, d);
         bool own = who == acc.principalOf(r) || who == acc.monitorOf(r);
+        uint256 topUp = own ? vd.postingTopUp(r) : 0;
         vm.prank(who);
-        vd.open{value: BOND + (own ? POSTING : 0)}(r, d, s);
+        vd.open{value: BOND + topUp}(r, d, s);
     }
 
     /// k settlements of one delegation, each challenged by `who`.
@@ -601,7 +602,14 @@ contract ValidityDisputeScaleTest is Test {
         view
         returns (ValidityDispute.Receipt memory)
     {
-        bytes32 ph = _proofHash(_proof(100));
+        return _receiptFor(pk, r, root, sealedRoot, _proofHash(_proof(100)), at);
+    }
+
+    function _receiptFor(uint256 pk, uint256 r, bytes32 root, bytes32 sealedRoot, bytes32 ph, uint64 at)
+        internal
+        view
+        returns (ValidityDispute.Receipt memory)
+    {
         (uint8 v, bytes32 rr, bytes32 ss) = vm.sign(pk, vd.receiptDigest(r, root, sealedRoot, ph, at));
         return ValidityDispute.Receipt({sealedRoot: sealedRoot, proofHash: ph, receivedAt: at, signature: abi.encodePacked(rr, ss, v)});
     }
@@ -1191,39 +1199,69 @@ contract ValidityDisputeScaleTest is Test {
         vd.join{value: POSTING}(r, 5, s);
     }
 
-    /// The named answerer's postings after an answer to the principal's
-    /// challenge are refunded from the pool at the domain's base fee; anyone
-    /// else's are not.
+    /// The named answerer's postings of the receipted proof, once its batch
+    /// is bound, are refunded from the pool at the domain's base fee;
+    /// anyone else's are not, nor the answerer's own before the binding.
     function testPostingIsRefundedFromThePool() public {
-        (uint256 r, , ) = _answered();
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
         vm.fee(1 gwei);
         vm.txGasPrice(2 gwei);
         address ans = vm.addr(ANSWERER_PK);
-        bytes memory b = _proof(vd.CHUNK() + 100);
-        vm.startPrank(address(0xD00D));
-        _post(r, b);
+        vm.startPrank(ans);
+        _post(r, _proof(200));
         vm.stopPrank();
+        assertEq(vd.credit(ans), BOND);
+        vm.prank(address(0xD00D));
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        assertEq(vd.postingPool(r), POSTING);
+        vm.prank(address(0xD00D));
+        vd.postProof(r, rc.proofHash, 0, _proof(vd.CHUNK()), false);
         assertEq(vd.credit(address(0xD00D)), 0);
         assertEq(vd.postingPool(r), POSTING);
         vm.startPrank(ans);
-        _post(r, _proof(200));
+        _post(r, _proof(100));
         vm.stopPrank();
         uint256 paid = vd.credit(ans) - BOND;
         assertGt(paid, 0);
         assertEq(vd.postingPool(r), POSTING - paid);
-        assertFalse(vd.postingLapsed(r));
+        assertFalse(vd.batchOf(r, vd.answeredRoot(r, 5)).lapsed);
     }
 
-    /// A posting the pool cannot pay for empties it and lapses the duty: the
-    /// answerer is not slashed for what it was not paid to post.
+    /// Chunks under a hash no receipt bound are not refunded, so the answerer
+    /// cannot spend the pool on junk and lapse its own duty.
+    function testJunkPostingIsNotRefunded() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        address ans = vm.addr(ANSWERER_PK);
+        vm.prank(ans);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        vm.fee(1e18);
+        vm.txGasPrice(1e18);
+        bytes memory chunk = _proof(vd.CHUNK());
+        vm.prank(ans);
+        vd.postProof(r, keccak256("junk"), 0, chunk, false);
+        assertEq(vd.postingPool(r), POSTING);
+        assertFalse(vd.batchOf(r, vd.answeredRoot(r, 5)).lapsed);
+        vm.fee(0);
+        vm.txGasPrice(0);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// A refund the pool cannot pay empties it and lapses that batch's duty:
+    /// the answerer is not slashed for what it was not paid to post.
     function testAnEmptyPoolLapsesTheDuty() public {
         (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        vm.prank(vm.addr(ANSWERER_PK));
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
         vm.fee(1e18);
         vm.txGasPrice(1e18);
         bytes memory chunk = _proof(vd.CHUNK());
         vm.prank(vm.addr(ANSWERER_PK));
-        vd.postProof(r, keccak256("partial"), 0, chunk, false);
-        assertTrue(vd.postingLapsed(r));
+        vd.postProof(r, rc.proofHash, 0, chunk, false);
+        assertTrue(vd.batchOf(r, vd.answeredRoot(r, 5)).lapsed);
         assertEq(vd.postingPool(r), 0);
         vm.fee(0);
         vm.txGasPrice(0);
@@ -1232,19 +1270,129 @@ contract ValidityDisputeScaleTest is Test {
         vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
     }
 
+    /// A lapse is the batch's alone: another batch of the delegation, whose
+    /// postings the pool still covers, keeps its duty.
+    function testLapseIsPerBatch() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        Settlement memory s5 = _rec(r, 5);
+        Settlement memory s6 = _rec(r, 6);
+        uint64 at = uint64(block.timestamp);
+        ValidityDispute.Receipt memory rc5 = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s5), keccak256(_sealed(5)), at);
+        ValidityDispute.Receipt memory rc6 = _receiptFor(ANSWERER_PK, r, vd.leafHash(r, 6, s6), keccak256(_sealed(6)), keccak256("other proof"), at);
+        _openBy(principal, r, 5);
+        _answerAlone(r, 5);
+        _openBy(principal, r, 6);
+        _answerAlone(r, 6);
+        address ans = vm.addr(ANSWERER_PK);
+        vm.fee(1e18);
+        vm.txGasPrice(1e18);
+        vm.prank(ans);
+        vd.bindPosting(r, 5, s5, 0, new bytes32[](0), rc5);
+        assertTrue(vd.batchOf(r, vd.answeredRoot(r, 5)).lapsed);
+        vm.fee(0);
+        vm.txGasPrice(0);
+        vd.fundPosting{value: POSTING}(r);
+        vm.prank(ans);
+        vd.bindPosting(r, 6, s6, 0, new bytes32[](0), rc6);
+        assertFalse(vd.batchOf(r, vd.answeredRoot(r, 6)).lapsed);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s5, 0, new bytes32[](0), rc5);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 6, s6, 0, new bytes32[](0), rc6);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// A batch binds once, only to a receipt for the root its answer proved,
+    /// and only after the principal's challenge is answered.
+    function testBindingNeedsTheAnsweredBatch() public {
+        (uint256 r, ) = _registerWithAnswerer();
+        _settle(AGENT_PK, r, 5);
+        Settlement memory s = _rec(r, 5);
+        ValidityDispute.Receipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), uint64(block.timestamp));
+        _openBy(principal, r, 5);
+        vm.expectRevert(ValidityDispute.NotDue.selector);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        _answerAlone(r, 5);
+        bytes32[] memory path = new bytes32[](1);
+        path[0] = keccak256("sibling");
+        ValidityDispute.Receipt memory other = _receiptOver(ANSWERER_PK, r, _climb(vd.leafHash(r, 5, s), 0, path), keccak256(_sealed(5)), rc.receivedAt);
+        vm.expectRevert(ValidityDispute.WrongBatch.selector);
+        vd.bindPosting(r, 5, s, 0, path, other);
+        vm.expectEmit(true, false, false, true, address(vd));
+        emit ValidityDispute.PostingBound(r, vd.leafHash(r, 5, s), rc.proofHash);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        vm.expectRevert(ValidityDispute.AlreadyBound.selector);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.TooLate.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+    }
+
+    /// A second receipt for a bound batch naming another proof is the
+    /// answerer's second signature for one batch, and slashes it at once.
+    function testSecondReceiptForABoundBatchSlashes() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        ValidityDispute.Receipt memory junk = _receiptFor(ANSWERER_PK, r, vd.leafHash(r, 5, s), keccak256(_sealed(5)), keccak256("junk"), rc.receivedAt);
+        vm.prank(vm.addr(ANSWERER_PK));
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), junk);
+        vm.prank(challenger);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        (, uint256 left) = acc.answererOf(r);
+        assertEq(left, 0);
+    }
+
+    /// The pool holds one deposit, whatever the number of the principal's
+    /// challenges: each tops it up to one deposit, and is refused with more.
+    function testOneDepositForManyChallenges() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 40);
+        Settlement memory s = _rec(r, 40);
+        _openMany(AGENT_PK, r, 3, principal);
+        assertEq(vd.postingPool(r), POSTING);
+        assertEq(vd.postingTopUp(r), 0);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.BondTooSmall.selector);
+        vd.open{value: BOND + POSTING}(r, 40, s);
+    }
+
+    /// A join whose challenge keeps its own, earlier deadline leaves the
+    /// principal's queue where it was.
+    function testJoinKeepingItsDeadlineLeavesTheQueue() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        _openBy(principal, r, 5);
+        _openBy(challenger, r, 6);
+        address agent = vm.addr(AGENT_PK);
+        uint64 last = vd.lastPrincipalDeadline(agent, principal);
+        uint64 before = _deadline(r, 6);
+        assertLt(before, last + 2 * SLOT);
+        vm.prank(principal);
+        vd.join(r, 6, _rec(r, 6));
+        assertEq(_deadline(r, 6), before);
+        assertEq(vd.lastPrincipalDeadline(agent, principal), last);
+    }
+
     /// A posting forced in through Ethereum pays nothing on the domain; it is
     /// refunded at the Ethereum base fee the domain records.
     function testForcedPostingIsRefundedAtTheEthereumFee() public {
-        (uint256 r, , ) = _answered();
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        address ans = vm.addr(ANSWERER_PK);
+        vm.prank(ans);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        uint256 c0 = vd.credit(ans);
         vm.etch(0x4200000000000000000000000000000000000015, address(new FixedL1Block()).code);
         vm.txGasPrice(0);
-        address ans = vm.addr(ANSWERER_PK);
-        bytes memory chunk = _proof(300);
+        bytes memory chunk = _proof(100);
         bytes32 h = _proofHash(chunk);
         vm.prank(ans);
         vd.postProof(r, h, 0, chunk, true);
         uint256 n = abi.encodeCall(ValidityDispute.postProof, (r, h, 0, chunk, true)).length;
-        assertEq(vd.credit(ans) - BOND, (21000 + 40 * n) * 3 gwei);
+        assertEq(vd.credit(ans) - c0, (21000 + 40 * n) * 3 gwei);
     }
 
     /// Once no delivery is due, what is left of the pool is the principal's.
@@ -1273,6 +1421,26 @@ contract ValidityDisputeScaleTest is Test {
         vm.stopPrank();
         _register(AGENT_PK, 10);
         vm.prank(address(0xB0B5));
+        vm.expectRevert(Reserve.NotServed.selector);
+        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+    }
+
+    /// Principals that delegated before the agent declared are counted, so
+    /// the agent cannot declare fewer than it already serves.
+    function testPrincipalsBeforeTheDeclarationCount() public {
+        address agent = vm.addr(AGENT_PK);
+        _register(AGENT_PK, 10);
+        vm.deal(address(0xB0B5), 1 ether);
+        vm.prank(address(0xB0B5));
+        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+        assertEq(acc.servedCount(agent), 2);
+        assertTrue(acc.serves(agent, address(0xB0B5)));
+        vm.prank(agent);
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.declareCapacity(1);
+        vm.prank(agent);
+        acc.declareCapacity(2);
+        vm.prank(address(0xCAFE));
         vm.expectRevert(Reserve.NotServed.selector);
         acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
     }

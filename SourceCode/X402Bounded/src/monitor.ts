@@ -153,6 +153,8 @@ export class Monitor {
   /** Challenges another party opened and someone answered before the monitor joined them. */
   private readonly joinedAnswered = new Set<string>();
   private readonly requested = new Map<string, bigint>();
+  /** Batches bound for posting and not yet posted, by domain and root: the proof hash and when the binding landed. */
+  private readonly bound = new Map<string, { domain: string; proofHash: Hex; at: bigint }>();
   private claimed = false;
   private frozen = false;
   readonly reasons: string[] = [];
@@ -392,8 +394,16 @@ export class Monitor {
           const a = l.args as { digest: bigint; opening: Hex };
           await this.deliverSealed(a.opening, c.domain, a.digest);
         }
+        const bindings = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "PostingBound", args: { id: d.delegation }, ...range });
+        for (const l of bindings) {
+          const a = l.args as { root: Hex; proofHash: Hex };
+          const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
+          this.bound.set(`${d.name}/${a.root}`, { domain: d.name, proofHash: a.proofHash, at: b.timestamp });
+        }
         const proofs = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "ProofPosted", args: { id: d.delegation }, ...range });
         for (const l of proofs) {
+          const posted = (l.args as { proofHash: Hex }).proofHash.toLowerCase();
+          for (const [k, v] of this.bound) if (v.domain === d.name && v.proofHash.toLowerCase() === posted) this.bound.delete(k);
           const a = l.args as { proofHash: Hex; poster: Address };
           const bytes = await this.postedProof(d, a.proofHash, a.poster);
           if (bytes) await this.deliverProof(bytes);
@@ -440,7 +450,7 @@ export class Monitor {
   }
 
   /**
-   * Step 1's challenge, with the posting deposit. A settlement someone else
+   * Step 1's challenge, topping the posting pool up to one deposit. A settlement someone else
    * challenged first is joined instead: an open challenge then holds it as
    * the monitor's own would, and an answered one carries the monitor's
    * request from the join, so step 3 counts the delivery wait from there.
@@ -450,16 +460,16 @@ export class Monitor {
   private async challenge(d: Domain, r: Record): Promise<void> {
     const dispute = d.dispute as Address;
     const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengerBond" })) as bigint;
-    const deposit = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingDeposit" })) as bigint;
+    const topUp = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingTopUp", args: [d.delegation] })) as bigint;
     const s = { elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch };
     let hash: Hex;
     let joined = false;
     try {
-      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond + deposit });
+      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond + topUp });
     } catch (e) {
       if (!String(e).includes("AlreadyChallenged")) throw e;
       try {
-        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: deposit });
+        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: topUp });
         joined = true;
       } catch (f) {
         if (String(f).includes("NotOpen")) {
@@ -484,6 +494,28 @@ export class Monitor {
         this.requested.set(key(r), t);
         this.joinedAnswered.add(key(r));
       }
+    }
+  }
+
+  /**
+   * Keeps one posting deposit in each domain's pool for every batch bound for
+   * posting whose proof is not yet posted and whose posting wait is still
+   * running, so batches due at once do not share one deposit.
+   */
+  private async fundPostings(): Promise<void> {
+    for (const d of this.domains) {
+      if (!d.dispute) continue;
+      const dispute = d.dispute as Address;
+      const now = await this.now(d);
+      const wait = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "deliveryWait" })) as bigint;
+      let due = 0n;
+      for (const v of this.bound.values()) if (v.domain === d.name && now <= v.at + wait) due += 1n;
+      if (due === 0n) continue;
+      const deposit = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingDeposit" })) as bigint;
+      const pool = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingPool", args: [d.delegation] })) as bigint;
+      if (pool >= due * deposit) continue;
+      const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "fundPosting", args: [d.delegation], value: due * deposit - pool });
+      await d.chain.waitForTransactionReceipt({ hash });
     }
   }
 
@@ -543,6 +575,7 @@ export class Monitor {
    */
   async poll(): Promise<{ total: bigint; challenged: Record[]; froze: boolean; reasons: string[] }> {
     await this.read();
+    await this.fundPostings();
     const total = this.total();
     const challenged: Record[] = [];
     const reasons: string[] = [];

@@ -171,7 +171,9 @@ contract Reserve {
     /// declares from its proving capacity, and the principals it has taken
     /// on. Once an agent has declared, a delegation to it is registered only
     /// for a principal it took on, so no number of principals it never agreed
-    /// to serve can open queues it must answer in.
+    /// to serve can open queues it must answer in. Before it declares, every
+    /// principal that delegates to it is taken on and counted, so a later
+    /// declaration cannot fall below the principals it already serves.
     mapping(address => uint32) public capacityOf;
     mapping(address => uint32) public servedCount;
     mapping(address => mapping(address => bool)) public serves;
@@ -262,7 +264,12 @@ contract Reserve {
 
     function register(Terms calldata t) external payable returns (uint256 id) {
         if (t.unitSize == 0 || t.rangeLen == 0) revert RangeOutside();
-        if (capacityOf[t.agent] != 0 && !serves[t.agent][msg.sender]) revert NotServed();
+        if (!serves[t.agent][msg.sender]) {
+            if (capacityOf[t.agent] != 0) revert NotServed();
+            serves[t.agent][msg.sender] = true;
+            servedCount[t.agent] += 1;
+            emit Serves(t.agent, msg.sender);
+        }
         id = nextId++;
         delegations[id] = Delegation({
             principal: msg.sender,
