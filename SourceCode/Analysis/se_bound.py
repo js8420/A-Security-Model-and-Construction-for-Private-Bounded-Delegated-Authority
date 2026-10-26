@@ -170,11 +170,11 @@ def main():
     print(f"  {'extension':>9} {'blowup':>7} {'grind':>6} {'queries':>8} {'2^64 bits':>10} {'rows zk needs':>14}")
     for e in (3, 5):
         for lb, g in ((4, 20), (4, 30), (5, 20), (3, 20)):
-            hit = next(((q, against(2.0**-provable(q, lb, g, e), 64)) for q in range(40, 161, 2)
+            hit = next(((q, against(2.0**-provable(q, lb, g, e), 64)) for q in range(40, 161)
                         if against(2.0**-provable(q, lb, g, e), 64) >= 100), None)
             if hit:
                 q, b = hit
-                print(f"  {e:>9} {2**lb:>7} {g:>6} {q:>8} {b:>10.1f} {2 * (2 * e + q):>14}")
+                print(f"  {e:>9} {2**lb:>7} {g:>6} {q:>8} {b:>10.1f} {2 * (e + q):>14}")
             else:
                 top = max(against(2.0**-provable(q, lb, g, e), 64) for q in range(40, 161, 20))
                 print(f"  {e:>9} {2**lb:>7} {g:>6} {'none':>8} {top:>10.1f} {'':>14}")

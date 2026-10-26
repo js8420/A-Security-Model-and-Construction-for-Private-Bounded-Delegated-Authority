@@ -181,9 +181,10 @@ pub fn run() {
     println!("{}", "=".repeat(78));
 
     let settings: Vec<(usize, usize, usize)> = vec![
-        // The deployed setting, then the neighbours that reach about 100
-        // provable bits over the cubic extension, then settings that do not
-        // admit a degree-seven quotient under the hiding commitment.
+        // The deployed setting, the earlier one and its neighbours, then
+        // settings that do not admit a degree-seven quotient under the
+        // hiding commitment.
+        (74, 4, 20),
         (44, 4, 20),
         (40, 4, 20),
         (50, 4, 20),
