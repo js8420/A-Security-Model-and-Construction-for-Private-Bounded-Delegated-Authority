@@ -23,6 +23,11 @@ NAME=${1:-$SLURM_JOB_ID}
 PROOF="$HERE/../../target/proof_keccak.bin"
 OUT="$HERE/out_$NAME"
 echo "job $SLURM_JOB_ID, node $(hostname), cpus $SLURM_CPUS_PER_TASK, out $OUT, start $(date)"
+mkdir -p "$OUT"
+lscpu | tee "$OUT/node.txt"
+cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null | sed 's/^/governor /' | tee -a "$OUT/node.txt" || true
+cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null | sed 's/^/no_turbo /' | tee -a "$OUT/node.txt" || true
+grep MemTotal /proc/meminfo | tee -a "$OUT/node.txt"
 sha256sum "$PROOF"
 env | grep '^SP1_WORKER' || echo "SP1 worker settings: defaults"
 TIMER=""
