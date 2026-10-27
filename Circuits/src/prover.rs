@@ -998,6 +998,88 @@ pub fn batch_cost(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<Batc
         .collect()
 }
 
+/// One circuit of the missing-binding comparison, timed as a whole proof.
+pub struct VacuityRow {
+    pub label: &'static str,
+    pub width: usize,
+    pub bytes: usize,
+    pub prove: Stats,
+    pub verify: Stats,
+    pub prove_batches: Vec<f64>,
+}
+
+/// The compliance half as built against the same circuit with C9's binding of
+/// the absorbed lanes to the policy columns removed, both proving the same
+/// honest trace at the deployed parameters, grinding off. The two are
+/// interleaved inside every batch, and which goes first alternates by batch, so
+/// that drift falls on both equally.
+pub fn vacuity_cost(batches: usize, per_batch: usize, pause_secs: u64) -> Vec<VacuityRow> {
+    let zk = config_with(NUM_QUERIES, LOG_BLOWUP, 0);
+    let cfg = &zk;
+    let pv = whole_public_values::<{ REGISTERS }, 16, 32>();
+    let tr = whole_trace::<{ REGISTERS }, 16, 32>(ROWS);
+    let bound = crate::degree::Stated::new(WholeAir::<{ REGISTERS }, 16, 32>::new());
+    let unbound = crate::degree::Stated::new(VacuousAir::<{ REGISTERS }, 16, 32>::new());
+    let p_bound = prove(cfg, &bound, tr.clone(), &pv);
+    assert!(verify(cfg, &bound, &p_bound, &pv).is_ok(), "the honest trace must verify under the circuit as built");
+    let p_unbound = prove(cfg, &unbound, tr.clone(), &pv);
+    assert!(verify(cfg, &unbound, &p_unbound, &pv).is_ok(), "the honest trace must verify with the binding removed");
+    let widths = [BaseAir::<Val>::width(&bound), BaseAir::<Val>::width(&unbound)];
+    let bytes = [
+        bincode::serialize(&p_bound).expect("proof serialises").len(),
+        bincode::serialize(&p_unbound).expect("proof serialises").len(),
+    ];
+    let _ = prove(cfg, &bound, tr.clone(), &pv);
+    let _ = prove(cfg, &unbound, tr.clone(), &pv);
+    let mut ps: Vec<Vec<u128>> = vec![Vec::new(); 2];
+    let mut vs: Vec<Vec<u128>> = vec![Vec::new(); 2];
+    let mut pb: Vec<Vec<f64>> = vec![Vec::new(); 2];
+    for batch in 0..batches {
+        if batch > 0 {
+            sleep(Duration::from_secs(pause_secs));
+        }
+        for j in 0..2 {
+            let i = (j + batch) % 2;
+            let mut this = Vec::with_capacity(per_batch);
+            for _ in 0..per_batch {
+                let ready = tr.clone();
+                let (us, ok) = if i == 0 {
+                    let t = Instant::now();
+                    let _ = prove(cfg, &bound, ready, &pv);
+                    let e = t.elapsed().as_micros();
+                    let t = Instant::now();
+                    let ok = verify(cfg, &bound, &p_bound, &pv).is_ok();
+                    vs[i].push(t.elapsed().as_micros());
+                    (e, ok)
+                } else {
+                    let t = Instant::now();
+                    let _ = prove(cfg, &unbound, ready, &pv);
+                    let e = t.elapsed().as_micros();
+                    let t = Instant::now();
+                    let ok = verify(cfg, &unbound, &p_unbound, &pv).is_ok();
+                    vs[i].push(t.elapsed().as_micros());
+                    (e, ok)
+                };
+                assert!(ok, "a proof built during setup must verify when timed");
+                this.push(us);
+            }
+            pb[i].push(summarise(this.clone(), 1).median);
+            ps[i].extend(this);
+        }
+    }
+    let labels = ["compliance half, as built", "with C9's binding removed"];
+    (0..2)
+        .map(|i| VacuityRow {
+            label: labels[i],
+            width: widths[i],
+            bytes: bytes[i],
+            prove: summarise(ps[i].clone(), 1),
+            verify: summarise(vs[i].clone(), 1),
+            prove_batches: pb[i].clone(),
+        })
+        .collect()
+}
+
 /// k payments proved as a padded batch of the next power of two.
 pub fn roundtrip_padded<
     const R: usize,

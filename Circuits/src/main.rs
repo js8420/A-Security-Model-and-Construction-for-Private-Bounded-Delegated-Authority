@@ -528,6 +528,44 @@ fn batch_cost() {
     }
 }
 
+fn vacuity_cost() {
+    println!("WHAT ONE MISSING BINDING COSTS, TIMED: C9 WITHOUT ITS POLICY BINDING");
+    println!("{}", "=".repeat(78));
+    let (rw, rn, rd) = whole::measure::<{ prover::REGISTERS }, 16, 32>();
+    let (vw, vn, vd) = vacuous::measure::<{ prover::REGISTERS }, 16, 32>();
+    let rows = prover::vacuity_cost(COST_BATCHES, COST_PER_BATCH, 10);
+    println!("  {:<27} {:>6} {:>11} {:>6} {:>9} {:>9} {:>9} {:>9} {:>11}",
+             "", "width", "constraints", "degree", "q1", "median", "q3", "verify", "proof bytes");
+    for (r, (n, d)) in rows.iter().zip([(rn, rd), (vn, vd)]) {
+        println!("  {:<27} {:>6} {:>11} {:>6} {:>9.1} {:>9.1} {:>9.1} {:>9.2} {:>11}",
+                 r.label, r.width, n, d, r.prove.q1, r.prove.median, r.prove.q3, r.verify.median, r.bytes);
+    }
+    assert_eq!(rows[0].width, rw);
+    assert_eq!(rows[1].width, vw);
+    let (a, b) = (&rows[0], &rows[1]);
+    let separate = a.prove.q3 < b.prove.q1 || b.prove.q3 < a.prove.q1;
+    println!();
+    println!("  Milliseconds per proof at {} rows, {} iterations of each in {} batches, the two",
+             prover::ROWS, COST_BATCHES * COST_PER_BATCH, COST_BATCHES);
+    println!("  interleaved and their order alternating by batch, grinding off, the same honest trace.");
+    println!("  constraints differ by {}; widths differ by {}; proof bytes differ by {}.",
+             rn as i64 - vn as i64, rw as i64 - vw as i64, a.bytes as i64 - b.bytes as i64);
+    println!("  median proving differs by {:.1} ms ({:+.2}%); interquartile ranges {}.",
+             b.prove.median - a.prove.median,
+             100.0 * (b.prove.median - a.prove.median) / a.prove.median,
+             if separate { "separate" } else { "overlap" });
+    println!();
+    println!("  PER-BATCH MEDIANS, ms per proof.");
+    print!("  {:<27}", "");
+    for i in 0..COST_BATCHES { print!(" {:>8}", i + 1); }
+    println!();
+    for r in &rows {
+        print!("  {:<27}", r.label);
+        for v in &r.prove_batches { print!(" {:>8.1}", v); }
+        println!();
+    }
+}
+
 fn main() {
     // `cargo run --release -- sweep` runs the FRI sweep alone. The timed
     // sections below are what the manuscript quotes, and re-running them to
@@ -656,6 +694,10 @@ fn main() {
     }
     // Every positive check and negative control, in minutes rather than the
     // hours the full run takes.
+    if std::env::args().any(|a| a == "vacuity-cost") {
+        vacuity_cost();
+        return;
+    }
     if std::env::args().any(|a| a == "batch-cost") {
         batch_cost();
         return;
