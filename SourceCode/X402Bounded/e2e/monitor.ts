@@ -66,6 +66,7 @@ const ACCEPT_WINDOW = 86_400n;
 const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
+const BOND = parseEther("0.01");
 
 /**
  * A reserve on one local chain, with a dispute contract whose answer system
@@ -79,6 +80,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const principal = createWalletClient({ account: privateKeyToAccount(KEYS.principal), chain: chainDef, transport: http(rpc) });
   const sender = createWalletClient({ account: privateKeyToAccount(KEYS.sender), chain: chainDef, transport: http(rpc) });
   const answering = createWalletClient({ account: answererKey, chain: chainDef, transport: http(rpc) });
+  const accepting = createWalletClient({ account: agent, chain: chainDef, transport: http(rpc) });
   const done = async (h: Hex) => {
     const r = await pub.waitForTransactionReceipt({ hash: h });
     if (r.status !== "success") throw new Error(`transaction ${h} reverted`);
@@ -95,7 +97,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const reserve = await deploy("Reserve.sol", "Reserve", [domainId, token, ZERO, poseidon, 3600n, 2n * 86400n]);
   const vkey = keccak256("0x01");
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
-  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, ACCEPT_WINDOW, ANSWER_WINDOW, SLOT, parseEther("0.01"), WAIT, parseEther("0.25"), 0n]);
+  const params = {
+    acceptWindow: ACCEPT_WINDOW, answerWindow: ANSWER_WINDOW, slot: SLOT, deliveryWait: WAIT, provingBond: BOND,
+    forceGas: 572_345n, feeFactor: 2n, postingGas: 125_000_000n, postingBytes: 10_800_000n,
+  };
+  const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, params]);
   await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "setDispute", args: [vd] }));
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
@@ -109,9 +115,10 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
       agent: agent.address, cap: t.cap, velocityN: 20n, windowW: 86_400n, secretHash: t.secretHash, funding: 0,
       deposit: 10n ** 12n, commitment: t.commitment, revocationRoot: t.revocationRoot, expiry: now + 30n * 86_400n,
       unitSize: t.unitSize, rangeBase: t.rangeBase, rangeLen: t.rangeLen, monitor: ZERO, answerer: t.answerer ? answererKey.address : ZERO,
-      openOnRequest: t.openOnRequest ?? false,
+      openOnRequest: t.openOnRequest ?? false, bond: parseEther("0.1"),
     };
-    await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms], value: parseEther("0.1") }));
+    await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms] }));
+    await done(await accepting.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id], value: parseEther("0.1") }));
     if (t.answerer) await done(await answering.writeContract({ address: reserve, abi: reserveFull, functionName: "stakeAnswerer", args: [id], value: parseEther("0.2") }));
     return { name, chain: pub, wallet: principal, reserve, delegation: id, dispute: vd };
   };
@@ -191,7 +198,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
 
   /** Another party, not the principal or its monitor, challenges a settlement first. */
   const challengeFirst = async (d: Domain, r: Record) => {
-    await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, recordOf(r)], value: parseEther("0.01") }));
+    await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, recordOf(r)], value: BOND }));
   };
 
   /** H(s) as the reserve's claim computes it: the circuit's Poseidon2 on the secret under its own domain separator. */
@@ -201,6 +208,9 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     return `0x${(out[2] | (out[3] << 64n) | (out[4] << 128n) | (out[5] << 192n)).toString(16).padStart(64, "0")}` as Hex;
   };
   const principalCredit = async () => (await pub.readContract({ address: reserve, abi: reserveFull, functionName: "credit", args: [principal.account.address] })) as bigint;
+  /** What the dispute contract owes an address: bonds credited back or won. */
+  const disputeCredit = async (who: Address) => (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "credit", args: [who] })) as bigint;
+  const principalAddress = principal.account.address;
 
   const stakeOf = async (d: Domain) => ((await pub.readContract({ address: reserve, abi: reserveFull, functionName: "answererOf", args: [d.delegation] })) as [Address, bigint])[1];
 
@@ -214,7 +224,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf, principalCredit };
+  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf, principalCredit, disputeCredit, principalAddress };
 }
 
 const lines: string[] = [];
@@ -384,6 +394,15 @@ async function main() {
   const sQ = await settleProven(dQ);
   const answererQ = new Answerer(gateBoth());
   await answererQ.receive(honest, sealAll(sQ.os));
+  const dL = await A.delegate(proven);
+  const mL = new Monitor([dL], provenPolicy, proving(gateBoth()));
+  const sL = await settleProven(dL);
+  const dP = await A.delegate({ ...proven, answerer: true });
+  const mP = new Monitor([dP], provenPolicy, proving(gateBoth(), KEYS.seal));
+  const sP = await settleProven(dP);
+  const answererP = new Answerer(gateBoth());
+  const sealedP = sealAll(sP.os);
+  const heldP = await answererP.receive(honest, sealedP);
   let twice = false;
   try {
     await answererR.receive(honest, sealedS);
@@ -407,7 +426,7 @@ async function main() {
   const afterRefusals = await refusedBy(answererF, honest, sealedS);
   const receivedAt = await A.now();
 
-  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR, mQ];
+  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR, mQ, mL, mP];
   const early = await Promise.all(all.map((m) => m.poll()));
   check("before the decision time the monitor acts on nothing: no challenge and no freeze under any delegation", early.every((r) => r.challenged.length === 0 && !r.froze));
   check("the honest batch passes both verifiers; the forged one is refused beside a deployed verifier that accepts anything", acceptedX && !acceptedY);
@@ -473,6 +492,21 @@ async function main() {
   const rQ = await mQ.poll();
   check(`two offline agents whose staked answerers have delivered nothing yet: all ${n} challenged under each`, rS.challenged.length === n && rR.challenged.length === n);
 
+  const rL = await mL.poll();
+  const heldL = await A.state(dL);
+  for (const o of sL.os) mL.deliverOpening(o);
+  await mL.deliverProof(honest);
+  const creditBefore = await A.disputeCredit(A.principalAddress);
+  const cL = await mL.poll();
+  const returned = (await A.disputeCredit(A.principalAddress)) - creditBefore;
+  const afterL = await A.state(dL);
+  const nextL = await A.settle(dL, engine(ids, pt.unitSize)(dL, await A.now(), 1n).s);
+  check(`an honest agent that delivers late: all ${n} challenged at the decision time and held; once its proof and openings arrive the monitor cancels all ${n}, the hold lifts, nothing is proved or frozen, and the next payment settles`,
+    rL.challenged.length === n && heldL.holds === n && mL.cancellations().length === n && !cL.froze && afterL.holds === 0 && !afterL.frozen && nextL !== "Held", `${cL.reasons.length} cancelled, next ${nextL}`);
+  check(`the late agent earns nothing: each of the ${n} bonds goes back to the principal`,
+    returned === BigInt(n) * BOND && (await A.disputeCredit(agent.address)) === 0n, `${returned} wei returned`);
+  const rP = await mP.poll();
+
   for (const r of rY.challenged) await A.answer(dY, r);
   const lifted = await A.state(dY);
   check("forged answers through an unsound answer system lift the hold", lifted.holds === 0 && !lifted.frozen, `holds ${lifted.holds}`);
@@ -491,6 +525,9 @@ async function main() {
   const servedR = await answererR.serve(mR, true);
   for (const r of rQ.challenged) await A.answer(dQ, r);
   const servedQ = await answererQ.serve(mQ, true);
+  for (const r of rP.challenged) await A.answer(dP, r);
+  const servedP = await answererP.serve(mP);
+  const cP = await mP.poll();
   await A.advance(Number(WAIT) + 1);
   const fY = await mY.poll();
   check("no backing proof arrives within the delivery wait, so the monitor freezes the delegation", fY.froze && (await A.state(dY)).frozen, fY.reasons[0] ?? "");
@@ -508,13 +545,19 @@ async function main() {
   const i0 = sealedR.findIndex((x) => x.digest === r0.digest);
   const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, heldR.proofHash, receivedAt));
   check("an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
+  const fP = await mP.poll();
+  const rP0 = rP.challenged[0];
+  const iP0 = sealedP.findIndex((x) => x.digest === rP0.digest);
+  const slashedP = await A.slashWithholding(dP, rP0, await A.receipt(dP, rP0, tree([sealedP[iP0]]).root, heldP.proofHash, receivedAt));
+  check(`a staked answerer answers all ${n} and then hands the proof and sealed openings over off chain: the monitor cancels every request, so nothing is posted or refunded, nothing is frozen, and no withholding can be slashed`,
+    rP.challenged.length === n && servedP.proofs === 1 && servedP.opened === n && mP.cancellations().length === n && !cP.froze && !fP.froze && !(await A.state(dP)).frozen && !slashedP && (await A.stakeOf(dP)) > 0n, fP.reasons.join("; "));
   const fQ = await mQ.poll();
   check("opening on request, an answer to the principal's challenge asks for the opening: an answerer that answers and hands over only the proof leaves the delegation frozen", rQ.challenged.length === n && servedQ.proofs === 1 && mQ.openedCount() === 0 && fQ.froze && (await A.state(dQ)).frozen, fQ.reasons[0] ?? "");
   const zBefore = await A.state(dZ);
   await A.advance(PAST_DEADLINE);
   const fZ = await mZ.poll();
   check("the extra unit's challenge goes unanswered, as no proof of it exists; past its deadline the monitor expires it and the delegation is frozen", !zBefore.frozen && fZ.froze && (await A.state(dZ)).frozen, fZ.reasons[0] ?? "");
-  const ends = await Promise.all([dX, dU, dT, dS].map((d) => A.state(d)));
+  const ends = await Promise.all([dX, dU, dT, dS, dL, dP].map((d) => A.state(d)));
   check("the honest delegations, the offline ones with sealed openings among them, are neither held nor frozen", ends.every((e) => !e.frozen && e.holds === 0));
 
   section("budget tripwire, no proof read");

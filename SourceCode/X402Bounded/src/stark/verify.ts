@@ -15,7 +15,7 @@ export const PARAMS = {
   commitPowBits: 0,
   logFinalPolyLen: 3,
   maxLogArity: 2,
-  saltElems: 2,
+  saltElems: 4,
   randomCodewords: 2,
   statedDegree: 7,
 } as const;

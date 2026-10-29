@@ -48,6 +48,7 @@ const wallet = (k: Hex) => createWalletClient({ account: privateKeyToAccount(k),
 const principal = wallet(KEYS.principal);
 const facWallet = wallet(KEYS.facilitator);
 const agent = privateKeyToAccount(KEYS.agent);
+const agentWallet = wallet(KEYS.agent);
 const payee = privateKeyToAccount(KEYS.payee).address;
 
 async function deploy(file: string, name: string, args: unknown[] = []): Promise<Hex> {
@@ -119,10 +120,11 @@ async function main() {
     commitment: keccak256("0x02"), revocationRoot: keccak256("0x03"), expiry: now + 30n * 86_400n,
     unitSize: UNIT, rangeBase: 0n, rangeLen: 1024n,
     monitor: "0x0000000000000000000000000000000000000000", answerer: "0x0000000000000000000000000000000000000000",
-    openOnRequest: false,
+    openOnRequest: false, bond: parseEther("0.1"),
   };
   const id = 0n;
-  await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms], value: parseEther("0.1") }));
+  await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms] }));
+  await send(await agentWallet.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id], value: parseEther("0.1") }));
 
   const verdicts: VerifyResponse[] = [];
   const facScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve]);

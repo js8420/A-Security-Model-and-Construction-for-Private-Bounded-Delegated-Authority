@@ -1,7 +1,7 @@
 //! Inside the zkVM: the Plonky3 verifier with Keccak commitments and a Keccak
-//! transcript, otherwise the deployed parameters, run on one proof of a batch
-//! of payments against the composed circuit. It commits the Keccak root of the
-//! payments' statements, each the leaf the reserve rebuilds from its record.
+//! transcript, otherwise the deployed parameters, run on one or more proofs of
+//! batches of payments against the composed circuit. It commits the Keccak root
+//! of each batch's statements, each the leaf the reserve rebuilds from its record.
 //! Keccak reaches SP1's precompile through the patched tiny-keccak.
 //!
 //! The circuit's own source files are compiled in unchanged, so the AIR the
@@ -60,7 +60,7 @@ type Challenge = BinomialExtensionField<Val, 5>;
 type U64Hash = tagged::TaggedSponge<KeccakF, 25, 17, 4>;
 type FieldHash = SerializingHasher<U64Hash>;
 type Compress = CompressionFunctionFromHasher<U64Hash, 2, 4>;
-type ValMmcs = MerkleTreeHidingMmcs<[Val; VECTOR_LEN], [u64; VECTOR_LEN], FieldHash, Compress, NoRng, 2, 4, 2>;
+type ValMmcs = MerkleTreeHidingMmcs<[Val; VECTOR_LEN], [u64; VECTOR_LEN], FieldHash, Compress, NoRng, 2, 4, 4>;
 type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
 type Pcs = HidingFriPcs<Val, Radix2DitParallel<Val>, ValMmcs, ChallengeMmcs, NoRng>;
 type Config = StarkConfig<Pcs, Challenge, SerializingChallenger64<Val, HashChallenger<u8, Keccak256Hash, 32>>>;
@@ -108,11 +108,20 @@ fn config() -> Config {
     StarkConfig::new(pcs, SerializingChallenger64::from_hasher(vec![], Keccak256Hash {}))
 }
 
+/// One answer may speak for several batches, of one delegation or of many:
+/// the program reads how many proofs follow, verifies each, and commits their
+/// roots in the order read, 32 bytes each. A single proof commits its root
+/// alone, as before.
 pub fn main() {
-    let bytes = sp1_zkvm::io::read_vec();
-    let (proof, pv): (Proof<Config>, Vec<Val>) = bincode::deserialize(&bytes).expect("proof and public values");
-    let air = composed::ComposedAir::<0, 16, 32, 16, 64>::from_public_values(&pv);
-    verify(&config(), &air, &proof, &pv).expect("the proof verifies");
-    let values: Vec<u64> = pv.iter().map(|v| v.as_canonical_u64()).collect();
-    sp1_zkvm::io::commit_slice(&statement::committed(&values, 64));
+    let count = sp1_zkvm::io::read::<u32>();
+    assert!(count >= 1, "at least one proof");
+    let config = config();
+    for _ in 0..count {
+        let bytes = sp1_zkvm::io::read_vec();
+        let (proof, pv): (Proof<Config>, Vec<Val>) = bincode::deserialize(&bytes).expect("proof and public values");
+        let air = composed::ComposedAir::<0, 16, 32, 16, 64>::from_public_values(&pv);
+        verify(&config, &air, &proof, &pv).expect("the proof verifies");
+        let values: Vec<u64> = pv.iter().map(|v| v.as_canonical_u64()).collect();
+        sp1_zkvm::io::commit_slice(&statement::committed(&values, 64));
+    }
 }

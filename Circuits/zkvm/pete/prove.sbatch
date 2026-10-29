@@ -3,6 +3,8 @@
 # proof, on a bigmem node. Submit from this folder:
 #   sbatch prove.sbatch            output folder out_<job id>
 #   sbatch prove.sbatch batch_a    output folder out_batch_a
+# PROOFS, if set, names the proof files one answer speaks for, separated by
+# colons; otherwise it is the exported batch proof alone.
 # The degree-5 proof is larger than the one measured before, whose slowest
 # healthy run took under three hours, so the limit is twelve: a job on a node
 # that stalls ends there rather than after two days.
@@ -20,7 +22,8 @@ HERE=$SLURM_SUBMIT_DIR
 source "$HERE/env.sh"
 export RUST_LOG=info TMPDIR=/scratch/jshital/tmp
 NAME=${1:-$SLURM_JOB_ID}
-PROOF="$HERE/../../target/proof_keccak.bin"
+PROOFS=${PROOFS:-"$HERE/../../target/proof_keccak.bin"}
+PROOFS=${PROOFS//:/ }
 OUT="$HERE/out_$NAME"
 echo "job $SLURM_JOB_ID, node $(hostname), cpus $SLURM_CPUS_PER_TASK, out $OUT, start $(date)"
 mkdir -p "$OUT"
@@ -28,10 +31,10 @@ lscpu | tee "$OUT/node.txt"
 cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null | sed 's/^/governor /' | tee -a "$OUT/node.txt" || true
 cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null | sed 's/^/no_turbo /' | tee -a "$OUT/node.txt" || true
 grep MemTotal /proc/meminfo | tee -a "$OUT/node.txt"
-sha256sum "$PROOF"
+sha256sum $PROOFS
 env | grep '^SP1_WORKER' || echo "SP1 worker settings: defaults"
 TIMER=""
 if [ -x /usr/bin/time ]; then TIMER="/usr/bin/time -v"; fi
-$TIMER "$HERE/../script/target/release/prove" "$PROOF" "$OUT"
+$TIMER "$HERE/../script/target/release/prove" "$OUT" $PROOFS
 echo "end $(date)"
 grep -v "^proof " "$OUT/onchain.txt"

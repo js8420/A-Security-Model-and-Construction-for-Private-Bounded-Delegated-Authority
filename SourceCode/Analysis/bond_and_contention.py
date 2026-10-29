@@ -1,17 +1,18 @@
 """Windows, bond ratios and capital for delegation profiles, and the delay an
 adversary or a censoring set of proposers can impose on a forced transaction
 on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
-protocol constants, so one run is the result. The bounty adds to the price
-of proving an answer, which the Groth16 runs on Pete measured, what including
-the answer costs at the highest fee the bounty is sized for, which is forcing
-it in through Ethereum at the base fee the posting deposit is sized for, and
-rounds the sum up to the next 10 cents; the answer's quiet cost on Base, as
-posting_cost.py measured it, is printed beside it. Posting the batch proof and
-delivering its sealed openings are refunded from the principal's posting
-deposit, one for each batch, which the script sizes from the measured postings
-and the measured L1 gas of forcing a chunk, an answer and a delivery in
-through the portal. The answer window and the slot are checked against the
-slowest proving run.
+protocol constants, so one run is the result.
+
+The challenger's bond is set when a challenge opens. Its fixed part, the
+proving bond, is the price of proving one answer, which the Groth16 runs on
+Pete measured, times a currency margin, converted to ether at deployment; it
+is also the bounty a slash pays. Its variable part is what forcing the answer
+in through Ethereum costs at the Ethereum base fee the domain records then,
+times the fee factor, so it covers an answer forced in at up to that factor
+times the fee at the challenge. The posting deposit is likewise set at the
+challenge: one batch's postings at the domain's own fee, times the fee factor.
+A posting forced in through Ethereum is refunded the same and no more. The
+answer window and the slot are checked against the slowest proving run.
 
 Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR WorkingHistory/run_TAG_forced.txt
 where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run;
@@ -46,22 +47,24 @@ MARGIN = 1.0
 W_A = 32.0
 SLOT = 4.0
 W_RATE = DAY
-# The challenger's bond, which is also the bounty a slash pays: the price of
-# proving one answer, 64 vCPU at 3.616 USD an hour for the measured proving
-# time, plus the cost of forcing the answer in through Ethereum at
-# DEPOSIT_FEE_GWEI, rounded up to the next 10 cents.
+# The price of proving one answer: 64 vCPU at 3.616 USD an hour for the
+# measured proving time. The proving bond is that price times the currency
+# margin, so it still covers an answer if ether falls to 1 / MARGIN of its
+# price at deployment.
 VCPU_HOUR_64 = 3.616
-# The Ethereum base fee, in gwei, up to which the posting deposit covers
-# forcing the whole proof and every delivery in through the portal, and the
-# bounty covers forcing an answer in.
-DEPOSIT_FEE_GWEI = 1.0
+CURRENCY_MARGIN = 2.0
+# What the fee-dependent parts of the bond and the deposit are multiplied by:
+# they cover a rise of the fee by this factor between the challenge and the
+# answer or the postings.
+FEE_FACTOR = 2
 # The most settlements of one batch, so the most deliveries one batch's
 # deposit refunds.
 BATCH = 256
 
 
-def runs(folder):
-    """Every Groth16 run in the folder: name, setup and proving seconds, low-memory or not."""
+def runs(folder, proofs=1):
+    """Every Groth16 run in the folder answering for this many batch proofs:
+    name, setup and proving seconds, low-memory or not."""
     out = []
     for name in sorted(os.listdir(folder)):
         path = os.path.join(folder, name, "onchain.txt")
@@ -70,12 +73,14 @@ def runs(folder):
         f = {}
         for line in open(path, encoding="utf8"):
             parts = line.split()
-            if len(parts) == 2 and parts[0] in ("setup_seconds", "prove_seconds", "verifies"):
+            if len(parts) == 2 and parts[0] in ("setup_seconds", "prove_seconds", "verifies", "stark_proofs"):
                 f[parts[0]] = parts[1]
         if f.get("verifies") != "true" or "prove_seconds" not in f:
             raise SystemExit(f"{path}: not a verified Groth16 run")
+        if int(f.get("stark_proofs", 1)) != proofs:
+            continue
         out.append((name, float(f.get("setup_seconds", 0)), float(f["prove_seconds"]), "low" in name))
-    if not any(not low for *_, low in out):
+    if proofs == 1 and not any(not low for *_, low in out):
         raise SystemExit(f"no run at the default setting in {folder}")
     return out
 
@@ -138,15 +143,21 @@ PORTAL_CHUNK, PORTAL_ANSWER, PORTAL_DELIVERY = portal_gas(sys.argv[3])
 FORCED_PROOF_GAS = CHUNKS * (21000 + PORTAL_CHUNK) + 40 * POSTED_BYTES
 FORCED_DELIVERY_GAS = forced(DELIVERY_BYTES, PORTAL_DELIVERY)
 FORCED_L1_GAS = FORCED_PROOF_GAS + BATCH * FORCED_DELIVERY_GAS
-DEPOSIT_ETH = FORCED_L1_GAS * DEPOSIT_FEE_GWEI * 1e-9
 FORCED_ANSWER_GAS = forced(ANSWER_BYTES, PORTAL_ANSWER)
-FORCED_ANSWER = FORCED_ANSWER_GAS * DEPOSIT_FEE_GWEI * 1e-9 * ETH_USD
 RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
-COST = PROVING + max(SENDING, FORCED_ANSWER)
-BETA = math.ceil(round(COST * 10, 9)) / 10
+# The proving bond in ether, rounded up to the microether, as the contract is deployed with.
+PROVING_BOND_ETH = math.ceil(CURRENCY_MARGIN * PROVING / ETH_USD * 1e6) / 1e6
+BOUNTY = PROVING_BOND_ETH * ETH_USD
+QUIET_POSTING = POSTING + BATCH * DELIVERING
+DEPOSIT = FEE_FACTOR * QUIET_POSTING
+
+
+def bond_at(l1_gwei):
+    """The challenger's bond in USD for a challenge opened at this Ethereum base fee."""
+    return BOUNTY + FEE_FACTOR * FORCED_ANSWER_GAS * l1_gwei * 1e-9 * ETH_USD
 
 def windows():
     w = W_D + THETA + MARGIN + DELTA_F + SIGMA_X
@@ -202,9 +213,9 @@ def profiles(k_w):
         budget = rate * mean * T / W
         bonds = k_w * rate * pm * cap
         assert abs(bonds / budget - r) < 1e-9
-        both = (2 * bonds + BETA) / budget
+        both = (2 * bonds + BOUNTY) / budget
         print(f"  {name:<34} {budget:>9.2f} {100 * r:7.1f}% {100 * both:10.1f}% {100 * (both - r):10.1f}")
-    print(f"  The stake is the bond plus the bounty, {BETA:.2f} USD, on each domain; the")
+    print(f"  The stake is the bond plus the bounty, {BOUNTY:.2f} USD, on each domain; the")
     print("  bounty is fixed in dollars, so it weighs more as the budget falls.")
     print("  A declared expiry longer than the task changes none of these: the bond")
     print("  follows the rate the task needs and the life it actually spends.")
@@ -223,16 +234,17 @@ def trade_off(k_w):
     print("HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD")
     print("FOR 30 DAYS, B = %.2f USD, DEPOSIT MODE" % B)
     print("=" * 78)
-    print(f"  {'declared expiry':<16} {'f':>6} {'bonds':>7} {'stake':>7} {'funding fB':>11} {'total':>9} {'total/B':>8}")
+    print(f"  {'declared expiry':<16} {'f':>6} {'bonds':>7} {'stake':>7} {'deposit':>8} {'funding fB':>11} {'total':>9} {'total/B':>8}")
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
         R = f * B
-        stake = bonds + BETA
-        tot = R + bonds + stake
-        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {stake:>7.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
-    print(f"  The stake is the bond plus the bounty, {BETA:.2f}; without an answerer the total")
-    print(f"  is less by the stake, {bonds + BETA:.2f}.")
-    print(f"  Carrying the stake for the task costs {(bonds + BETA) * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
+        stake = bonds + BOUNTY
+        tot = R + bonds + stake + DEPOSIT
+        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {stake:>7.2f} {DEPOSIT:>8.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
+    print(f"  The stake is the bond plus the bounty, {BOUNTY:.2f}; without an answerer the total")
+    print(f"  is less by the stake, {bonds + BOUNTY:.2f}. The deposit is one posting deposit at the measured")
+    print("  Base fee, which the principal holds while a challenge of its own is open.")
+    print(f"  Carrying the stake for the task costs {(bonds + BOUNTY) * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
     print("  point of annual interest on it.")
     print("  The same f reached by a short declared life instead needs bonds of")
     for mult in (1, 2, 5, 10):
@@ -323,35 +335,41 @@ if __name__ == "__main__":
     print("=" * 78)
     for name, st, p, low in RUNS:
         print(f"  {name:<28} {'low memory' if low else 'default':<12} setup {st:7.1f}  prove {p:9.1f}")
+    TWO = runs(sys.argv[2], 2)
+    if any(not low for *_, low in TWO):
+        print("  one answer for two batch proofs:")
+        for name, st, p, low in TWO:
+            print(f"  {name:<28} {'low memory' if low else 'default':<12} setup {st:7.1f}  prove {p:9.1f}")
+        one = max(p for _, _, p, low in RUNS if not low)
+        two = max(p for _, _, p, low in TWO if not low)
+        print(f"  the second batch adds {two - one:.1f} s to the slower default run, {100 * (two - one) / one:.1f}% of one answer")
     print()
-    print("THE BOUNTY, USD")
+    print("THE CHALLENGER'S BOND AND THE BOUNTY")
     print("=" * 78)
-    rows = [
-        (f"proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour", f"{PROVING:.4f}"),
-        ("sending the answer on Base, measured", f"{SENDING:.4f}"),
-        (f"forcing it in through Ethereum at {DEPOSIT_FEE_GWEI:.0f} gwei, {FORCED_ANSWER_GAS:,} L1 gas", f"{FORCED_ANSWER:.4f}"),
-        ("sum of the proving and the dearer inclusion", f"{COST:.4f}"),
-        ("bounty and challenger's bond beta, rounded up", f"{BETA:.2f}"),
-    ]
-    for label, v in rows:
-        print(f"  {label:<66}{v:>10}")
+    print(f"  proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour {PROVING:10.4f} USD")
+    print(f"  proving bond, {CURRENCY_MARGIN:.0f} x that at {ETH_USD} USD an ether, rounded up   {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD")
+    print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")
+    print(f"  sending the answer on Base, measured                                  {SENDING:10.4f} USD")
+    print(f"  forcing it in through Ethereum: {FORCED_ANSWER_GAS:,} L1 gas, measured on a fork")
+    print(f"  bond at a challenge, proving bond + {FEE_FACTOR} x forcing at the Ethereum base fee then:")
+    for g in (1, 10, 50, 200):
+        forced_usd = FORCED_ANSWER_GAS * g * 1e-9 * ETH_USD
+        print(f"    at {g:>4} gwei: {bond_at(g):9.2f} USD; forcing at {g} gwei costs {forced_usd:8.2f}, at {FEE_FACTOR * g} gwei {FEE_FACTOR * forced_usd:8.2f}")
+    print(f"  An answer pays whenever the Ethereum base fee at the answer is at most {FEE_FACTOR} times")
+    print("  the fee at the challenge and ether has not fallen below the bound above.")
     print()
-    print("THE POSTING DEPOSIT, ONE FOR EACH BATCH")
+    print("THE POSTING DEPOSIT, SET AT THE PRINCIPAL'S CHALLENGE")
     print("=" * 78)
-    quiet = POSTING + BATCH * DELIVERING
-    print(f"  posting the batch proof and {BATCH} sealed openings on Base, measured, USD {quiet:10.4f}")
+    print(f"  posting the batch proof and {BATCH} sealed openings on Base, measured, USD {QUIET_POSTING:10.4f}")
     print(f"  the proof's postings: {CHUNKS} transactions, {POSTED_BYTES:,} bytes of call data")
+    print(f"  deposit, {FEE_FACTOR} x the postings at the domain's fee then, at the measured fee  {DEPOSIT:10.4f} USD")
+    print("  A posting forced in through Ethereum is refunded what it costs on the domain; what forcing adds")
+    print("  is the answerer's:")
     print(f"  portal's L1 gas beyond call data, measured: one chunk {PORTAL_CHUNK:,}, one answer {PORTAL_ANSWER:,}, one delivery {PORTAL_DELIVERY:,}")
-    print(f"  forcing every chunk in through Ethereum, L1 gas      {FORCED_PROOF_GAS:>14,}")
-    print(f"  forcing {BATCH} deliveries in, {FORCED_DELIVERY_GAS:,} L1 gas each  {BATCH * FORCED_DELIVERY_GAS:>14,}")
-    print(f"  together, L1 gas                                     {FORCED_L1_GAS:>14,}")
+    print(f"  forcing every chunk and {BATCH} deliveries in, L1 gas      {FORCED_L1_GAS:>14,}")
     for gwei in (1.0, 10.0):
         eth = FORCED_L1_GAS * gwei * 1e-9
-        print(f"    at {gwei:4.0f} gwei: {eth:.4f} ETH = {eth * ETH_USD:,.2f} USD")
-    proof_only = FORCED_PROOF_GAS * DEPOSIT_FEE_GWEI * 1e-9
-    print(f"  the proof alone at {DEPOSIT_FEE_GWEI:.0f} gwei: {proof_only:.4f} ETH = {proof_only * ETH_USD:,.2f} USD")
-    print(f"  deposit, covering the forced path at {DEPOSIT_FEE_GWEI:.0f} gwei: {DEPOSIT_ETH:.4f} ETH = {DEPOSIT_ETH * ETH_USD:,.2f} USD")
-    print(f"  the quiet posting uses {100 * quiet / (DEPOSIT_ETH * ETH_USD):.2f}% of it")
+        print(f"    at {gwei:4.0f} gwei: {eth:.4f} ETH = {eth * ETH_USD:,.2f} USD, paid by the answerer only under censorship")
     print()
     k_w = windows()
     profiles(k_w)

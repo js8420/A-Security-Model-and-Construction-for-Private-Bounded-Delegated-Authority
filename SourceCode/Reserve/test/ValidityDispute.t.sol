@@ -11,6 +11,7 @@ import {Verifier} from "../src/sp1/v6.1.0/Groth16Verifier.sol";
 import {MockToken} from "./MockToken.sol";
 import {Groth16Result} from "./Groth16Result.sol";
 import {Statement} from "./Statement.sol";
+import {console} from "forge-std/Test.sol";
 
 /// Challenges against real settlements, answered with the real Groth16 proof.
 /// The delegation is registered with the commitment and revocation root the
@@ -51,7 +52,22 @@ contract ValidityDisputeTest is Groth16Result {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, ACCEPT, WINDOW, SLOT, CHALLENGER_BOND, 8 hours, 0.25 ether, 0);
+        vd = new ValidityDispute(
+            address(acc),
+            address(sp1),
+            vkey,
+            ValidityDispute.Params({
+                acceptWindow: ACCEPT,
+                answerWindow: WINDOW,
+                slot: SLOT,
+                deliveryWait: 8 hours,
+                provingBond: CHALLENGER_BOND,
+                forceGas: 572_345,
+                feeFactor: 2,
+                postingGas: 125_000_000,
+                postingBytes: 10_500_000
+            })
+        );
         acc.setDispute(address(vd));
         vm.deal(principal, 10 ether);
         vm.deal(challenger, 10 ether);
@@ -68,7 +84,10 @@ contract ValidityDisputeTest is Groth16Result {
 
     function _register(bytes32 com) internal returns (uint256 r) {
         vm.prank(principal);
-        r = acc.register{value: AGENT_BOND}(TermsOf.make(agent, CAP, 1_000, 86_400, Reserve.Funding.Deposit, BUDGET, com, _root0(), uint64(block.timestamp) + 30 days));
+        r = acc.register(TermsOf.make(agent, CAP, 1_000, 86_400, Reserve.Funding.Deposit, BUDGET, com, _root0(), uint64(block.timestamp) + 30 days));
+        vm.deal(agent, agent.balance + AGENT_BOND);
+        vm.prank(agent);
+        acc.accept{value: AGENT_BOND}(r);
     }
 
     function _settle(uint256 r, uint256 i, uint64[] memory e, uint64 amount) internal returns (Settlement memory s) {
@@ -279,6 +298,42 @@ contract ValidityDisputeTest is Groth16Result {
         vm.warp(vd.challengeOf(id, _digest(0)).deadline + 1);
         vm.expectRevert(ValidityDispute.NotOpen.selector);
         vd.expire(id, _digest(0));
+    }
+
+    /// One real Groth16 proof that the verifier accepts two batch proofs, the
+    /// exported batch's and another, commits both roots; it answers a challenge
+    /// against a payment of the first through answerBatches, and fails with
+    /// the roots named in another order.
+    function testOneRealAnswerForTwoBatches() public {
+        require(vm.parseBytes32(_field(AGGREGATE, "vkey")) == vkey, "the aggregate was proved under the same program");
+        bytes memory pv = vm.parseBytes(_field(AGGREGATE, "public_values"));
+        bytes memory agg = vm.parseBytes(_field(AGGREGATE, "proof"));
+        require(pv.length == 64, "two roots");
+        bytes32[] memory roots = new bytes32[](2);
+        bytes32 r0;
+        bytes32 r1;
+        assembly {
+            r0 := mload(add(pv, 32))
+            r1 := mload(add(pv, 64))
+        }
+        roots[0] = r0;
+        roots[1] = r1;
+        assertEq(roots[0], Statement.ROOT);
+        _open(id, 0, recs[0]);
+        ValidityDispute.Item[] memory items = new ValidityDispute.Item[](1);
+        items[0] = ValidityDispute.Item({id: id, digest: _digest(0), s: recs[0], index: 0, path: _path(0)});
+        uint256[] memory which = new uint256[](1);
+        bytes32[] memory swapped = new bytes32[](2);
+        swapped[0] = roots[1];
+        swapped[1] = roots[0];
+        uint256[] memory second = new uint256[](1);
+        second[0] = 1;
+        vm.expectRevert();
+        vd.answerBatches(items, second, swapped, agg);
+        uint256 g = gasleft();
+        vd.answerBatches(items, which, roots, agg);
+        console.log("answer for two batches, real Groth16 proof", g - gasleft());
+        assertEq(uint256(vd.challengeOf(id, _digest(0)).status), uint256(ValidityDispute.Status.Answered));
     }
 
     function _items(

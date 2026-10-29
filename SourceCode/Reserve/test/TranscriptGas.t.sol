@@ -50,12 +50,26 @@ contract TranscriptGas is Fixture {
     }
 
     function testAllOperationsOneWarming() public {
+        Reserve.Terms memory t = TermsOf.make(agent, CAP, VELOCITY, WINDOW, Reserve.Funding.Deposit, BUDGET, COM, ROOT0, uint64(block.timestamp) + LIFE);
+        vm.prank(principal);
         uint256 g0 = gasleft();
-        uint256 id = _reg(Reserve.Funding.Deposit);
+        uint256 id = acc.register(t);
         console.log("Open, deposit", g0 - gasleft());
+        vm.deal(agent, agent.balance + 2 * TermsOf.BOND);
+        vm.prank(agent);
+        uint256 ga = gasleft();
+        acc.accept{value: TermsOf.BOND}(id);
+        console.log("Accept, first from this principal", ga - gasleft());
+        t.funding = Reserve.Funding.Permit2;
+        t.deposit = 0;
+        vm.prank(principal);
         uint256 g1 = gasleft();
-        _reg(Reserve.Funding.Permit2);
+        uint256 id2 = acc.register(t);
         console.log("Open, permit2", g1 - gasleft());
+        vm.prank(agent);
+        ga = gasleft();
+        acc.accept{value: TermsOf.BOND}(id2);
+        console.log("Accept, a principal already served", ga - gasleft());
 
         _settle(id, 1, _elems(64, 1), true);
         console.log("Settle logged, 64 units", _settle(id, 2, _elems(64, 2), true));
@@ -177,7 +191,7 @@ contract TranscriptGas is Fixture {
         Reserve.Terms memory t = TermsOf.make(agent, CAP, VELOCITY, WINDOW, Reserve.Funding.Deposit, BUDGET, COM, ROOT0, uint64(block.timestamp) + LIFE);
         t.openOnRequest = true;
         vm.prank(principal);
-        uint256 asked = acc.register{value: 1 ether}(t);
+        uint256 asked = acc.register(t);
         assertTrue(acc.openOnRequestOf(asked));
     }
 

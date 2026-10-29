@@ -11,6 +11,7 @@ import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {MockToken} from "../test/MockToken.sol";
 import {Statement} from "../test/Statement.sol";
 import {KeccakTree} from "../test/KeccakTree.sol";
+import {Deployment} from "./Deployment.sol";
 
 /// The validity dispute as real transactions on a local node, so every gas
 /// figure is a receipt's gasUsed: intrinsic cost, calldata (with the EIP-7623
@@ -28,7 +29,7 @@ contract ValidityDisputeOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
-    string constant RESULT = "../../WorkingHistory/groth16_s8/out_s8_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s9/out_s9_batch_a/onchain.txt";
     /// The exported batch's STARK proof with its public values, as the agent hands it on.
     string constant STARK = "../../Circuits/target/proof_keccak.bin";
     uint64 constant DOMAIN = 8453;
@@ -59,7 +60,7 @@ contract ValidityDisputeOnChain is Script {
         _settle(d);
         (bool ok, ) = address(sp1).call(abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof)));
         require(ok, "verifyProof");
-        vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, digest, rec);
+        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
         bytes memory stark = vm.readFileBinary(STARK);
@@ -74,7 +75,7 @@ contract ValidityDisputeOnChain is Script {
         // seconds; three blocks later it has passed.
         _deploy(d, vm.addr(pk), 0, 1);
         _settle(d);
-        vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, digest, rec);
+        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
         for (uint256 i = 0; i < 3; ++i) token.mint(vm.addr(pk), 1);
         // The script runs every call locally first, in one block; the warp
         // moves only that local clock past the deadline. On the node the three
@@ -85,21 +86,43 @@ contract ValidityDisputeOnChain is Script {
         vd.withdraw{gas: 100_000}();
         vm.stopBroadcast();
         console.log("dispute expired", uint256(vd.challengeOf(id, digest).status) == 3);
+
+        // The cancelled case: the principal's challenge, then its cancel once
+        // the late batch has reached it off chain.
+        vm.startBroadcast(pk);
+        _deploy(d, vm.addr(pk), 1 days, 2 hours);
+        _settle(d);
+        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
+        vd.cancel(id, digest);
+        vm.stopBroadcast();
+        console.log("dispute cancelled", uint256(vd.challengeOf(id, digest).status) == 5);
     }
 
     function _deploy(Statement.Data memory d, address me, uint64 window, uint64 slot) internal {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
-        vd = new ValidityDispute(address(acc), address(sp1), vkey, 1 days, window, slot, 0.01 ether, 30 hours, 0.25 ether, 0);
+        vd = new ValidityDispute(address(acc), address(sp1), vkey, Deployment.params(1 days, window, slot, 30 hours));
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
         token.approve(address(acc), type(uint256).max);
         Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1);
         t.answerer = me;
-        id = acc.register{value: 1 ether}(t);
+        id = acc.register(t);
+        _accept(me);
         acc.stakeAnswerer{value: 1 ether}(id);
+    }
+
+    /// The agent's acceptance, sent from the agent's own key: the broadcast
+    /// pauses, the agent is funded for its bond, and accepts.
+    function _accept(address me) internal {
+        address agent = vm.addr(AGENT_PK);
+        payable(agent).transfer(TermsOf.BOND + 0.01 ether);
+        vm.stopBroadcast();
+        vm.broadcast(AGENT_PK);
+        acc.accept{value: TermsOf.BOND}(id);
+        vm.startBroadcast(me);
     }
 
     /// The answerer's receipt for the batch and its sealed openings, and the

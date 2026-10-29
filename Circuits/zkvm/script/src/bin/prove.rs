@@ -1,12 +1,13 @@
 //! One real Groth16 proof that the dispute verifier accepts a batch proof, made
 //! on the CPU, checked, and written out for the on-chain test.
 //!
-//!   prove fetch                    download the Groth16 circuit files (needs internet)
-//!   prove <proof file> <out dir>   prove, verify, and write the results
+//!   prove fetch                         download the Groth16 circuit files (needs internet)
+//!   prove <out dir> <proof file>...     prove, verify, and write the results
 //!
-//! The out directory receives proof_groth16.bin (the SDK's own format),
-//! and onchain.txt: the program's verifying key hash, the public values (the
-//! 32-byte root of the batch's statements) and the proof bytes, all hex, as
+//! Several proof files make one answer for several batches. The out directory
+//! receives proof_groth16.bin (the SDK's own format), and onchain.txt: the
+//! program's verifying key hash, the public values (the 32-byte root of each
+//! batch's statements, in the order given) and the proof bytes, all hex, as
 //! the Solidity verifier takes them, with the time each stage took.
 
 use std::io::Write;
@@ -25,13 +26,20 @@ fn main() {
         println!("groth16 circuit files at {}", dir.display());
         return;
     }
-    let input = args.get(1).expect("proof file");
-    let out = std::path::PathBuf::from(args.get(2).expect("out directory"));
+    let out = std::path::PathBuf::from(args.get(1).expect("out directory"));
+    let inputs = &args[2..];
+    assert!(!inputs.is_empty(), "at least one proof file");
     std::fs::create_dir_all(&out).expect("out directory");
-    let raw = std::fs::read(input).expect("exported proof");
     let mut stdin = SP1Stdin::new();
-    stdin.write_vec(raw.clone());
-    println!("stark proof bytes                           {:>12}", raw.len());
+    stdin.write(&(inputs.len() as u32));
+    let mut sizes = Vec::new();
+    for input in inputs {
+        let raw = std::fs::read(input).expect("exported proof");
+        sizes.push(raw.len());
+        stdin.write_vec(raw);
+    }
+    println!("stark proofs                                {:>12}", inputs.len());
+    println!("stark proof bytes                           {:>12}", sizes.iter().sum::<usize>());
 
     let t = Instant::now();
     let prover = CpuProver::new();
@@ -55,7 +63,8 @@ fn main() {
     writeln!(f, "vkey {}", vk.bytes32()).ok();
     writeln!(f, "public_values 0x{}", hex(&pv)).ok();
     writeln!(f, "proof 0x{}", hex(&onchain)).ok();
-    writeln!(f, "stark_bytes {}", raw.len()).ok();
+    writeln!(f, "stark_proofs {}", inputs.len()).ok();
+    writeln!(f, "stark_bytes {}", sizes.iter().sum::<usize>()).ok();
     writeln!(f, "setup_seconds {setup_secs:.1}").ok();
     writeln!(f, "prove_seconds {prove_secs:.1}").ok();
     writeln!(f, "verifies {ok}").ok();

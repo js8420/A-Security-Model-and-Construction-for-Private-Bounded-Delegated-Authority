@@ -53,6 +53,12 @@ contract ValidityDisputeScaleTest is Test {
     uint64 constant SLOT = 2 hours;
     uint64 constant DELIVERY = 8 hours;
     uint256 constant POSTING = 0.25 ether;
+    /// The fee factor, the forced answer's L1 gas, and the posting gas that
+    /// makes one deposit POSTING at a domain base fee of 1 gwei.
+    uint256 constant FACTOR = 2;
+    uint256 constant FORCE_GAS = 572_345;
+    uint256 constant POSTING_GAS = POSTING / (FACTOR * 1 gwei);
+    uint256 constant POSTING_BYTES = 10_500_000;
     uint64 constant LIFE = 30 days;
     bytes32 constant PROGRAM = bytes32(uint256(1));
 
@@ -69,7 +75,8 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(100 days);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, ACCEPT + 1 hours);
-        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, ACCEPT, WINDOW, SLOT, BOND, DELIVERY, POSTING, 0);
+        vm.fee(1 gwei);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, _params(ACCEPT, WINDOW, SLOT, DELIVERY));
         acc.setDispute(address(vd));
         vm.deal(principal, 100 ether);
         vm.deal(challenger, 100 ether);
@@ -79,9 +86,32 @@ contract ValidityDisputeScaleTest is Test {
         token.approve(address(acc), type(uint256).max);
     }
 
+    function _params(uint64 w, uint64 wa, uint64 eta, uint64 wp) internal pure returns (ValidityDispute.Params memory) {
+        return ValidityDispute.Params({
+            acceptWindow: w,
+            answerWindow: wa,
+            slot: eta,
+            deliveryWait: wp,
+            provingBond: BOND,
+            forceGas: FORCE_GAS,
+            feeFactor: FACTOR,
+            postingGas: POSTING_GAS,
+            postingBytes: POSTING_BYTES
+        });
+    }
+
+    /// The agent accepts the delegation, posting the bond it names.
+    function _accepted(uint256 r) internal returns (uint256) {
+        address a = acc.agentOf(r);
+        vm.deal(a, a.balance + AGENT_BOND);
+        vm.prank(a);
+        acc.accept{value: AGENT_BOND}(r);
+        return r;
+    }
+
     function _register(uint256 pk, uint256 tag) internal returns (uint256 r) {
         vm.prank(principal);
-        r = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(pk), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(tag), bytes32(tag + 1), uint64(block.timestamp) + LIFE));
+        r = _accepted(acc.register(TermsOf.make(vm.addr(pk), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(tag), bytes32(tag + 1), uint64(block.timestamp) + LIFE)));
     }
 
     function _rec(uint256 r, uint64 d) internal view returns (Settlement memory) {
@@ -328,7 +358,7 @@ contract ValidityDisputeScaleTest is Test {
             com |= uint256(c[5 + j]) << (64 * j);
         }
         vm.prank(principal);
-        uint256 r = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(com), bytes32(root), uint64(block.timestamp) + LIFE));
+        uint256 r = _accepted(acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(com), bytes32(root), uint64(block.timestamp) + LIFE)));
         for (uint256 i = 0; i < Statement.PAYMENTS; ++i) _rebuilt(d, r, i);
     }
 
@@ -549,7 +579,7 @@ contract ValidityDisputeScaleTest is Test {
         Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
         t.monitor = mon;
         vm.prank(principal);
-        uint256 r = acc.register{value: AGENT_BOND}(t);
+        uint256 r = _accepted(acc.register(t));
         assertEq(acc.monitorOf(r), mon);
         _settle(AGENT_PK, r, 5);
         _openBy(mon, r, 5);
@@ -585,7 +615,7 @@ contract ValidityDisputeScaleTest is Test {
         Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
         t.answerer = ans;
         vm.prank(principal);
-        r = acc.register{value: AGENT_BOND}(t);
+        r = _accepted(acc.register(t));
         vm.prank(ans);
         acc.stakeAnswerer{value: AGENT_BOND}(r);
     }
@@ -993,7 +1023,7 @@ contract ValidityDisputeScaleTest is Test {
         Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
         t.answerer = ans;
         vm.prank(principal);
-        uint256 r = acc.register{value: AGENT_BOND}(t);
+        uint256 r = _accepted(acc.register(t));
         vm.prank(ans);
         uint256 g0 = gasleft();
         acc.stakeAnswerer{value: AGENT_BOND}(r);
@@ -1049,7 +1079,7 @@ contract ValidityDisputeScaleTest is Test {
         uint64 eta = 4 hours;
         uint64 wp = 30 hours;
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, w + 1 hours);
-        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, w, wa, eta, BOND, wp, POSTING, 0);
+        vd = new ValidityDispute(address(acc), address(new EchoVerifier(PROGRAM)), PROGRAM, _params(w, wa, eta, wp));
         acc.setDispute(address(vd));
         vm.prank(principal);
         token.approve(address(acc), type(uint256).max);
@@ -1234,12 +1264,13 @@ contract ValidityDisputeScaleTest is Test {
         address ans = vm.addr(ANSWERER_PK);
         vm.prank(ans);
         vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        uint256 pool = vd.postingPool(r);
         vm.fee(1e18);
         vm.txGasPrice(1e18);
         bytes memory chunk = _proof(vd.CHUNK());
         vm.prank(ans);
         vd.postProof(r, keccak256("junk"), 0, chunk, false);
-        assertEq(vd.postingPool(r), POSTING);
+        assertEq(vd.postingPool(r), pool);
         assertFalse(vd.batchOf(r, vd.answeredRoot(r, 5)).lapsed);
         vm.fee(0);
         vm.txGasPrice(0);
@@ -1346,17 +1377,28 @@ contract ValidityDisputeScaleTest is Test {
     }
 
     /// The pool holds one deposit, whatever the number of the principal's
-    /// challenges: each tops it up to one deposit, and is refused with more.
+    /// challenges: each tops it up to one deposit and no further. A challenge
+    /// short of the bond and the top-up is refused; one carrying more, as a
+    /// monitor sends against a fee that moves, adds the excess to the pool,
+    /// and another party's excess is credited back to it.
     function testOneDepositForManyChallenges() public {
         uint256 r = _register(AGENT_PK, 10);
         _settle(AGENT_PK, r, 40);
+        _settle(AGENT_PK, r, 41);
+        _settle(AGENT_PK, r, 42);
         Settlement memory s = _rec(r, 40);
         _openMany(AGENT_PK, r, 3, principal);
         assertEq(vd.postingPool(r), POSTING);
         assertEq(vd.postingTopUp(r), 0);
         vm.prank(principal);
         vm.expectRevert(ValidityDispute.BondTooSmall.selector);
-        vd.open{value: BOND + POSTING}(r, 40, s);
+        vd.open{value: BOND - 1}(r, 40, s);
+        vm.prank(principal);
+        vd.open{value: BOND + 7}(r, 40, s);
+        assertEq(vd.postingPool(r), POSTING + 7);
+        vm.prank(challenger);
+        vd.open{value: BOND + 5}(r, 41, _rec(r, 41));
+        assertEq(vd.credit(challenger), 5);
     }
 
     /// A join whose challenge keeps its own, earlier deadline leaves the
@@ -1377,22 +1419,26 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(vd.lastPrincipalDeadline(agent, principal), last);
     }
 
-    /// A posting forced in through Ethereum pays nothing on the domain; it is
-    /// refunded at the Ethereum base fee the domain records.
-    function testForcedPostingIsRefundedAtTheEthereumFee() public {
+    /// A posting forced in through Ethereum is refunded what including it on
+    /// the domain costs, the same as one sent there, and nothing at the
+    /// Ethereum base fee: forcing is the answerer's own cost.
+    function testForcedPostingIsRefundedAtTheDomainFee() public {
         (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
         address ans = vm.addr(ANSWERER_PK);
         vm.prank(ans);
         vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
         uint256 c0 = vd.credit(ans);
         vm.etch(0x4200000000000000000000000000000000000015, address(new FixedL1Block()).code);
+        vm.fee(1 gwei);
         vm.txGasPrice(0);
-        bytes memory chunk = _proof(100);
-        bytes32 h = _proofHash(chunk);
+        bytes memory chunk = _proof(vd.CHUNK());
+        bytes32 h = rc.proofHash;
         vm.prank(ans);
-        vd.postProof(r, h, 0, chunk, true);
-        uint256 n = abi.encodeCall(ValidityDispute.postProof, (r, h, 0, chunk, true)).length;
-        assertEq(vd.credit(ans) - c0, (21000 + 40 * n) * 3 gwei);
+        vd.postProof(r, h, 0, chunk, false);
+        uint256 n = abi.encodeCall(ValidityDispute.postProof, (r, h, 0, chunk, false)).length;
+        uint256 paid = vd.credit(ans) - c0;
+        assertGe(paid, (21000 + 40 * n) * 1 gwei);
+        assertLt(paid, (21000 + 40 * n) * 2 gwei);
     }
 
     /// Once no delivery is due, what is left of the pool is the principal's.
@@ -1407,32 +1453,100 @@ contract ValidityDisputeScaleTest is Test {
         vd.returnPosting(r);
     }
 
-    /// An agent that has declared its capacity is registered to only by the
-    /// principals it took on, and takes on no more than it declared.
-    function testAgentCapacityLimitsItsPrincipals() public {
-        address agent = vm.addr(AGENT_PK);
-        vm.startPrank(agent);
-        acc.declareCapacity(1);
-        acc.servePrincipal(principal);
-        vm.expectRevert(Reserve.OverCapacity.selector);
-        acc.servePrincipal(address(0xB0B5));
-        vm.expectRevert(Reserve.OverCapacity.selector);
-        acc.declareCapacity(0);
-        vm.stopPrank();
-        _register(AGENT_PK, 10);
-        vm.prank(address(0xB0B5));
-        vm.expectRevert(Reserve.NotServed.selector);
-        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+    /// One proof answers challenges against batches of two delegations: each
+    /// settlement's path must reach the root the call names for it, and the
+    /// proof is checked against all the roots at once.
+    function testOneAnswerForSeveralBatches() public {
+        uint256 a = _register(AGENT_PK, 10);
+        uint256 b = _register(AGENT_PK, 20);
+        _settle(AGENT_PK, a, 5);
+        _settle(AGENT_PK, b, 6);
+        _openBy(principal, a, 5);
+        _openBy(challenger, b, 6);
+        ValidityDispute.Item[] memory items = new ValidityDispute.Item[](2);
+        items[0] = ValidityDispute.Item({id: a, digest: 5, s: _rec(a, 5), index: 0, path: new bytes32[](0)});
+        items[1] = ValidityDispute.Item({id: b, digest: 6, s: _rec(b, 6), index: 0, path: new bytes32[](0)});
+        bytes32[] memory roots = new bytes32[](2);
+        roots[0] = vd.leafHash(a, 5, _rec(a, 5));
+        roots[1] = vd.leafHash(b, 6, _rec(b, 6));
+        uint256[] memory which = new uint256[](2);
+        which[1] = 1;
+        uint256[] memory swapped = new uint256[](2);
+        swapped[0] = 1;
+        vm.expectRevert(ValidityDispute.RootMismatch.selector);
+        vd.answerBatches(items, swapped, roots, abi.encodePacked(roots));
+        vm.expectRevert(bytes("values"));
+        vd.answerBatches(items, which, roots, abi.encodePacked(roots[0]));
+        uint256 g = gasleft();
+        vd.answerBatches(items, which, roots, abi.encodePacked(roots));
+        console.log("answer for two batches of two delegations", g - gasleft());
+        assertEq(uint256(vd.challengeOf(a, 5).status), uint256(ValidityDispute.Status.Answered));
+        assertEq(uint256(vd.challengeOf(b, 6).status), uint256(ValidityDispute.Status.Answered));
+        assertEq(vd.answeredRoot(a, 5), roots[0]);
+        assertEq(vd.answeredRoot(b, 6), roots[1]);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), 2 * BOND);
     }
 
-    /// Principals that delegated before the agent declared are counted, so
-    /// the agent cannot declare fewer than it already serves.
+    /// A delegation is the agent's only once it accepts it: nothing settles
+    /// before, and nobody else can accept for it or post another bond.
+    function testNothingSettlesBeforeTheAgentAccepts() public {
+        address agent = vm.addr(AGENT_PK);
+        vm.prank(principal);
+        uint256 r = acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE));
+        vm.expectRevert(Reserve.NotAccepted.selector);
+        this.settleAgain(AGENT_PK, r, 5);
+        vm.prank(principal);
+        vm.expectRevert(Reserve.NotAgent.selector);
+        acc.accept{value: AGENT_BOND}(r);
+        vm.deal(agent, 3 ether);
+        vm.prank(agent);
+        vm.expectRevert(Reserve.WrongBond.selector);
+        acc.accept{value: AGENT_BOND - 1}(r);
+        assertFalse(acc.serves(agent, principal));
+        vm.prank(agent);
+        acc.accept{value: AGENT_BOND}(r);
+        assertTrue(acc.serves(agent, principal));
+        vm.prank(agent);
+        vm.expectRevert(Reserve.NotAcceptable.selector);
+        acc.accept{value: AGENT_BOND}(r);
+        _settle(AGENT_PK, r, 5);
+    }
+
+    /// An agent that declared its capacity accepts no principal beyond it,
+    /// and delegations it never accepted count for nothing: a stranger
+    /// registering to it fills no place.
+    function testAgentCapacityLimitsItsPrincipals() public {
+        address agent = vm.addr(AGENT_PK);
+        vm.prank(agent);
+        acc.declareCapacity(1);
+        Reserve.Terms memory t = TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE);
+        for (uint160 i = 1; i <= 5; ++i) {
+            vm.prank(address(0x5B1100 + i));
+            acc.register(t);
+        }
+        assertEq(acc.servedCount(agent), 0);
+        _register(AGENT_PK, 10);
+        assertEq(acc.servedCount(agent), 1);
+        _register(AGENT_PK, 20);
+        assertEq(acc.servedCount(agent), 1);
+        vm.prank(address(0xB0B5));
+        uint256 other = acc.register(t);
+        vm.deal(agent, 2 ether);
+        vm.prank(agent);
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.accept{value: AGENT_BOND}(other);
+        vm.prank(agent);
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.declareCapacity(0);
+    }
+
+    /// Principals accepted before the agent declared are counted, so the
+    /// agent cannot declare fewer than it already serves.
     function testPrincipalsBeforeTheDeclarationCount() public {
         address agent = vm.addr(AGENT_PK);
         _register(AGENT_PK, 10);
-        vm.deal(address(0xB0B5), 1 ether);
         vm.prank(address(0xB0B5));
-        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+        _accepted(acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE)));
         assertEq(acc.servedCount(agent), 2);
         assertTrue(acc.serves(agent, address(0xB0B5)));
         vm.prank(agent);
@@ -1441,8 +1555,156 @@ contract ValidityDisputeScaleTest is Test {
         vm.prank(agent);
         acc.declareCapacity(2);
         vm.prank(address(0xCAFE));
-        vm.expectRevert(Reserve.NotServed.selector);
-        acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+        uint256 third = acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
+        vm.deal(agent, 2 ether);
+        vm.prank(agent);
+        vm.expectRevert(Reserve.OverCapacity.selector);
+        acc.accept{value: AGENT_BOND}(third);
+    }
+
+    /// The principal cancels its own open challenge once the late batch has
+    /// reached it: the hold lifts, the bond comes back to it, the agent earns
+    /// nothing, and the challenge can be neither answered nor expired.
+    function testCancelReturnsTheBondAndLiftsTheHold() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(principal, r, 5);
+        vm.expectRevert(Reserve.Held.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        vm.prank(principal);
+        vm.expectEmit(true, false, false, true, address(vd));
+        emit ValidityDispute.Cancelled(r, 5);
+        vd.cancel(r, 5);
+        assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Cancelled));
+        assertEq(vd.credit(principal), BOND);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), 0);
+        assertEq(vd.openCount(r), 0);
+        _settle(AGENT_PK, r, 6);
+        Settlement memory s = _rec(r, 5);
+        bytes memory proof = abi.encodePacked(vd.leafHash(r, 5, s));
+        vm.expectRevert(ValidityDispute.NotOpen.selector);
+        vd.answer(r, 5, s, 0, new bytes32[](0), proof);
+        vm.warp(_deadline(r, 5) + 1);
+        vm.expectRevert(ValidityDispute.NotOpen.selector);
+        vd.expire(r, 5);
+    }
+
+    /// The monitor address cancels as the principal does; nobody else can,
+    /// and no one cancels after the deadline.
+    function testOnlyThePrincipalSideCancelsInTime() public {
+        address mon = address(0x3011);
+        vm.deal(mon, 10 ether);
+        Reserve.Terms memory t = TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(10)), bytes32(uint256(11)), uint64(block.timestamp) + LIFE);
+        t.monitor = mon;
+        vm.prank(principal);
+        uint256 r = _accepted(acc.register(t));
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        _openBy(mon, r, 5);
+        _openBy(mon, r, 6);
+        vm.prank(challenger);
+        vm.expectRevert(ValidityDispute.NotPrincipal.selector);
+        vd.cancel(r, 5);
+        vm.prank(vm.addr(AGENT_PK));
+        vm.expectRevert(ValidityDispute.NotPrincipal.selector);
+        vd.cancel(r, 5);
+        vm.prank(principal);
+        vd.cancel(r, 5);
+        assertEq(vd.credit(mon), BOND);
+        vm.warp(_deadline(r, 6) + 1);
+        vm.prank(mon);
+        vm.expectRevert(ValidityDispute.TooLate.selector);
+        vd.cancel(r, 6);
+    }
+
+    /// Another party's challenge is not the principal's to cancel. Once the
+    /// principal joined it, cancelling withdraws the join alone: the hold
+    /// lifts and the challenge stays open, still the other party's.
+    function testCancellingAJoinLeavesTheOtherChallenge() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(challenger, r, 5);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.NotCancellable.selector);
+        vd.cancel(r, 5);
+        Settlement memory s = _rec(r, 5);
+        uint256 topUp = vd.postingTopUp(r);
+        vm.prank(principal);
+        vd.join{value: topUp}(r, 5, s);
+        vm.expectRevert(Reserve.Held.selector);
+        this.settleAgain(AGENT_PK, r, 6);
+        vm.prank(principal);
+        vd.cancel(r, 5);
+        ValidityDispute.Challenge memory c = vd.challengeOf(r, 5);
+        assertEq(uint256(c.status), uint256(ValidityDispute.Status.Open));
+        assertFalse(c.byPrincipal);
+        assertEq(vd.credit(principal), 0);
+        _settle(AGENT_PK, r, 6);
+        _answerAlone(r, 5);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), BOND);
+    }
+
+    /// Cancelling an answered challenge withdraws its request: nothing is due
+    /// under it, the batch is no longer refunded for postings, and the
+    /// answerer cannot be slashed for posting nothing.
+    function testCancelWithdrawsTheRequest() public {
+        (uint256 r, Settlement memory s, ValidityDispute.Receipt memory rc) = _answered();
+        address ans = vm.addr(ANSWERER_PK);
+        vm.prank(ans);
+        vd.bindPosting(r, 5, s, 0, new bytes32[](0), rc);
+        uint256 pool = vd.postingPool(r);
+        vm.prank(principal);
+        vd.cancel(r, 5);
+        assertEq(uint256(vd.challengeOf(r, 5).status), uint256(ValidityDispute.Status.Cancelled));
+        assertEq(vd.batchOf(r, vd.answeredRoot(r, 5)).due, 0);
+        vm.fee(1 gwei);
+        bytes memory chunk = _proof(100);
+        vm.prank(ans);
+        vd.postProof(r, rc.proofHash, 0, chunk, true);
+        assertEq(vd.postingPool(r), pool);
+        vm.expectRevert(ValidityDispute.NotDue.selector);
+        vd.deliver(r, 5, s, 0, new bytes32[](0), rc, _sealed(5), new bytes32[](0));
+        vm.warp(block.timestamp + DELIVERY + 1);
+        vm.expectRevert(ValidityDispute.NotWithheld.selector);
+        vd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
+        vm.prank(principal);
+        vm.expectRevert(ValidityDispute.NotCancellable.selector);
+        vd.cancel(r, 5);
+    }
+
+    /// The bond follows the Ethereum base fee the domain records when the
+    /// challenge opens, times the fee factor, and the challenge keeps the bond
+    /// it opened with: the answer is credited that amount.
+    function testBondFollowsTheEthereumFee() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        assertEq(vd.challengeBond(), BOND);
+        vm.etch(0x4200000000000000000000000000000000000015, address(new FixedL1Block()).code);
+        uint256 bond = BOND + FACTOR * FORCE_GAS * 3 gwei;
+        assertEq(vd.challengeBond(), bond);
+        Settlement memory s = _rec(r, 5);
+        vm.prank(challenger);
+        vm.expectRevert(ValidityDispute.BondTooSmall.selector);
+        vd.open{value: BOND}(r, 5, s);
+        vm.prank(challenger);
+        vd.open{value: bond}(r, 5, s);
+        assertEq(vd.challengeOf(r, 5).bond, bond);
+        vm.etch(0x4200000000000000000000000000000000000015, "");
+        _answerAlone(r, 5);
+        assertEq(vd.credit(vm.addr(AGENT_PK)), bond);
+    }
+
+    /// The deposit follows the domain's base fee when the principal
+    /// challenges, times the fee factor.
+    function testDepositFollowsTheDomainFee() public {
+        assertEq(vd.postingDeposit(), POSTING);
+        vm.fee(3 gwei);
+        assertEq(vd.postingDeposit(), 3 * POSTING);
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _openBy(principal, r, 5);
+        assertEq(vd.postingPool(r), 3 * POSTING);
     }
 
     function testDisputeWindowMustFitTheCloseDelay() public {
@@ -1517,7 +1779,7 @@ contract ValidityDisputeScaleTest is Test {
         vm.prank(other);
         token.approve(address(acc), type(uint256).max);
         vm.prank(other);
-        uint256 o = acc.register{value: AGENT_BOND}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(20)), bytes32(uint256(21)), uint64(block.timestamp) + LIFE));
+        uint256 o = _accepted(acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(20)), bytes32(uint256(21)), uint64(block.timestamp) + LIFE)));
         uint256 r = _register(AGENT_PK, 10);
         for (uint64 d = 1; d <= 6; ++d) _settle(AGENT_PK, o, d);
         for (uint64 d = 1; d <= 6; ++d) _openBy(other, o, d);
@@ -1532,7 +1794,7 @@ contract ValidityDisputeScaleTest is Test {
     function testAgentThatRefusesEtherCannotBlockClose() public {
         RefusesEther bad = new RefusesEther();
         vm.prank(principal);
-        uint256 r = acc.register{value: AGENT_BOND}(TermsOf.make(address(bad), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(30)), bytes32(uint256(31)), uint64(block.timestamp) + LIFE));
+        uint256 r = _accepted(acc.register(TermsOf.make(address(bad), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(30)), bytes32(uint256(31)), uint64(block.timestamp) + LIFE)));
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
         uint256 before = token.balanceOf(principal);
         acc.close(r);

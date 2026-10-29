@@ -72,6 +72,14 @@ interface Chained {
 
 const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`;
 
+/**
+ * The bond and the deposit follow the fees, which move between the reading
+ * and the block the challenge lands in, so the monitor sends half again as
+ * much; the dispute contract puts the excess in the posting pool, which
+ * returns what is left.
+ */
+const margin = (x: bigint) => x + x / 2n;
+
 /** Shares live in F_p[X]/(X^2 - 7), the extension the circuit forms them in. */
 const P = 0xffffffff00000001n;
 type F2 = readonly [bigint, bigint];
@@ -129,6 +137,12 @@ export function extractSecret(settled: readonly { digest: bigint; domain: bigint
  * challenge goes unanswered, or when it is answered and the settlement is
  * still not in order the delivery wait later.
  *
+ * A challenge or request of the monitor's whose settlement comes into order
+ * later, as when an agent that was late delivers, is cancelled at the next
+ * poll: the hold lifts, the bond comes back, and nothing more is proved or
+ * posted. Whether a settlement is in order never depends on the budget for a
+ * settlement the agent made honestly, so neither does a cancel.
+ *
  * So what the chain shows depends only on whether backing was delivered in
  * time, never on which rule a settlement broke. A party who signs with the
  * agent's key but cannot prove sees every settlement it makes challenged at
@@ -153,6 +167,8 @@ export class Monitor {
   /** Challenges another party opened and someone answered before the monitor joined them. */
   private readonly joinedAnswered = new Set<string>();
   private readonly requested = new Map<string, bigint>();
+  /** Challenges and requests of the monitor's it has cancelled. */
+  private readonly cancelled = new Set<string>();
   /** Batches bound for posting and not yet posted, by domain and root: the proof hash and when the binding landed. */
   private readonly bound = new Map<string, { domain: string; proofHash: Hex; at: bigint }>();
   private claimed = false;
@@ -459,17 +475,17 @@ export class Monitor {
    */
   private async challenge(d: Domain, r: Record): Promise<void> {
     const dispute = d.dispute as Address;
-    const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengerBond" })) as bigint;
+    const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengeBond" })) as bigint;
     const topUp = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingTopUp", args: [d.delegation] })) as bigint;
     const s = { elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch };
     let hash: Hex;
     let joined = false;
     try {
-      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: bond + topUp });
+      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: margin(bond + topUp) });
     } catch (e) {
       if (!String(e).includes("AlreadyChallenged")) throw e;
       try {
-        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: topUp });
+        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: margin(topUp) });
         joined = true;
       } catch (f) {
         if (String(f).includes("NotOpen")) {
@@ -517,6 +533,30 @@ export class Monitor {
       const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "fundPosting", args: [d.delegation], value: due * deposit - pool });
       await d.chain.waitForTransactionReceipt({ hash });
     }
+  }
+
+  /**
+   * Withdraws the monitor's challenge of, or request for, a settlement now in
+   * order. Returns whether the contract took it: one past its deadline is
+   * left to the steps that follow.
+   */
+  private async cancel(d: Domain, r: Record): Promise<boolean> {
+    try {
+      const { request } = await d.chain.simulateContract({
+        account: d.wallet.account, address: d.dispute as Address, abi: disputeAbi, functionName: "cancel", args: [d.delegation, r.digest],
+      });
+      const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
+      if (receipt.status !== "success") return false;
+    } catch {
+      return false;
+    }
+    this.cancelled.add(key(r));
+    return true;
+  }
+
+  /** The records whose challenge or request the monitor cancelled. */
+  cancellations(): string[] {
+    return [...this.cancelled];
   }
 
   /**
@@ -609,6 +649,11 @@ export class Monitor {
       if (this.expired.has(k)) {
         reasons.push(`${k}: challenged and not answered`);
         freeze = true;
+        continue;
+      }
+      if (this.cancelled.has(k)) continue;
+      if (this.faultsWith(r, backed, breaches, over).length === 0 && (await this.cancel(d, r))) {
+        reasons.push(`${k}: now in order, cancelled`);
         continue;
       }
       const at = this.answered.get(k);

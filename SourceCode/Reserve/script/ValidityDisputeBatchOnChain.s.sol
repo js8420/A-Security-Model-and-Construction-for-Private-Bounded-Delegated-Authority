@@ -6,6 +6,7 @@ import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "../test/TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
+import {Deployment} from "./Deployment.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {MockToken} from "../test/MockToken.sol";
@@ -21,7 +22,7 @@ contract ValidityDisputeBatchOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
     /// the reserve signs over and emits but never reads.
     bytes32 constant OPENING = keccak256("hidden fields");
-    string constant RESULT = "../../WorkingHistory/groth16_s8/out_s8_batch_a/onchain.txt";
+    string constant RESULT = "../../WorkingHistory/groth16_s9/out_s9_batch_a/onchain.txt";
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
 
@@ -39,13 +40,18 @@ contract ValidityDisputeBatchOnChain is Script {
         vm.startBroadcast(pk);
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
-        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), 1 days, 1 days, 2 hours, 0.01 ether, 30 hours, 0.25 ether, 0);
+        vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), Deployment.params(1 days, 1 days, 2 hours, 30 hours));
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
         token.approve(address(acc), type(uint256).max);
         for (uint256 k = 1; k <= Statement.PAYMENTS; k *= 2) {
-            uint256 id = acc.register{value: 0.1 ether}(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));
+            uint256 id = acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));
+            payable(vm.addr(AGENT_PK)).transfer(TermsOf.BOND + 0.01 ether);
+            vm.stopBroadcast();
+            vm.broadcast(AGENT_PK);
+            acc.accept{value: TermsOf.BOND}(id);
+            vm.startBroadcast(pk);
             uint256[] memory ids = new uint256[](k);
             uint64[] memory ds = new uint64[](k);
             Settlement[] memory ss = new Settlement[](k);
@@ -57,7 +63,7 @@ contract ValidityDisputeBatchOnChain is Script {
                 ss[i] = _settled(d, id, i);
                 (ids[i], ds[i], at[i], paths[i]) = (id, Statement.digest(d, i), i, Statement.path(d, i));
             }
-            for (uint256 i = 0; i < k; ++i) vd.open{value: 0.01 ether + vd.postingTopUp(id)}(id, ds[i], ss[i]);
+            for (uint256 i = 0; i < k; ++i) vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, ds[i], ss[i]);
             vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();

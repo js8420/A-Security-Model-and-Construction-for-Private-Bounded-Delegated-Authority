@@ -71,7 +71,10 @@ contract Fixture is Test {
 
     function _reg(Reserve.Funding f) internal returns (uint256 id) {
         vm.prank(principal);
-        id = acc.register{value: 1 ether}(TermsOf.make(agent, CAP, VELOCITY, WINDOW, f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0, uint64(block.timestamp) + LIFE));
+        id = acc.register(TermsOf.make(agent, CAP, VELOCITY, WINDOW, f, f == Reserve.Funding.Deposit ? BUDGET : 0, COM, ROOT0, uint64(block.timestamp) + LIFE));
+        vm.deal(agent, agent.balance + TermsOf.BOND);
+        vm.prank(agent);
+        acc.accept{value: TermsOf.BOND}(id);
     }
 
     function _elems(uint256 cover, uint256 salt) internal pure returns (uint64[] memory e) {

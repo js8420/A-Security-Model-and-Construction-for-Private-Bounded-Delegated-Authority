@@ -1,11 +1,13 @@
 #!/bin/bash
 # The full measurement harness twice, on one whole node, so no other job shares
-# its cores or memory bandwidth. Submit from this folder:
+# its cores or memory bandwidth: n048, the node every circuit timing of the
+# paper is measured on. Submit from this folder:
 #   sbatch harness.sbatch
 #SBATCH --job-name=harness
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --exclusive
+#SBATCH --nodelist=n048
 #SBATCH --time=24:00:00
 #SBATCH --output=harness_%j.log
 set -euo pipefail

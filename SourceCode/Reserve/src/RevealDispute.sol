@@ -16,8 +16,8 @@ pragma solidity ^0.8.28;
 ///
 /// The principal may cancel its own open challenge, as it does once the
 /// agent's late opening has reached it off chain and checks out: the hold
-/// lifts, the agent is credited the challenger's bond as an answer would
-/// credit it, and nothing is published.
+/// lifts, the bond goes back to the principal, and nothing is published. The
+/// agent was late, so it earns nothing, as in the validity design.
 contract RevealDispute {
     /// The principal's policy, committed at issuance with a salt.
     struct Policy {
@@ -235,7 +235,7 @@ contract RevealDispute {
         if (msg.sender != d.principal) revert NotPrincipal();
         c.status = Status.Cancelled;
         d.holds -= 1;
-        credit[d.agent] += challengerBond;
+        credit[c.challenger] += challengerBond;
         emit Cancelled(id, digest);
     }
 

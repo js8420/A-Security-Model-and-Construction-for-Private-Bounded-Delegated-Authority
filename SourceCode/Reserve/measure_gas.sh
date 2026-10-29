@@ -14,7 +14,7 @@ tag=${1:?tag}
 here=$(cd "$(dirname "$0")" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
 circuits=$(cd "$here/../../Circuits" && pwd)
-result="$hist/groth16_s8/out_s8_batch_a/onchain.txt"
+result="$hist/groth16_s9/out_s9_batch_a/onchain.txt"
 [ -f "$result" ] || { echo "missing $result: copy the Groth16 run from Pete first"; exit 1; }
 log=$(mktemp)
 (cd "$circuits" && cargo build --release > "$log" 2>&1) || { tail -20 "$log"; exit 1; }
@@ -69,4 +69,4 @@ for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisput
 PY
 
 python3 ../Analysis/posting_cost.py "$hist/receipts_${tag}_ValidityDisputeOnChain.json" | tee "$hist/run_${tag}_posting.txt"
-python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s8" "$hist/run_${tag}_forced.txt" | tee "$hist/run_${tag}_bond.txt"
+python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s9" "$hist/run_${tag}_forced.txt" | tee "$hist/run_${tag}_bond.txt"

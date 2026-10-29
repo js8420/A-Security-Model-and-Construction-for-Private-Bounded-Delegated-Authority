@@ -1,9 +1,9 @@
-"""Knowledge-soundness error of the deployed payment proof, round by round.
+"""Knowledge-soundness and zero-knowledge errors of the deployed payment proof.
 
 The interactive protocol is the zero-knowledge DEEP-ALI of Haboeck and Kindi,
 whose round-by-round knowledge soundness Atapoor, Delpech de Saint Guilhem and
 Kindi prove (ePrint 2024/1553, Theorems 2 and 3). Plonky3 departs from that
-protocol in five places, and each changes one term:
+protocol in six places, and each changes one term or none:
 
   constraints   combined by the powers of one challenge, not by independent
                 ones: the combination is a polynomial of degree s - 1 in it.
@@ -17,17 +17,24 @@ protocol in five places, and each changes one term:
   out of domain the point is not resampled, so it lands where a quotient by
                 (X - zeta) is undefined, the evaluation domain or the hiding
                 commitment's, with probability at most 2|D|/|G|.
+  quotient      split by its Lagrange decomposition over disjoint cosets of
+                size n, each chunk randomised to degree below 2n, rather than
+                into monomial segments: the identity checked at zeta has degree
+                at most (chunks + 2) n - 1 on the quotient's side, the second
+                argument of d_zeta, and the extractor reads the trace alone.
 
-The challenge field is the cubic extension of Goldilocks; over the quadratic
-one the batching term caps the Johnson-regime figure near 72 bits whatever the
-queries, and the unique-decoding regime passes 100 bits only at about 88
-queries, which the script also prints. The provable figure is the Johnson
-regime (list decoding, multiplicity 3 <= m < k/2 with eta > 0) or the
-unique-decoding regime, whichever is better. The conjectured figure
-takes the query term at the full rate, as the usual conjecture does, and every
-other term at its unique-decoding value, which is the least any analysis
-charges. Each figure is the round-by-round error; against an adversary making
-2^h oracle queries the state-restoration error is (2^h + 7) times it.
+The challenge field is the degree-five extension of Goldilocks. The provable
+figure is the Johnson regime (list decoding, multiplicity 3 <= m < k/2 with
+eta > 0) or the unique-decoding regime, whichever is better. The conjectured
+figure takes the query term at the full rate, as the usual conjecture does,
+and every other term at its unique-decoding value. Each figure is the
+round-by-round error; against an adversary making 2^h oracle queries the
+state-restoration error is (2^h + 7) times it.
+
+Zero knowledge (Theorem 8): a proof is simulated with statistical distance at
+most 1/p^(e-1) + q L / p^SALT + 2(|D| + 2n)/p^e against q oracle queries, for
+L salted leaves of SALT field elements each. A delegation's proofs are each
+replaced by a simulated one, so its distance is the sum over its proofs.
 
 Usage: python3 se_bound.py
 """
@@ -46,6 +53,8 @@ DEPLOYED = (74, 4, 20)  # queries, log2 blowup, grinding bits
 CODEWORDS = 2           # random codewords the hiding commitment appends to each matrix
 FOLDS = (4, 4, 4)       # FRI fold arities at 256 rows
 ROUNDS = 7              # constraint challenge, out-of-domain point, batching, three folds, queries
+SALT = 4                # field elements salting each Merkle leaf
+FINAL = 8               # the final polynomial's length
 
 
 def batched(ext=EXT):
@@ -62,7 +71,11 @@ def terms(regime, queries, log_blowup, pow_bits, ext=EXT, m=None):
     rho = k / D
     kp = k + 2
     N = batched(ext)
-    deg = max(DEGREE * (kp - 1) + (k - 1), kp + (CHUNKS - 1) * k + (kp - 1))
+    # The identity checked at zeta, C = Z_H * sum_i S_i q_i: the constraints on
+    # the trace of degree below 2n, and on the right Z_H of degree n, each
+    # chunk's Lagrange factor S_i of degree (chunks - 1) n and its randomised
+    # chunk of degree below 2n.
+    deg = max(DEGREE * (kp - 1) + (k - 1), (CHUNKS + 2) * ROWS - 1)
     grind = 2.0**(-pow_bits)
     if regime == "johnson":
         L = m / (rho - 2 * m / D)
@@ -187,6 +200,38 @@ def main():
             print(f"  {e:>9} {2**lb:>7} {cap(lb, e):>9.1f} {against(2.0**-cap(lb, e), 64):>8.1f}")
 
 
+def leaves(log_blowup=DEPLOYED[1]):
+    """Salted leaves in one proof's commitments: the trace, the quotient
+    chunks and the mask each commit one leaf per point of the evaluation
+    domain, and each FRI commit round one leaf per coset of its arity."""
+    D = 2 * ROWS * 2**log_blowup
+    total, size = 3 * D, D
+    for a in FOLDS:
+        total += size // a
+        size //= a
+    return total
+
+
+def zk_error(q, ext=EXT, salt=SALT, log_blowup=DEPLOYED[1]):
+    """Theorem 8's statistical distance of one simulated proof against q queries."""
+    D = 2 * ROWS * 2**log_blowup
+    return 1 / P**(ext - 1) + q * leaves(log_blowup) / P**salt + 2 * (D + 2 * ROWS) / P**ext
+
+
+def zk_main():
+    print()
+    print("ZERO KNOWLEDGE: THEOREM 8'S DISTANCE, ONE PROOF AND A DELEGATION'S PROOFS, BITS")
+    print("=" * 78)
+    print(f"  salted leaves per proof L = {leaves()}, salt of {SALT} field elements, {EXT}-degree extension")
+    # One batch every 256 minutes: the one-cent-a-minute agent of Table 7 over thirty days.
+    proofs = math.ceil(30 * 24 * 60 / ROWS)
+    print(f"  {'salt':>5} {'2^48, one':>10} {'2^64, one':>10} {f'2^48, {proofs} proofs':>16} {f'2^64, {proofs} proofs':>16}")
+    for salt in (2, SALT):
+        one48, one64 = zk_error(2.0**48, salt=salt), zk_error(2.0**64, salt=salt)
+        print(f"  {salt:>5} {bits(one48):>10.1f} {bits(one64):>10.1f} {bits(proofs * one48):>16.1f} {bits(proofs * one64):>16.1f}")
+    print(f"  {proofs} proofs: one full batch of {ROWS} payments every {ROWS} minutes for thirty days.")
+
+
 def cap(log_blowup, ext):
     """Bits of the Johnson-regime figure with the query term removed, the best
     over the multiplicity: what no number of queries can pass."""
@@ -203,3 +248,4 @@ def cap(log_blowup, ext):
 
 if __name__ == "__main__":
     main()
+    zk_main()

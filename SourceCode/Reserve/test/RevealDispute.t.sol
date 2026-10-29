@@ -217,8 +217,9 @@ contract RevealDisputeTest is Test {
     }
 
     /// The principal, holding the late opening off chain, cancels: the hold
-    /// lifts, the agent is credited the bond, and nothing is revealed.
-    function testCancelReleasesTheHoldAndCreditsTheAgent() public {
+    /// lifts, the bond comes back to it, the late agent earns nothing, and
+    /// nothing is revealed.
+    function testCancelReleasesTheHoldAndReturnsTheBond() public {
         Setup memory s = _setup(DOMAIN, 7);
         RevealDispute.Opening memory o = _opening(DOMAIN, 20_000, 5, 3, 0, 1);
         _settleAndChallenge(s, 1, o);
@@ -226,7 +227,8 @@ contract RevealDisputeTest is Test {
         s.rd.settle(s.id, 2, 1, address(1), T0, bytes32(0));
         s.rd.cancel(s.id, 1);
         assertEq(uint256(_status(s, 1)), uint256(RevealDispute.Status.Cancelled));
-        assertEq(s.rd.credit(AGENT), 0.01 ether);
+        assertEq(s.rd.credit(AGENT), 0);
+        assertEq(s.rd.credit(address(this)), 0.01 ether);
         s.rd.settle(s.id, 2, 1, address(1), T0, bytes32(0));
         vm.expectRevert(RevealDispute.NotOpen.selector);
         _answer(s, 1, o, o.amount, 0);

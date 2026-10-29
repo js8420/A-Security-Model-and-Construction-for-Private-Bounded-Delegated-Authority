@@ -28,19 +28,22 @@ use crate::trace::{composed_case, composed_public_values, full_public_values, va
 
 // Goldilocks at width 8: a digest of four elements is 256 bits.
 pub(crate) type Val = Goldilocks;
-/// The challenge field: the cubic extension F_p[X]/(X^3 - X - 1). Over the
-/// quadratic extension the batching of the opened columns by one challenge
-/// caps the provable soundness near 72 bits (`soundness.rs`); over this one
-/// the queries bind, at 107 bits.
+/// The challenge field: the degree-five extension F_p[X]/(X^5 - 3). Over the
+/// cubic extension the batching of the opened columns by one challenge caps
+/// the provable soundness at 134 bits round by round whatever the queries, 70
+/// against 2^64 oracle queries (SourceCode/Analysis/se_bound.py); over this
+/// one the queries bind, at 167.8 bits, 103.8 against 2^64.
 pub(crate) type Challenge = BinomialExtensionField<Val, 5>;
 pub(crate) type Perm = Poseidon2Goldilocks<8>;
 pub(crate) type Hash = PaddingFreeSponge<Perm, 8, 4, 4>;
 pub(crate) type Compress = TruncatedPermutation<Perm, 2, 4, 8>;
 
-/// Salt elements per leaf. The crate's rule is that SALT_ELEMS times the size
-/// of a value must reach the target security parameter; at 64 bits a piece,
-/// two elements give 128 against a claimed 88. One would give 64 and be short.
-pub const SALT_ELEMS: usize = 2;
+/// Salt elements per leaf. A query that hits a salted leaf it was not shown is
+/// what the zero-knowledge simulator cannot answer, and each such query
+/// succeeds with probability at most one in p to this power: four elements
+/// keep that below 2^-177 for 2^64 queries over every leaf of a proof, where
+/// two gave only 2^-49.
+pub const SALT_ELEMS: usize = 4;
 
 /// Random codewords the hiding PCS appends per matrix. Must exceed zero, and
 /// the quotient decomposition panics below two.

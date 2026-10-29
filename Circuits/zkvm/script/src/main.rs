@@ -33,6 +33,7 @@ fn main() {
     let proof = std::fs::read(&path).expect("exported proof");
     let input = |p: &[u8]| {
         let mut s = SP1Stdin::new();
+        s.write(&1u32);
         s.write_vec(p.to_vec());
         s
     };
@@ -106,6 +107,7 @@ fn verdicts(paths: &[String]) {
     for path in paths {
         let proof = std::fs::read(path).expect("proof file");
         let mut s = SP1Stdin::new();
+        s.write(&1u32);
         s.write_vec(proof);
         let mut ex = MinimalExecutorEnum::new(program.clone(), false, None);
         for b in &s.buffer {

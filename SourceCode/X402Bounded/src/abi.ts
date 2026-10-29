@@ -18,6 +18,8 @@ export const reserveAbi = parseAbi([
   "function commitmentOf(uint256 id) view returns (bytes32)",
   "function termsOf(uint256 id) view returns (uint64 unitSize, uint64 rangeBase, uint64 rangeLen, bytes32 secretHash)",
   "function freeze(uint256 id)",
+  "function accept(uint256 id) payable",
+  "function acceptanceOf(uint256 id) view returns (bool accepted, uint256 bond)",
   "event Settled(uint256 indexed id, uint64 digest, uint64 amount, address payee, uint64 time, bytes32 opening)",
   "event Transcript(uint256 indexed id, uint64 digest, uint64[] elems)",
   "error IndexAlreadySettled()",
@@ -30,6 +32,7 @@ export const reserveAbi = parseAbi([
   "error Frozen()",
   "error Held()",
   "error WrongSlotCount()",
+  "error NotAccepted()",
 ]);
 
 /** The calls of ValidityDispute.sol the monitor makes. */
@@ -43,7 +46,9 @@ export const disputeAbi = parseAbi([
   "function fundPosting(uint256 id) payable",
   "function answer(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, bytes proof)",
   "function rootOf(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path) view returns (bytes32)",
-  "function challengerBond() view returns (uint256)",
+  "function challengeBond() view returns (uint256)",
+  "function cancel(uint256 id, uint64 digest)",
+  "function credit(address) view returns (uint256)",
   "function acceptWindow() view returns (uint64)",
   "function expire(uint256 id, uint64 digest)",
   "struct Receipt { bytes32 sealedRoot; bytes32 proofHash; uint64 receivedAt; bytes signature; }",
@@ -55,7 +60,7 @@ export const disputeAbi = parseAbi([
   "function deliver(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, Receipt r, bytes opening, bytes32[] sealedPath)",
   "function slashWithholding(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path, Receipt r)",
   "function deliveryWait() view returns (uint64)",
-  "struct Challenge { address challenger; uint64 deadline; uint8 status; bool byPrincipal; uint16 batch; }",
+  "struct Challenge { address challenger; uint64 deadline; uint8 status; bool byPrincipal; uint16 batch; uint128 bond; bool joined; }",
   "function challengeOf(uint256 id, uint64 digest) view returns (Challenge)",
   "event Challenged(uint256 indexed id, uint64 digest, address challenger, uint64 deadline)",
   "event Answered(uint256 indexed id, uint64 digest)",
@@ -65,6 +70,7 @@ export const disputeAbi = parseAbi([
   "event ProofChunk(uint256 indexed id, bytes32 indexed proofHash, address indexed poster, uint256 index)",
   "event ProofPosted(uint256 indexed id, bytes32 indexed proofHash, address poster)",
   "event PostingBound(uint256 indexed id, bytes32 root, bytes32 proofHash)",
+  "event Cancelled(uint256 indexed id, uint64 digest)",
   "error AlreadyChallenged()",
   "error NotOpen()",
   "error WindowClosed()",
@@ -73,6 +79,7 @@ export const disputeAbi = parseAbi([
   "error NotDue()",
   "error AlreadyBound()",
   "error WrongBatch()",
+  "error NotCancellable()",
 ]);
 
 /** The dispute contract's status of an answered challenge, in its Status enum order. */

@@ -41,6 +41,8 @@ fn main() {
     std::env::set_var("TRACE_SAMPLE_RATE", SAMPLE.to_string());
     let program = Arc::new(Program::from(&elf).expect("elf"));
     let mut ex = MinimalExecutorEnum::new(program, false, None);
+    // The guest reads how many proofs follow, a bincode u32, then each proof.
+    ex.with_input(&1u32.to_le_bytes());
     ex.with_input(&bytes);
     while ex.execute_chunk().is_some() {}
     let instructions = ex.global_clk();

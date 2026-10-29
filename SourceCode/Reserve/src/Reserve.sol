@@ -59,6 +59,9 @@ contract Reserve {
         uint64 windowW;
         Funding funding;
         bool bondPaid;
+        /// The agent accepted the delegation and posted its bond; nothing
+        /// settles before.
+        bool accepted;
         bool closed;
         /// The principal's choice at issuance: the agent opens each payment's
         /// fields only when the principal asks, not with every proof.
@@ -72,6 +75,7 @@ contract Reserve {
         uint64 rangeBase;
         uint64 rangeLen;
         uint256 deposit;
+        /// The bond the principal asked for, held once the agent accepts.
         uint256 bond;
         /// The canonical unit size the budget is counted in.
         uint64 unitSize;
@@ -147,6 +151,8 @@ contract Reserve {
         /// Whether the agent opens payments only on the principal's request.
         /// The reserve records the choice and never acts on it.
         bool openOnRequest;
+        /// The bond the agent must post to accept.
+        uint256 bond;
     }
 
     /// The contract allowed to forfeit a bond on an unanswered challenge. Set
@@ -169,11 +175,10 @@ contract Reserve {
     uint256 public nextId;
     /// How many principals an agent can answer for on this domain, which it
     /// declares from its proving capacity, and the principals it has taken
-    /// on. Once an agent has declared, a delegation to it is registered only
-    /// for a principal it took on, so no number of principals it never agreed
-    /// to serve can open queues it must answer in. Before it declares, every
-    /// principal that delegates to it is taken on and counted, so a later
-    /// declaration cannot fall below the principals it already serves.
+    /// on. A principal is taken on only when the agent accepts a delegation
+    /// from it, so no principal the agent never agreed to serve is counted or
+    /// can open a queue the agent must answer in. Once the agent has declared,
+    /// it cannot accept a delegation from a new principal beyond that number.
     mapping(address => uint32) public capacityOf;
     mapping(address => uint32) public servedCount;
     mapping(address => mapping(address => bool)) public serves;
@@ -203,8 +208,11 @@ contract Reserve {
     error NotAnswerer();
     error NotClosed();
     error NothingToWithdraw();
-    error NotServed();
     error OverCapacity();
+    error NotAgent();
+    error NotAcceptable();
+    error WrongBond();
+    error NotAccepted();
 
     /// `opening` is the agent's commitment to the payment's hidden fields,
     /// which the agent opens to the principal alone.
@@ -218,6 +226,7 @@ contract Reserve {
     event AnswererStaked(uint256 indexed id, uint256 amount);
     event AnswererSlashed(uint256 indexed id, uint256 amount);
     event Serves(address indexed agent, address indexed principal);
+    event Accepted(uint256 indexed id, uint256 bond);
 
     constructor(
         uint64 domainId,
@@ -253,23 +262,10 @@ contract Reserve {
         capacityOf[msg.sender] = n;
     }
 
-    /// The agent takes on a principal, within its declared capacity.
-    function servePrincipal(address principal) external {
-        if (serves[msg.sender][principal]) return;
-        if (servedCount[msg.sender] >= capacityOf[msg.sender]) revert OverCapacity();
-        serves[msg.sender][principal] = true;
-        servedCount[msg.sender] += 1;
-        emit Serves(msg.sender, principal);
-    }
-
-    function register(Terms calldata t) external payable returns (uint256 id) {
+    /// The principal issues a delegation and funds it. Nothing settles under
+    /// it until the agent accepts.
+    function register(Terms calldata t) external returns (uint256 id) {
         if (t.unitSize == 0 || t.rangeLen == 0) revert RangeOutside();
-        if (!serves[t.agent][msg.sender]) {
-            if (capacityOf[t.agent] != 0) revert NotServed();
-            serves[t.agent][msg.sender] = true;
-            servedCount[t.agent] += 1;
-            emit Serves(t.agent, msg.sender);
-        }
         id = nextId++;
         delegations[id] = Delegation({
             principal: msg.sender,
@@ -281,6 +277,7 @@ contract Reserve {
             windowW: t.windowW,
             funding: t.funding,
             bondPaid: false,
+            accepted: false,
             closed: false,
             openOnRequest: t.openOnRequest,
             epoch: 0,
@@ -289,7 +286,7 @@ contract Reserve {
             rangeBase: t.rangeBase,
             rangeLen: t.rangeLen,
             deposit: t.funding == Funding.Deposit ? t.deposit : 0,
-            bond: msg.value,
+            bond: t.bond,
             unitSize: t.unitSize,
             secretHash: t.secretHash,
             commitment: t.commitment,
@@ -301,6 +298,24 @@ contract Reserve {
         if (t.funding == Funding.Deposit && t.deposit != 0) {
             require(token.transferFrom(msg.sender, address(this), t.deposit), "deposit");
         }
+    }
+
+    /// The agent accepts a delegation by posting the bond it names, which
+    /// takes its principal on. An agent that declared a capacity accepts a new
+    /// principal only within it.
+    function accept(uint256 id) external payable {
+        Delegation storage d = delegations[id];
+        if (msg.sender != d.agent) revert NotAgent();
+        if (d.accepted || d.frozen || d.closed) revert NotAcceptable();
+        if (msg.value != d.bond) revert WrongBond();
+        if (!serves[msg.sender][d.principal]) {
+            if (capacityOf[msg.sender] != 0 && servedCount[msg.sender] >= capacityOf[msg.sender]) revert OverCapacity();
+            serves[msg.sender][d.principal] = true;
+            servedCount[msg.sender] += 1;
+            emit Serves(msg.sender, d.principal);
+        }
+        d.accepted = true;
+        emit Accepted(id, msg.value);
     }
 
     /// One payment, transcript stored. Called by whoever delivers the service,
@@ -407,6 +422,7 @@ contract Reserve {
     ) private {
         Delegation storage d = delegations[id];
         if (d.frozen) revert Frozen();
+        if (!d.accepted) revert NotAccepted();
         if (d.holds != 0) revert Held();
         uint256 u = d.unitSize;
         if (published != 3 * ((uint256(amount) + u - 1) / u)) revert WrongSlotCount();
@@ -576,7 +592,7 @@ contract Reserve {
         closedAt[id] = uint64(block.timestamp);
         uint256 dep = d.deposit;
         d.deposit = 0;
-        uint256 bond = d.bondPaid ? 0 : d.bond;
+        uint256 bond = d.bondPaid || !d.accepted ? 0 : d.bond;
         d.bondPaid = true;
         d.bond = 0;
         emit Closed(id, dep, bond);
@@ -597,7 +613,7 @@ contract Reserve {
         Delegation storage d = delegations[id];
         if (d.bondPaid) revert BondAlreadyPaid();
         d.bondPaid = true;
-        uint256 amount = d.bond;
+        uint256 amount = d.accepted ? d.bond : 0;
         d.bond = 0;
         emit BondForfeited(id, d.principal, amount);
         credit[d.principal] += amount;
@@ -663,6 +679,11 @@ contract Reserve {
 
     function principalOf(uint256 id) external view returns (address) {
         return delegations[id].principal;
+    }
+
+    /// Whether the agent has accepted the delegation, and the bond it names.
+    function acceptanceOf(uint256 id) external view returns (bool, uint256) {
+        return (delegations[id].accepted, delegations[id].bond);
     }
 
     function commitmentOf(uint256 id) external view returns (bytes32) {
