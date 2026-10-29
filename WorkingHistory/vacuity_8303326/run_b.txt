@@ -1,0 +1,15 @@
+WHAT ONE MISSING BINDING COSTS, TIMED: C9 WITHOUT ITS POLICY BINDING
+==============================================================================
+                               width constraints degree        q1    median        q3    verify proof bytes
+  compliance half, as built     7481        7223      7    3444.4    3445.4    3446.1    152.23     5347851
+  with C9's binding removed     7481        7208      7    3442.6    3443.7    3445.8    152.31     5347851
+
+  Milliseconds per proof at 256 rows, 200 iterations of each in 10 batches, the two
+  interleaved and their order alternating by batch, grinding off, the same honest trace.
+  constraints differ by 15; widths differ by 0; proof bytes differ by 0.
+  median proving differs by -1.7 ms (-0.05%); interquartile ranges overlap.
+
+  PER-BATCH MEDIANS, ms per proof.
+                                     1        2        3        4        5        6        7        8        9       10
+  compliance half, as built     3445.0   3445.6   3446.0   3445.6   3445.6   3443.8   3444.5   3445.2   3445.4   3445.8
+  with C9's binding removed     3442.2   3442.7   3443.2   3443.3   3442.9   3441.7   3445.8   3446.7   3445.6   3446.2
