@@ -1,0 +1,1 @@
+FAIL an input row of three columns against three claimed values is accepted

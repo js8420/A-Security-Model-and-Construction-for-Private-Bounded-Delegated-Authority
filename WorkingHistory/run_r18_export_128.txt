@@ -1,0 +1,1 @@
+  Keccak proof of 128 payments and public values written to target/proof_keccak.bin: 10157675 bytes, verifies natively true, proved in 5.62 s

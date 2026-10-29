@@ -1,0 +1,23 @@
+Compiling 2 files with Solc 0.8.28
+Solc 0.8.28 finished in 1.83s
+Compiler run successful!
+Script ran successfully.
+
+== Logs ==
+  dispute answered true
+  sealed opening delivered true
+  proof posted, bytes 10365547 true
+  dispute expired true
+  dispute cancelled true
+
+SKIPPING ON CHAIN SIMULATION.
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/broadcast/ValidityDisputeOnChain.s.sol/31337/run-latest.json
+
+Sensitive values saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/cache/ValidityDisputeOnChain.s.sol/31337/run-latest.json
+

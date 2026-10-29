@@ -1,0 +1,11 @@
+job 8308473, node n048.cluster, start Thu Oct 29 11:23:56 CDT 2026
+CPU(s):                32
+Thread(s) per core:    1
+Socket(s):             2
+Model name:            Intel(R) Xeon(R) Gold 6130F CPU @ 2.10GHz
+CPU MHz:               1000.000
+CPU max MHz:           2101.0000
+CPU min MHz:           1000.0000
+governor conservative
+    Finished `release` profile [optimized] target(s) in 56.03s
+run a start Thu Oct 29 11:24:52 CDT 2026

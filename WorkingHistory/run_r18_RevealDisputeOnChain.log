@@ -1,0 +1,19 @@
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  reveal dispute answered, list depth 7 true
+  reveal dispute answered, list depth 10 true
+  reveal dispute cancelled true
+
+SKIPPING ON CHAIN SIMULATION.
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/broadcast/RevealDisputeOnChain.s.sol/31337/run-latest.json
+
+Sensitive values saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/cache/RevealDisputeOnChain.s.sol/31337/run-latest.json
+

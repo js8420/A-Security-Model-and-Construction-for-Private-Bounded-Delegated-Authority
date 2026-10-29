@@ -1,0 +1,16 @@
+POSTING A BATCH PROOF ON BASE
+==============================================================================
+  2026-10-29 17:07 UTC, Base block 53252159, endpoint https://base-rpc.publicnode.com
+  base fee, median of the last 1025 blocks        0.005000 gwei
+  base fee, least and greatest              0.005000   0.005121 gwei
+  ETH / USD, Chainlink on Base                   2351.72
+
+  proof, all chunks    106 tx   414,852,590 gas  10,386,344 bytes
+                       execution 0.00207426 ETH, L1 data 0.00035190 ETH, total 0.00242616 ETH = 5.7056 USD
+                       on Ethereum at 1 gwei 0.41485259 ETH = 975.6171 USD
+  one answer             1 tx       449,524 gas       1,028 bytes
+                       execution 0.00000225 ETH, L1 data 0.00000004 ETH, total 0.00000229 ETH = 0.0054 USD
+                       on Ethereum at 1 gwei 0.00044952 ETH = 1.0572 USD
+  one delivery           1 tx       217,415 gas       1,604 bytes
+                       execution 0.00000109 ETH, L1 data 0.00000006 ETH, total 0.00000115 ETH = 0.0027 USD
+                       on Ethereum at 1 gwei 0.00021741 ETH = 0.5113 USD

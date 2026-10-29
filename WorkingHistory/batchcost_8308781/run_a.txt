@@ -1,0 +1,2 @@
+PROOF COST BY BATCH SIZE, COMPOSED CIRCUIT AT 256 ROWS, GRINDING OFF
+==============================================================================

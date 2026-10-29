@@ -1,0 +1,17 @@
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  cross-domain read recorded true
+
+SKIPPING ON CHAIN SIMULATION.
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/broadcast/StateReadOnChain.s.sol/31337/run-latest.json
+
+Sensitive values saved to: /mnt/e/ZK_Delegated_Authority_for_Agentic_Payments/ResearchPaper04_TDSC12_submission/SourceCode/Reserve/cache/StateReadOnChain.s.sol/31337/run-latest.json
+
