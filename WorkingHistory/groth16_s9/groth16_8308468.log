@@ -1,0 +1,83 @@
+job 8308468, node himem08.cluster, cpus 32, out /scratch/jshital/paper04/Circuits/zkvm/pete/out_s9_batch_b, start Thu Oct 29 07:29:25 CDT 2026
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                32
+On-line CPU(s) list:   0-31
+Thread(s) per core:    1
+Core(s) per socket:    16
+Socket(s):             2
+NUMA node(s):          2
+Vendor ID:             GenuineIntel
+CPU family:            6
+Model:                 85
+Model name:            Intel(R) Xeon(R) Gold 6130F CPU @ 2.10GHz
+Stepping:              4
+CPU MHz:               1000.000
+CPU max MHz:           2101.0000
+CPU min MHz:           1000.0000
+BogoMIPS:              4200.00
+Virtualization:        VT-x
+L1d cache:             32K
+L1i cache:             32K
+L2 cache:              1024K
+L3 cache:              22528K
+NUMA node0 CPU(s):     0-15
+NUMA node1 CPU(s):     16-31
+Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc aperfmperf eagerfpu pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch epb cat_l3 cdp_l3 invpcid_single intel_pt ssbd mba ibrs ibpb stibp tpr_shadow vnmi flexpriority ept vpid fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm cqm mpx rdt_a avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local dtherm ida arat pln pts hwp hwp_act_window hwp_epp hwp_pkg_req pku ospke md_clear spec_ctrl intel_stibp flush_l1d
+governor conservative
+MemTotal:       791035580 kB
+ebac65cf210922422f2a52b00311e05fc9167e779313926ab83973994881477d  /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_keccak.bin
+SP1 worker settings: defaults
+stark proofs                                           1
+stark proof bytes                               10365547
+setup, seconds                                      23.3
+Setting environment variables took 23.629456ms
+Reading R1CS took 23.842584909s
+Reading proving key took 6.65639243s
+Reading witness file took 2.591776ms
+Deserializing JSON data took 28.740902ms
+Generating witness took 1.114538729s
+[90m09:09:27[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m8209.516988
+[90m09:09:40[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m12395.465042
+Generating proof took 20.671202927s
+[90m09:09:40[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m09:09:40[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m09:09:40[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m09:09:40[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m2.437799
+groth16 proof, seconds                            5990.1
+the groth16 proof verifies                          true
+program verifying key                       0x008687e87a93fdfe30b60eb407c8036e341d261e78ef72bf46554765a1065c3e
+public value bytes                                    32
+on-chain proof bytes                                 356
+	Command being timed: "/scratch/jshital/paper04/Circuits/zkvm/pete/../script/target/release/prove /scratch/jshital/paper04/Circuits/zkvm/pete/out_s9_batch_b /scratch/jshital/paper04/Circuits/zkvm/pete/../../target/proof_keccak.bin"
+	User time (seconds): 171414.51
+	System time (seconds): 5792.30
+	Percent of CPU this job got: 2945%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:40:15
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 108487552
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 3
+	Minor (reclaiming a frame) page faults: 129303502
+	Voluntary context switches: 34475199
+	Involuntary context switches: 125719253
+	Swaps: 0
+	File system inputs: 16400432
+	File system outputs: 5512
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+end Thu Oct 29 09:09:41 CDT 2026
+vkey 0x008687e87a93fdfe30b60eb407c8036e341d261e78ef72bf46554765a1065c3e
+public_values 0x45b82068cfcdcfcd4cfb1e7a20074b22d30577b8a936e279790f43a2bc8ac725
+stark_proofs 1
+stark_bytes 10365547
+setup_seconds 23.3
+prove_seconds 5990.1
+verifies true

@@ -148,9 +148,25 @@ RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
-# The proving bond in ether, rounded up to the microether, as the contract is deployed with.
-PROVING_BOND_ETH = math.ceil(CURRENCY_MARGIN * PROVING / ETH_USD * 1e6) / 1e6
+# The proving bond the contract is deployed with, in ether, read from the
+# deployment library so the paper and the contract cannot differ. Ether's price
+# moves, so the run reports the margin the deployed bond gives at today's price
+# and refuses to go on if it no longer covers one answer.
+def deployed_bond():
+    here = os.path.dirname(os.path.abspath(__file__))
+    src = open(os.path.join(here, "..", "Reserve", "script", "Deployment.sol"), encoding="utf8").read()
+    m = re.search(r"PROVING_BOND\s*=\s*([\d.]+)\s*ether", src)
+    if not m:
+        raise SystemExit("no PROVING_BOND in Deployment.sol")
+    return float(m.group(1))
+
+
+PROVING_BOND_ETH = deployed_bond()
 BOUNTY = PROVING_BOND_ETH * ETH_USD
+MARGIN_NOW = BOUNTY / PROVING
+NEEDED_ETH = math.ceil(CURRENCY_MARGIN * PROVING / ETH_USD * 1e6) / 1e6
+if MARGIN_NOW < 1:
+    raise SystemExit(f"the deployed proving bond {PROVING_BOND_ETH} ETH no longer covers one answer at {ETH_USD} USD; set it to {NEEDED_ETH}")
 QUIET_POSTING = POSTING + BATCH * DELIVERING
 DEPOSIT = FEE_FACTOR * QUIET_POSTING
 
@@ -347,7 +363,8 @@ if __name__ == "__main__":
     print("THE CHALLENGER'S BOND AND THE BOUNTY")
     print("=" * 78)
     print(f"  proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour {PROVING:10.4f} USD")
-    print(f"  proving bond, {CURRENCY_MARGIN:.0f} x that at {ETH_USD} USD an ether, rounded up   {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD")
+    print(f"  proving bond as deployed {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD at {ETH_USD} USD an ether")
+    print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
     print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")
     print(f"  sending the answer on Base, measured                                  {SENDING:10.4f} USD")
     print(f"  forcing it in through Ethereum: {FORCED_ANSWER_GAS:,} L1 gas, measured on a fork")

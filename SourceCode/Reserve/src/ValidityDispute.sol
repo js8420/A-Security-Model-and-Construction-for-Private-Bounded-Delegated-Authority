@@ -177,7 +177,7 @@ contract ValidityDispute {
     /// Gas the refund itself spends after it measures, an upper bound.
     uint256 private constant REFUND_GAS = 40_000;
     /// The chunks of the deployed batch proof with its public values,
-    /// 10,340,683 bytes: the most chunks of one posting that are refunded.
+    /// 10,365,547 bytes: the most chunks of one posting that are refunded.
     uint256 public constant MAX_CHUNKS = 106;
 
     IReserveV public immutable reserve;

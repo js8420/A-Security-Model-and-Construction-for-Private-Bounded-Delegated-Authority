@@ -1,0 +1,64 @@
+job 8308475, node n048.cluster, start Thu Oct 29 10:29:37 CDT 2026
+Architecture:          x86_64
+CPU op-mode(s):        32-bit, 64-bit
+Byte Order:            Little Endian
+CPU(s):                32
+On-line CPU(s) list:   0-31
+Thread(s) per core:    1
+Core(s) per socket:    16
+Socket(s):             2
+NUMA node(s):          2
+Vendor ID:             GenuineIntel
+CPU family:            6
+Model:                 85
+Model name:            Intel(R) Xeon(R) Gold 6130F CPU @ 2.10GHz
+Stepping:              4
+CPU MHz:               1100.000
+CPU max MHz:           2101.0000
+CPU min MHz:           1000.0000
+BogoMIPS:              4200.00
+Virtualization:        VT-x
+L1d cache:             32K
+L1i cache:             32K
+L2 cache:              1024K
+L3 cache:              22528K
+NUMA node0 CPU(s):     0-15
+NUMA node1 CPU(s):     16-31
+Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc aperfmperf eagerfpu pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch epb cat_l3 cdp_l3 invpcid_single intel_ppin intel_pt ssbd mba ibrs ibpb stibp tpr_shadow vnmi flexpriority ept vpid fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm cqm mpx rdt_a avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local dtherm ida arat pln pts hwp hwp_act_window hwp_epp hwp_pkg_req pku ospke md_clear spec_ctrl intel_stibp flush_l1d
+governor conservative
+    Finished `release` profile [optimized] target(s) in 1m 32s
+run a start Thu Oct 29 10:31:10 CDT 2026
+run a end Thu Oct 29 10:57:29 CDT 2026
+run b start Thu Oct 29 10:57:29 CDT 2026
+run b end Thu Oct 29 11:23:49 CDT 2026
+WHAT ONE MISSING BINDING COSTS, TIMED: C9 WITHOUT ITS POLICY BINDING
+==============================================================================
+                               width constraints degree        q1    median        q3    verify proof bytes
+  compliance half, as built     7481        7223      7    3517.8    3520.1    3521.1    152.05     5372715
+  with C9's binding removed     7481        7208      7    3517.4    3519.0    3520.4    152.13     5372715
+
+  Milliseconds per proof at 256 rows, 200 iterations of each in 10 batches, the two
+  interleaved and their order alternating by batch, grinding off, the same honest trace.
+  constraints differ by 15; widths differ by 0; proof bytes differ by 0.
+  median proving differs by -1.0 ms (-0.03%); interquartile ranges overlap.
+
+  PER-BATCH MEDIANS, ms per proof.
+                                     1        2        3        4        5        6        7        8        9       10
+  compliance half, as built     3521.7   3519.3   3520.0   3519.5   3519.8   3520.2   3520.1   3520.3   3520.0   3520.5
+  with C9's binding removed     3520.7   3519.9   3518.6   3520.2   3519.6   3519.8   3519.2   3519.0   3519.2   3518.5
+WHAT ONE MISSING BINDING COSTS, TIMED: C9 WITHOUT ITS POLICY BINDING
+==============================================================================
+                               width constraints degree        q1    median        q3    verify proof bytes
+  compliance half, as built     7481        7223      7    3519.4    3521.3    3523.3    152.44     5372715
+  with C9's binding removed     7481        7208      7    3521.3    3523.2    3524.7    152.34     5372715
+
+  Milliseconds per proof at 256 rows, 200 iterations of each in 10 batches, the two
+  interleaved and their order alternating by batch, grinding off, the same honest trace.
+  constraints differ by 15; widths differ by 0; proof bytes differ by 0.
+  median proving differs by 1.8 ms (+0.05%); interquartile ranges overlap.
+
+  PER-BATCH MEDIANS, ms per proof.
+                                     1        2        3        4        5        6        7        8        9       10
+  compliance half, as built     3522.2   3521.5   3522.9   3521.0   3521.6   3519.9   3522.0   3521.1   3522.6   3521.7
+  with C9's binding removed     3523.8   3524.1   3522.6   3524.0   3523.8   3522.8   3523.3   3523.2   3523.6   3523.2
+end Thu Oct 29 11:23:49 CDT 2026
