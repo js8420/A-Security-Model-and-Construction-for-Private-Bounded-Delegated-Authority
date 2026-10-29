@@ -449,7 +449,7 @@ need("the honest proof of one payment is accepted", verifyStark(one1, air).ok);
 {
   const z: E = [5n, 6n, 7n, 0n, 0n];
   const leafRows = Array.from({ length: 8 }, (_, k) => [BigInt(k), BigInt(k + 100), BigInt(k + 200)]);
-  const leafSalts = Array.from({ length: 8 }, (_, k) => [BigInt(k + 300), BigInt(k + 400)]);
+  const leafSalts = Array.from({ length: 8 }, (_, k) => Array.from({ length: PARAMS.saltElems }, (_, j) => BigInt(k + 300 + 100 * j)));
   let level: Digest[] = leafRows.map((r, k) => sponge([...r, ...leafSalts[k]]));
   const levels: Digest[][] = [level];
   while (level.length > 1) {

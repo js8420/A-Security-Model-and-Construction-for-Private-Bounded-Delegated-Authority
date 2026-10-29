@@ -1,11 +1,11 @@
 #!/bin/bash
-# Proof cost at every batch size, twice, on one whole node. Submit from this folder:
+# Proof cost at every batch size, twice, on one whole node of the batch
+# partition, whose processor the run records. Submit from this folder:
 #   sbatch batchcost.sbatch
 #SBATCH --job-name=batchcost
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --exclusive
-#SBATCH --nodelist=n097
 #SBATCH --time=12:00:00
 #SBATCH --output=batchcost_%j.log
 set -euo pipefail
