@@ -340,3 +340,351 @@ COMPOSED BATCH             & satisfying trace                   & verifies \\
 
 WHOLE-CIRCUIT PROVING COST, AS BUILT, HIDING PCS
 ==============================================================================
+    rows         min          q1      median          q3   per payment
+  ------ ----------- ----------- ----------- ----------- -------------
+     256    3575.3ms    4129.8ms    4651.8ms    5889.1ms       18.17ms
+     512    7234.2ms    7694.3ms    8288.2ms    9365.4ms       16.19ms
+
+  Per payment is the median divided by the row count. 300 iterations in
+  10 interleaved batches with a 10s pause. Heights are interleaved inside
+  each batch so drift hits them equally.
+
+  PER-BATCH MEDIANS, ms per payment. Flat means no thermal drift.
+   batch     256 rows     512 rows
+      1      17.1289      16.7118
+      2      17.7175      15.8877
+      3      21.4738      16.4872
+      4      20.1546      15.7023
+      5      17.6020      16.5312
+      6      20.3127      15.4213
+      7      20.2365      16.9747
+      8      17.2094      16.3019
+      9      17.6142      17.3806
+     10      19.9206      15.7947
+
+PROOF SIZE AND VERIFICATION COST, AS BUILT, HIDING PCS
+==============================================================================
+  smallest trace height these FRI parameters admit           8
+  proof, bincode bytes, deployed height               5372715
+    of which commitments                                  121
+    of which opened values                             602044
+    of which opening proof                            4770542
+  bytes per payment at the deployed height              20987
+
+  Deterministic at fixed parameters, so one run is a measurement.
+
+  composed proof, bincode bytes, deployed height      9949707
+  two separate proofs, same payments                 10150710
+  saved by proving once                                201003
+  composed width for reference                          14292
+
+    rows         min          q1      median          q3   per payment
+  ------ ----------- ----------- ----------- ----------- -------------
+     256    165.67ms    165.82ms    165.90ms    166.02ms       0.648ms
+     512    166.31ms    166.44ms    166.53ms    166.65ms       0.325ms
+
+  Verification, not proving. Proofs are built outside the timed region.
+  PER-BATCH MEDIANS, ms per payment.
+   batch     256 rows     512 rows
+      1      0.64803      0.32525
+      2      0.64825      0.32521
+      3      0.64830      0.32526
+      4      0.64807      0.32549
+      5      0.64810      0.32552
+      6      0.64822      0.32522
+      7      0.64850      0.32516
+      8      0.64836      0.32517
+      9      0.64792      0.32534
+     10      0.64759      0.32523
+
+COST STRUCTURE: WHAT EACH DESIGN DECISION BUYS, 256-ROW TRACES
+==============================================================================
+  variant                         columns   prove/pmt  proof bytes  verify/pmt
+  ------------------------------ -------- ----------- ------------ -----------
+  policy + C9 only                    520      1.28ms       694923     0.062ms
+  + allowlists + revocation d32      7481     13.79ms      5372715     0.599ms
+    same, revocation d20             6245     11.44ms      4542123     0.502ms
+    allowlists outside the proof     4185      7.95ms      3157803     0.342ms
+  accountability, grain 1/64         6596     11.58ms      4777995     0.526ms
+    coarser, grain 1/30              3162      5.77ms      2470347     0.264ms
+    finer, grain 1/128              13060     22.53ms      9121803     1.022ms
+  whole, no zero knowledge           7481      5.98ms      5202603     0.592ms
+  accountability, no zk              6596      5.00ms      4607883     0.522ms
+  composed, one proof per payment    14292     25.56ms      9949707     1.122ms
+  composed, one proof per 256 payments    14292     26.20ms      9949707     1.167ms
+  two halves, one timed region      14077     25.33ms     10150710     1.120ms
+
+  Proved with grinding off. Every deployed proof adds one 20-bit search,
+  the same for every variant, timed on its own below over 200 fresh
+  transcripts. Add its mean to a row for a deployed proof's time.
+  grinding, ms per proof               min        q1    median        q3      mean
+                                      1.36    222.32    438.26    901.32    651.72
+
+  COMPARISONS, by iteration quartiles. A difference is reported as
+  real only if the two interquartile ranges do not overlap.
+  composed, one proof per payment / two halves, one timed region   25.55-25.56   vs   25.32-25.34   separate
+  composed, one proof per payment / composed, one proof per 256 payments   25.55-25.56   vs   26.19-26.23   separate
+  + allowlists + revocation d32 / same, revocation d20   13.78-13.79   vs   11.42-11.45   separate
+  + allowlists + revocation d32 / allowlists outside the proof   13.78-13.79   vs    7.94-7.95    separate
+  accountability, grain 1/64 / coarser, grain 1/30   11.58-11.59   vs    5.77-5.78    separate
+  accountability, grain 1/64 / finer, grain 1/128   11.58-11.59   vs   22.53-22.54   separate
+  one proof, grinding off: one payment 6542.5 ms, 256 payments 6707.4 ms; per payment in the batch 26.20 ms and 38866 proof bytes
+
+  Dispersion of the proving figures above. A median on its own says
+  nothing about how stable it is, and these rows are the ones the
+  manuscript quotes.
+  variant                              min        q1    median        q3
+  ------------------------------ --------- --------- --------- ---------
+  policy + C9 only                    1.28      1.28      1.28      1.28
+  + allowlists + revocation d32      13.75     13.78     13.79     13.79
+    same, revocation d20             11.41     11.42     11.44     11.45
+    allowlists outside the proof      7.94      7.94      7.95      7.95
+  accountability, grain 1/64         11.58     11.58     11.58     11.59
+    coarser, grain 1/30               5.77      5.77      5.77      5.78
+    finer, grain 1/128               22.52     22.53     22.53     22.54
+  whole, no zero knowledge            5.97      5.98      5.98      5.98
+  accountability, no zk               5.00      5.00      5.00      5.01
+  composed, one proof per payment     25.53     25.55     25.56     25.56
+  composed, one proof per 256 payments     26.19     26.19     26.20     26.23
+  two halves, one timed region       25.31     25.32     25.33     25.34
+
+  PER-BATCH MEDIANS of the proving figures, ms per payment. Flat means
+  no drift within this study; the hiding rows above are far less stable
+  than the plain ones and this is where that is either explained or not.
+  variant                               1        2        3        4        5        6        7        8        9       10
+  ------------------------------ -------- -------- -------- -------- -------- -------- -------- -------- -------- --------
+  policy + C9 only                   1.28     1.28     1.28     1.28     1.28     1.28     1.28     1.28     1.28     1.28
+  + allowlists + revocation d32     13.79    13.76    13.78    13.80    13.81    13.79    13.79    13.79    13.79    13.79
+    same, revocation d20            11.46    11.45    11.45    11.45    11.45    11.42    11.42    11.42    11.41    11.42
+    allowlists outside the proof     7.95     7.94     7.94     7.94     7.95     7.97     7.96     7.94     7.94     7.95
+  accountability, grain 1/64        11.58    11.58    11.58    11.58    11.58    11.58    11.58    11.58    11.58    11.59
+    coarser, grain 1/30              5.78     5.77     5.77     5.77     5.78     5.78     5.77     5.77     5.77     5.78
+    finer, grain 1/128              22.53    22.53    22.53    22.53    22.54    22.53    22.53    22.53    22.53    22.54
+  whole, no zero knowledge           5.98     5.98     5.99     5.98     5.98     5.98     5.98     5.98     5.98     5.99
+  accountability, no zk              5.00     5.00     5.00     5.00     5.00     5.01     5.00     5.00     5.00     5.01
+  composed, one proof per payment    25.55    25.55    25.56    25.57    25.58    25.56    25.56    25.55    25.56    25.57
+  composed, one proof per 256 payments    26.33    26.19    26.22    26.19    26.30    26.20    26.20    26.19    26.19    26.23
+  two halves, one timed region      25.34    25.34    25.33    25.32    25.35    25.34    25.33    25.33    25.32    25.32
+
+  Medians of 200 iterations, variants interleaved inside each batch.
+  Traces are built once and cloned before the timer starts, so no row
+  is charged for generating its own witness.
+  Every row is a real AIR proved at the deployed height, not a sum of other rows.
+  Marginal costs are differences between measured rows:
+    C7, allowlists, revocation     6961 cols     12.51ms      4677792 bytes
+    allowlists alone             3296 cols      5.84ms      2214912 bytes
+    revocation d32 over d20      1236 cols                           830592 bytes
+    grain 1/64 over 1/30         3434 cols                          2307648 bytes
+    zero knowledge, policy          0 cols      7.81ms       170112 bytes
+    zero knowledge, accnt.          0 cols                           170112 bytes
+
+WHAT ONE PAYMENT COSTS, COMPOSED AGAINST THE TWO HALVES SEPARATELY
+==============================================================================
+                                     min        q1    median        q3  proof bytes
+  ---------------------------- --------- --------- --------- --------- ------------
+  composed, proving               25.53    25.55    25.56    25.56      9949707
+  composed, verification           1.12     1.12     1.12     1.12             
+  two halves, proving             25.31    25.32    25.33    25.34     10150710
+  two halves, verification         1.12     1.12     1.12     1.12             
+
+  Milliseconds per payment at the deployed height. Both rows are timed the same
+  way: one region covering everything a settlement pays for. The two
+  halves are two proofs inside one region rather than two medians
+  added, which is not the median of a sum.
+  Proving  +0.9%   verification  +0.2%   proof bytes -2.0%
+  Interquartile ranges do not overlap on proving, so the difference is real within this run.
+
+  PER-BATCH MEDIANS, ms per payment. Flat means no thermal drift.
+   batch    composed pr      halves pr    composed vf      halves vf
+  ------ -------------- -------------- -------------- --------------
+       1         25.551         25.342          1.122          1.121
+       2         25.547         25.341          1.122          1.120
+       3         25.556         25.326          1.122          1.120
+       4         25.566         25.323          1.122          1.120
+       5         25.579         25.354          1.122          1.121
+       6         25.556         25.339          1.122          1.121
+       7         25.557         25.335          1.122          1.120
+       8         25.551         25.334          1.122          1.120
+       9         25.556         25.322          1.122          1.121
+      10         25.567         25.324          1.122          1.120
+
+
+POSEIDON2 SUB-TRACE GENERATION, SANITY CHECKS
+==============================================================================
+  row width equals num_cols                              94
+  output differs from all-zero input                   true
+  ten elements absorb in three permutations               3
+  capacity carries from perm 0 into perm 1             true
+
+PROVING TIME, 1000 ITERATIONS IN 10 INTERLEAVED BATCHES, 10s PAUSE
+74 QUERIES AT BLOWUP 2^4, 20 POW BITS
+==============================================================================
+  configuration                 min        q1    median        q3      mean
+  ------------------------ -------- --------- --------- --------- ---------
+  256 perms, 0 registers     0.5817    2.2702    4.5353    9.1256    6.5889
+  256 perms, 1 register      0.5113    2.3082    5.0001    9.5532    6.8470
+  1024 perms, 0 registers    0.6126    1.0544    1.6733    2.7636    2.1883
+
+  Milliseconds per permutation. Configurations are interleaved so
+  drift hits each equally; minimum is the most robust statistic,
+  since interference can only ever slow a run down.
+  Register verdict: 4.5353 vs 5.0001 ms/perm at matched height, ratio 1.10x.
+
+  PER-BATCH MEDIANS, ms per permutation. Flat means no thermal drift;
+  a rising trend means the machine throttled over the run.
+   batch        256/0        256/1       1024/0
+  ------ ------------ ------------ ------------
+       1       3.5331       4.6943       1.5630
+       2       6.2943       5.4694       1.8423
+       3       4.8108       4.8219       1.5852
+       4       4.7033       4.7608       1.6682
+       5       5.1752       5.4374       2.0087
+       6       5.1458       4.8072       1.6429
+       7       4.4953       6.4359       1.7877
+       8       3.9397       5.0937       1.5652
+       9       3.3080       4.3494       1.7947
+      10       4.5685       4.7800       1.5985
+
+ZERO REGISTERS UNDER THE HIDING COMMITMENT
+==============================================================================
+  The S-box register holds the constraint degree at 3. At the rate this
+  crate now uses, degree 7 is admissible too, so the register is a cost
+  rather than a requirement. Both rows below are proved and verified.
+
+  composed circuit                      columns   constraints  degree  verifies
+  ---------------------------------- ---------- ------------- ------- ---------
+  one register, as built                  25902         25912       3      true
+  zero registers                          14292         14302       7      true
+
+  THE SMALLEST RATE THAT ADMITS ZERO REGISTERS
+  blowup                   provable     verifies
+  ---------------------- ---------- ------------
+  2                              55        false
+  4                              92        false
+  8                             129         true
+  16                            166         true
+  32                            203         true
+
+  Width is a property of the AIR and does not move with the rate.
+  What moves is whether the commitment can carry a degree-7
+  quotient, so the first row that verifies is the whole price of
+  the register, and any rate above it is bought for soundness.
+
+  Dropping the register removes 11610 columns, 44.8% of the circuit,
+  and the proof still verifies. The cost moves into constraint
+  degree, which the rate now covers.
+
+ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED, POSEIDON2 COMMITMENTS (BISECTION STUDY)
+==============================================================================
+  composed circuit, 256 rows, verifies                 true
+  Poseidon2 permutations during verify               310224
+  constraints                                         14302
+  distinct operations evaluating them                310744
+  folding them into one, two per constraint           28604
+  proof bytes                                       9949707
+  loading the proof, one element per step           1243714
+  loading the public values                             214
+  blobs, three elements to a blob element               102
+  lower bound on steps                              1893500  (2^20.85)
+  rounds of bisection                                    21
+
+ONE CONFIGURATION REUSED, AGAINST A FRESH ONE PER PROOF
+==============================================================================
+  Same circuit, same prebuilt trace, 20 proofs each. The only
+  difference is whether the hiding configuration is rebuilt.
+
+  configuration                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  shared                   6606.29   6863.98   7579.05   8750.05   1886.08
+  rebuilt each proof       6588.31   7018.70   7368.98   8194.08   1175.37
+
+  If sharing is the cause, the shared row is the wide one.
+
+WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED
+==============================================================================
+  Same circuit, 74 queries at blowup 16, 24 interleaved pairs. Only the
+  grinding bits differ. Every proof verifies: true.
+
+  grinding bits                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  0                        6556.14   6557.25   6558.26   6560.26      3.01
+  20                       6653.99   7000.91   7351.21   8801.30   1800.39
+
+  median difference 792.96 ms, spread difference 1797.39 ms.
+  A geometric search over 2^20 hashes has a mean and a standard
+  deviation of the same order, so if grinding is the source these two
+  differences should be comparable and the 0-bit row should be tight.
+
+DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?
+==============================================================================
+  allowlist / revocation / depth / cover, rows     verifies
+  ---------------------------------------------- ----------
+  8 / 8 / 16 / 14, deployed height                     true
+  16 / 32 / 16 / 14, deployed height                   true
+  16 / 32 / 16 / 64, deployed height (the paper's)       true
+
+FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 256 ROWS
+==============================================================================
+  queries  blowup   pow   conj. provable  proof bytes   prove ms  verify ms  verifies
+  ------- ------- ----- ------- -------- ------------ ---------- ----------
+       74      16    20     292      167      9949707    6959.17    288.652      true
+       44      16    20     196      107      6382017    7941.63    174.007      true
+       40      16    20     180       99      5906325    9491.75    158.906      true
+       50      16    20     220      119      7095555    7611.42    196.262      true
+       44       8    20     152       85      6373569    4722.75    173.822      true
+       54       8    20     182      100      7560879    6890.90    213.033      true
+       58       8    20     194      106      8035803    6334.74    225.881      true
+       40       8     8     128       67      5898645    4316.37    159.825      true
+       44       4    20     108       63      6365121    4890.24    173.294     false
+       40       4     8      88       47      5890965    4735.40    159.186     false
+       40       2     8      48       27      5883285    3839.67    159.184     false
+
+  Blowup is the reciprocal rate. Conjectured soundness charges a query
+  the full rate; provable is the round-by-round bound, which needs no
+  conjecture and is the figure to size a secret or a bond against.
+
+  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.
+  queries  blowup   pow  commitments       opened      opening opening%
+  ------- ------- ----- ------------ ------------ ------------ -------
+       74      16    20          121      1146924      8802654   88.5%
+       44      16    20          121      1146924      5234964   82.0%
+       40      16    20          121      1146924      4759272   80.6%
+       50      16    20          121      1146924      5948502   83.8%
+       44       8    20          121      1146924      5226516   82.0%
+       54       8    20          121      1146924      6413826   84.8%
+       58       8    20          121      1146924      6888750   85.7%
+       40       8     8          121      1146924      4751592   80.6%
+       44       4    20          121      1146924      5218068   82.0%
+       40       4     8          121      1146924      4743912   80.5%
+       40       2     8          121      1146924      4736232   80.5%
+
+WHAT A SETTLEMENT DOMAIN CAN CARRY
+==============================================================================
+  call data in one 60M-gas block, at 40 gas a byte        1500000
+  the dispute contract's chunk                               98304
+  one EIP-4844 blob                                         131072
+
+   proof bytes   provable       blocks       chunks        blobs
+  ------------ ---------- ------------ ------------ ------------
+       9949707        167         6.63          102         75.9
+       6382017        107         4.25           65         48.7
+       5906325         99         3.94           61         45.1
+       7095555        119         4.73           73         54.1
+       6373569         85         4.25           65         48.6
+       7560879        100         5.04           77         57.7
+       8035803        106         5.36           82         61.3
+       5898645         67         3.93           61         45.0
+       6365121         63         4.24           65         48.6
+       5890965         47         3.93           60         44.9
+       5883285         27         3.92           60         44.9
+
+  The smallest proof that verifies here is 5898645 bytes at 67 provable bits:
+  3.93 blocks of call data, 61 chunks, 45.0 blobs. The opening proof
+  dominates and shrinks only with the query count, which is what
+  soundness buys, so a smaller proof needs another opening argument.
+  Soundness gaps closed: C6 uses the field constant one in-circuit
+  rather than a witness adjustment; share indices are forced non-zero
+  by a witnessed inverse; and each sponge carries every lane its
+  chunk does not absorb, not only the capacity, so a partial final
+  chunk leaves no rate lane for a prover to choose.
+

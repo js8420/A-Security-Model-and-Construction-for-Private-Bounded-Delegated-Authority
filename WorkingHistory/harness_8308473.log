@@ -9,3 +9,11 @@ CPU min MHz:           1000.0000
 governor conservative
     Finished `release` profile [optimized] target(s) in 56.03s
 run a start Thu Oct 29 11:24:52 CDT 2026
+run a end Thu Oct 29 17:08:16 CDT 2026
+run b start Thu Oct 29 17:08:16 CDT 2026
+run b end Thu Oct 29 22:52:13 CDT 2026
+  48 controls, every one rejected; 21 positive checks, every one holding.
+  one proof, grinding off: one payment 6542.5 ms, 256 payments 6707.4 ms; per payment in the batch 26.20 ms and 38866 proof bytes
+  48 controls, every one rejected; 21 positive checks, every one holding.
+  one proof, grinding off: one payment 6546.9 ms, 256 payments 6713.3 ms; per payment in the batch 26.22 ms and 38866 proof bytes
+end Thu Oct 29 22:52:13 CDT 2026

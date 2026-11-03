@@ -1,0 +1,9 @@
+DIFFERENTIAL TESTING OF THE TWO VERIFIERS: 8 SEEDS, 250 ALTERATIONS EACH
+seed 1: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 2: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 3: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 4: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 5: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 6: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 7: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
+seed 8: 250 alterations; both refuse 250, both accept 0, only the deployed accepts 0, only the independent accepts 0, left unchanged 0
