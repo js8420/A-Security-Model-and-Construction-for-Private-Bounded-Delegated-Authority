@@ -1,0 +1,109 @@
+
+ADJUDICABLE STEPS IN ONE VERIFICATION, COUNTED, POSEIDON2 COMMITMENTS (BISECTION STUDY)
+==============================================================================
+  composed circuit, 256 rows, verifies                 true
+  Poseidon2 permutations during verify               310224
+  constraints                                         14302
+  distinct operations evaluating them                310744
+  folding them into one, two per constraint           28604
+  proof bytes                                       9949707
+  loading the proof, one element per step           1243714
+  loading the public values                             214
+  blobs, three elements to a blob element               102
+  lower bound on steps                              1893500  (2^20.85)
+  rounds of bisection                                    21
+
+ONE CONFIGURATION REUSED, AGAINST A FRESH ONE PER PROOF
+==============================================================================
+  Same circuit, same prebuilt trace, 20 proofs each. The only
+  difference is whether the hiding configuration is rebuilt.
+
+  configuration                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  shared                   5457.23   5658.67   5894.60   6596.19    937.52
+  rebuilt each proof       5390.86   5816.20   6098.00   6776.25    960.06
+
+  If sharing is the cause, the shared row is the wide one.
+
+WHERE THE DISPERSION COMES FROM: GRINDING, MEASURED
+==============================================================================
+  Same circuit, 74 queries at blowup 16, 24 interleaved pairs. Only the
+  grinding bits differ. Every proof verifies: true.
+
+  grinding bits                min        q1    median        q3     q3-q1
+  ---------------------- --------- --------- --------- --------- ---------
+  0                        5123.71   5304.10   5320.32   5355.03     50.94
+  20                       5398.95   5712.37   6049.21   7402.94   1690.57
+
+  median difference 728.89 ms, spread difference 1639.64 ms.
+  A geometric search over 2^20 hashes has a mean and a standard
+  deviation of the same order, so if grinding is the source these two
+  differences should be comparable and the 0-bit row should be tight.
+
+DOES THE COMPOSED CIRCUIT VERIFY AT THE PARAMETERS THE PAPER QUOTES?
+==============================================================================
+  allowlist / revocation / depth / cover, rows     verifies
+  ---------------------------------------------- ----------
+  8 / 8 / 16 / 14, deployed height                     true
+  16 / 32 / 16 / 14, deployed height                   true
+  16 / 32 / 16 / 64, deployed height (the paper's)       true
+
+FRI PARAMETERS: PROOF SIZE AGAINST SOUNDNESS, COMPOSED CIRCUIT AT 256 ROWS
+==============================================================================
+  queries  blowup   pow   conj. provable  proof bytes   prove ms  verify ms  verifies
+  ------- ------- ----- ------- -------- ------------ ---------- ----------
+       74      16    20     292      167      9949707    6127.21    227.626      true
+       44      16    20     196      107      6382017    9436.81    135.127      true
+       40      16    20     180       99      5906325    5646.05    127.200      true
+       50      16    20     220      119      7095555    6746.92    152.971      true
+       44       8    20     152       85      6373569    3763.06    136.021      true
+       54       8    20     182      100      7560879    5809.24    165.475      true
+       58       8    20     194      106      8035803    5503.64    174.317      true
+       40       8     8     128       67      5898645    3443.78    123.776      true
+       44       4    20     108       63      6365121    4614.14    134.854     false
+       40       4     8      88       47      5890965    3915.01    124.177     false
+       40       2     8      48       27      5883285    3208.15    123.285     false
+
+  Blowup is the reciprocal rate. Conjectured soundness charges a query
+  the full rate; provable is the round-by-round bound, which needs no
+  conjecture and is the figure to size a secret or a bond against.
+
+  WHERE THE BYTES ARE. A wrapper replaces the opening proof and nothing else.
+  queries  blowup   pow  commitments       opened      opening opening%
+  ------- ------- ----- ------------ ------------ ------------ -------
+       74      16    20          121      1146924      8802654   88.5%
+       44      16    20          121      1146924      5234964   82.0%
+       40      16    20          121      1146924      4759272   80.6%
+       50      16    20          121      1146924      5948502   83.8%
+       44       8    20          121      1146924      5226516   82.0%
+       54       8    20          121      1146924      6413826   84.8%
+       58       8    20          121      1146924      6888750   85.7%
+       40       8     8          121      1146924      4751592   80.6%
+       44       4    20          121      1146924      5218068   82.0%
+       40       4     8          121      1146924      4743912   80.5%
+       40       2     8          121      1146924      4736232   80.5%
+
+WHAT A SETTLEMENT DOMAIN CAN CARRY
+==============================================================================
+  call data in one 60M-gas block, at 40 gas a byte        1500000
+  the dispute contract's chunk                               98304
+  one EIP-4844 blob                                         131072
+
+   proof bytes   provable       blocks       chunks        blobs
+  ------------ ---------- ------------ ------------ ------------
+       9949707        167         6.63          102         75.9
+       6382017        107         4.25           65         48.7
+       5906325         99         3.94           61         45.1
+       7095555        119         4.73           73         54.1
+       6373569         85         4.25           65         48.6
+       7560879        100         5.04           77         57.7
+       8035803        106         5.36           82         61.3
+       5898645         67         3.93           61         45.0
+       6365121         63         4.24           65         48.6
+       5890965         47         3.93           60         44.9
+       5883285         27         3.92           60         44.9
+
+  The smallest proof that verifies here is 5898645 bytes at 67 provable bits:
+  3.93 blocks of call data, 61 chunks, 45.0 blobs. The opening proof
+  dominates and shrinks only with the query count, which is what
+  soundness buys, so a smaller proof needs another opening argument.
