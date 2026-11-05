@@ -1,0 +1,30 @@
+HOW FAR THE BASE FEE RISES AFTER A CHALLENGE, SINCE DENCUN
+==============================================================================
+  ethereum: blocks 19,429,556 to 26,348,992, 6,919,437 blocks, fixed at 2026-11-05 13:40 UTC
+  ethereum, answer window w_a, 32 h = 9,600 blocks; 6,909,837 windows
+    largest fee in the window over the fee at its start:
+    p50 6.504  p90 37.914  p99 260.256  p99.9 3475.362  p99.99 6292.164  max 7295.934 at block 26,296,012
+    share of windows above F:  2x 0.898425  3x 0.784733  5x 0.597268  10x 0.358962
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  260.256  3475.362  6292.164
+  ethereum, answer window plus posting wait, 62 h = 18,600 blocks; 6,900,837 windows
+    largest fee in the window over the fee at its start:
+    p50 10.597  p90 68.171  p99 531.374  p99.9 4977.371  p99.99 6435.762  max 7302.644 at block 26,289,052
+    share of windows above F:  2x 0.946072  3x 0.883731  5x 0.749621  10x 0.519377
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  531.374  4977.371  6435.762
+  ethereum blob base fee, highest within 62 h of each block, wei; 6,900,837 windows
+    p50 45,198,595  p90 186,469,176,870  p99 1,180,311,565,524  p99.9 8,405,020,945,159  max 8,405,020,945,159
+  one batch as blobs: 86 blobs (10,365,547 proof bytes and 256 openings of 1,604), blob gas 11,272,192
+    blob fee for the batch at those quantiles, ETH: p50 0.000509  p90 2.1  p99 13.3  p99.9 94.7  max 94.7
+
+  base: blocks 11,792,527 to 53,549,834, 41,757,308 blocks, fixed at 2026-11-05 14:30 UTC
+  base, answer window w_a, 32 h = 57,600 blocks; 41,699,708 windows
+    largest fee in the window over the fee at its start:
+    p50 4.068  p90 52.918  p99 676.083  p99.9 3001.926  p99.99 10004.606  max 4951082.298 at block 11,792,548
+    share of windows above F:  2x 0.735314  3x 0.599906  5x 0.443599  10x 0.288667
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  676.083  3001.926  10004.606
+  base, answer window plus posting wait, 62 h = 111,600 blocks; 41,645,708 windows
+    largest fee in the window over the fee at its start:
+    p50 6.226  p90 111.429  p99 1287.064  p99.9 6031.148  p99.99 10004.606  max 6361749.388 at block 37,080,719
+    share of windows above F:  2x 0.831168  3x 0.721486  5x 0.565848  10x 0.392847
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  1287.064  6031.148  10004.606
+
