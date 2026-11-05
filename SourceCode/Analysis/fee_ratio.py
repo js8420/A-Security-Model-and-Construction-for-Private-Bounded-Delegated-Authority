@@ -38,6 +38,16 @@ CHAINS = {
 # answer window plus the posting wait w_p for the deposit and the blobs.
 W_A_HOURS = 32
 W_POST_HOURS = 32 + 30
+# What an answerer that sends when it can actually pays. It is ready t_ans
+# after the challenge (the slowest Groth16 run with its setup, s9_batch_low_a,
+# 9,697.7 s) and may send in any block until its deadline. Through Ethereum the
+# transaction must land there 12 h (the sequencing window) plus the clock bound
+# chi = 12.5 h before the deadline on Base. Postings follow an answer by at
+# most w_p = 30 h.
+T_ANS_HOURS = 9697.7 / 3600
+SEQ_HOURS = 12
+CHI_HOURS = 12.5
+W_P_HOURS = 30
 # One batch's postings as blobs: the proof file and 256 sealed openings, at
 # 31 usable bytes in each of a blob's 4,096 field elements.
 PROOF_FILE_BYTES = 10_365_547
@@ -171,14 +181,39 @@ def window_max(x, w):
     return out
 
 
-BINS = 20000  # log10 of the ratio from 0 to 4 in steps of 0.0002, 0.05% wide
+def window_min_ahead(x, a, b):
+    """m[i] = min(x[i + a], ..., x[i + b]) for every i with i + b inside x."""
+    w = b - a
+    out = array("Q", bytes(8 * max(0, len(x) - b)))
+    q = deque()
+    for j in range(len(x) - 1, -1, -1):
+        v = x[j]
+        while q and x[q[-1]] >= v:
+            q.pop()
+        q.append(j)
+        if q[0] > j + w:
+            q.popleft()
+        i = j - a
+        if 0 <= i < len(out):
+            out[i] = x[q[0]]
+    return out
 
 
-def ratio_stats(fee, w):
-    m = window_max(fee, w)
+# log10 of the ratio from -8 to 8 in steps of 0.0002, 0.05% wide
+LO, HI = -8.0, 8.0
+BINS = int((HI - LO) / 0.0002)
+
+
+def edge(b):
+    return 10 ** (LO + (b + 1) * (HI - LO) / BINS)
+
+
+def ratio_stats(fee, w, m=None):
+    if m is None:
+        m = window_max(fee, w)
     hist = [0] * (BINS + 1)
     n = 0
-    top, top_at = 1.0, 0
+    top, top_at = 0.0, 0
     over = {2: 0, 3: 0, 5: 0, 10: 0}
     for i in range(len(m)):
         f = fee[i]
@@ -191,26 +226,29 @@ def ratio_stats(fee, w):
         for k in over:
             if r > k:
                 over[k] += 1
-        b = min(BINS, int(math.log10(r) / 4 * BINS))
+        if r == 0:
+            b = 0
+        else:
+            b = max(0, min(BINS, int((math.log10(r) - LO) / (HI - LO) * BINS)))
         hist[b] += 1
     def pct(p):
         target, run = p / 100 * n, 0
         for b, h in enumerate(hist):
             run += h
             if run >= target:
-                return min(top, 10 ** ((b + 1) * 4 / BINS))
+                return min(top, edge(b))
         return top
     return n, top, top_at, over, {p: pct(p) for p in (50, 90, 99, 99.9, 99.99)}, hist
 
 
-def smallest_factor(hist, n, share):
+def smallest_factor(hist, n, share, top=float("inf")):
     """The smallest F, to bin precision, with at most this share of windows above it."""
     run = 0
     for b, h in enumerate(hist):
         run += h
         if n - run <= share * n:
-            return 10 ** ((b + 1) * 4 / BINS)
-    return float("inf")
+            return min(top, edge(b))
+    return top
 
 
 def analyze(data):
@@ -227,7 +265,25 @@ def analyze(data):
             print("    largest fee in the window over the fee at its start:")
             print("    " + "  ".join(f"p{p:g} {v:.3f}" for p, v in pcts.items()) + f"  max {top:.3f} at block {meta['first'] + top_at:,}")
             print("    share of windows above F:  " + "  ".join(f"{k}x {over[k] / n:.6f}" for k in over))
-            print("    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  " + "  ".join(f"{smallest_factor(hist, n, s):.3f}" for s in (1e-2, 1e-3, 1e-4)))
+            print("    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  " + "  ".join(f"{smallest_factor(hist, n, s, top):.3f}" for s in (1e-2, 1e-3, 1e-4)))
+        bs = c["block_seconds"]
+        def blocks(h):
+            return math.ceil(h * 3600 / bs)
+        ready = blocks(T_ANS_HOURS)
+        if chain == "ethereum":
+            patient = [("an answer forced in, landing on Ethereum by", W_A_HOURS - SEQ_HOURS - CHI_HOURS),
+                       ("postings forced in, landing on Ethereum by", T_ANS_HOURS + W_P_HOURS - SEQ_HOURS - CHI_HOURS)]
+        else:
+            patient = [("an answer sent on Base by", W_A_HOURS),
+                       ("postings sent on Base by", T_ANS_HOURS + W_P_HOURS)]
+        for label, until in patient:
+            m = window_min_ahead(fee, ready, blocks(until))
+            n, top, top_at, over, pcts, hist = ratio_stats(fee, 0, m)
+            print(f"  {chain}, sending when ready: {label} {until:.2f} h after the challenge, ready at {T_ANS_HOURS:.2f} h; {n:,} windows")
+            print("    lowest fee from ready to the last block that can still land, over the fee at the challenge:")
+            print("    " + "  ".join(f"p{p:g} {v:.3f}" for p, v in pcts.items()) + f"  max {top:.3f} at block {meta['first'] + top_at:,}")
+            print("    share of windows above F:  " + "  ".join(f"{k}x {over[k] / n:.6f}" for k in over))
+            print("    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  " + "  ".join(f"{smallest_factor(hist, n, s, top):.3f}" for s in (1e-2, 1e-3, 1e-4)))
         if c["blob"]:
             w = math.ceil(W_POST_HOURS * 3600 / c["block_seconds"])
             m = window_max(blob, w)
@@ -238,6 +294,12 @@ def analyze(data):
             print(f"  ethereum blob base fee, highest within {W_POST_HOURS} h of each block, wei; {len(vals):,} windows")
             print("    " + "  ".join(f"p{p:g} {q(p):,}" for p in (50, 90, 99, 99.9)) + f"  max {vals[-1]:,}")
             print(f"  one batch as blobs: {blobs} blobs ({PROOF_FILE_BYTES:,} proof bytes and {BATCH} openings of {OPENING_BYTES:,}), blob gas {blobs * BLOB_GAS:,}")
+            print("    blob fee for the batch at those quantiles, ETH: " + "  ".join(f"p{p:g} {q(p) * blobs * BLOB_GAS / 1e18:.3g}" for p in (50, 90, 99, 99.9)) + f"  max {vals[-1] * blobs * BLOB_GAS / 1e18:.3g}")
+            until = T_ANS_HOURS + W_P_HOURS - SEQ_HOURS - CHI_HOURS
+            m = window_min_ahead(blob, ready, blocks(until))
+            vals = sorted(m)
+            print(f"  ethereum blob base fee, lowest from ready, {T_ANS_HOURS:.2f} h, to {until:.2f} h after the challenge, wei; {len(vals):,} windows")
+            print("    " + "  ".join(f"p{p:g} {q(p):,}" for p in (50, 90, 99, 99.9)) + f"  max {vals[-1]:,}")
             print("    blob fee for the batch at those quantiles, ETH: " + "  ".join(f"p{p:g} {q(p) * blobs * BLOB_GAS / 1e18:.3g}" for p in (50, 90, 99, 99.9)) + f"  max {vals[-1] * blobs * BLOB_GAS / 1e18:.3g}")
         print()
 

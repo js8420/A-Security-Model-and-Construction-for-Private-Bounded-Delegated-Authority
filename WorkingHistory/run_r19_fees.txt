@@ -11,20 +11,43 @@ HOW FAR THE BASE FEE RISES AFTER A CHALLENGE, SINCE DENCUN
     p50 10.597  p90 68.171  p99 531.374  p99.9 4977.371  p99.99 6435.762  max 7302.644 at block 26,289,052
     share of windows above F:  2x 0.946072  3x 0.883731  5x 0.749621  10x 0.519377
     smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  531.374  4977.371  6435.762
+  ethereum, sending when ready: an answer forced in, landing on Ethereum by 7.50 h after the challenge, ready at 2.69 h; 6,917,187 windows
+    lowest fee from ready to the last block that can still land, over the fee at the challenge:
+    p50 0.646  p90 1.022  p99 2.232  p99.9 5.328  p99.99 12.630  max 19.485 at block 20,458,546
+    share of windows above F:  2x 0.013750  3x 0.004557  5x 0.001149  10x 0.000200
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  2.232  5.328  12.630
+  ethereum, sending when ready: postings forced in, landing on Ethereum by 8.19 h after the challenge, ready at 2.69 h; 6,916,978 windows
+    lowest fee from ready to the last block that can still land, over the fee at the challenge:
+    p50 0.635  p90 0.998  p99 2.091  p99.9 4.680  p99.99 11.041  max 19.485 at block 20,458,546
+    share of windows above F:  2x 0.011445  3x 0.003592  5x 0.000897  10x 0.000140
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  2.091  4.680  11.041
   ethereum blob base fee, highest within 62 h of each block, wei; 6,900,837 windows
     p50 45,198,595  p90 186,469,176,870  p99 1,180,311,565,524  p99.9 8,405,020,945,159  max 8,405,020,945,159
   one batch as blobs: 86 blobs (10,365,547 proof bytes and 256 openings of 1,604), blob gas 11,272,192
     blob fee for the batch at those quantiles, ETH: p50 0.000509  p90 2.1  p99 13.3  p99.9 94.7  max 94.7
+  ethereum blob base fee, lowest from ready, 2.69 h, to 8.19 h after the challenge, wei; 6,916,978 windows
+    p50 2,892  p90 18,350,969  p99 4,136,902,711  p99.9 20,689,969,947  max 34,468,375,521
+    blob fee for the batch at those quantiles, ETH: p50 3.26e-08  p90 0.000207  p99 0.0466  p99.9 0.233  max 0.389
 
   base: blocks 11,792,527 to 53,549,834, 41,757,308 blocks, fixed at 2026-11-05 14:30 UTC
   base, answer window w_a, 32 h = 57,600 blocks; 41,699,708 windows
     largest fee in the window over the fee at its start:
-    p50 4.068  p90 52.918  p99 676.083  p99.9 3001.926  p99.99 10004.606  max 4951082.298 at block 11,792,548
+    p50 4.068  p90 52.918  p99 676.083  p99.9 3001.926  p99.99 442384.600  max 4951082.298 at block 11,792,548
     share of windows above F:  2x 0.735314  3x 0.599906  5x 0.443599  10x 0.288667
-    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  676.083  3001.926  10004.606
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  676.083  3001.926  442384.600
   base, answer window plus posting wait, 62 h = 111,600 blocks; 41,645,708 windows
     largest fee in the window over the fee at its start:
-    p50 6.226  p90 111.429  p99 1287.064  p99.9 6031.148  p99.99 10004.606  max 6361749.388 at block 37,080,719
+    p50 6.226  p90 111.429  p99 1287.064  p99.9 6031.148  p99.99 881454.704  max 6361749.388 at block 37,080,719
     share of windows above F:  2x 0.831168  3x 0.721486  5x 0.565848  10x 0.392847
-    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  1287.064  6031.148  10004.606
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  1287.064  6031.148  881454.704
+  base, sending when ready: an answer sent on Base by 32.00 h after the challenge, ready at 2.69 h; 41,699,708 windows
+    lowest fee from ready to the last block that can still land, over the fee at the challenge:
+    p50 0.545  p90 1.000  p99 1.353  p99.9 3.512  p99.99 1664.945  max 5144.600 at block 33,792,884
+    share of windows above F:  2x 0.003572  3x 0.001349  5x 0.000774  10x 0.000544
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  1.353  3.512  1664.945
+  base, sending when ready: postings sent on Base by 32.69 h after the challenge, ready at 2.69 h; 41,698,459 windows
+    lowest fee from ready to the last block that can still land, over the fee at the challenge:
+    p50 0.542  p90 1.000  p99 1.348  p99.9 3.466  p99.99 1664.945  max 5144.600 at block 33,792,884
+    share of windows above F:  2x 0.003518  3x 0.001324  5x 0.000775  10x 0.000544
+    smallest F exceeded by at most 1e-2, 1e-3, 1e-4 of windows:  1.348  3.466  1664.945
 
