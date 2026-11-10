@@ -5,6 +5,8 @@ import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "./TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
+import {Postings} from "../src/Postings.sol";
+import {Deployment} from "../script/Deployment.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {Verifier} from "../src/sp1/v6.1.0/Groth16Verifier.sol";
@@ -61,13 +63,17 @@ contract ValidityDisputeTest is Groth16Result {
                 answerWindow: WINDOW,
                 slot: SLOT,
                 deliveryWait: 8 hours,
+                deliveryTime: 8 hours,
                 provingBond: CHALLENGER_BOND,
+                provingCost: CHALLENGER_BOND / 2,
                 forceGas: 572_345,
-                feeFactor: 2,
-                postingGas: 125_000_000,
-                postingBytes: 10_500_000
+                l1Factor: 2,
+                l2Factor: 2,
+                l1FeeFloor: 0,
+                l2FeeFloor: 0
             })
         );
+        vd.setPostings(address(new Postings(address(acc), address(vd), Deployment.postingParams())));
         acc.setDispute(address(vd));
         vm.deal(principal, 10 ether);
         vm.deal(challenger, 10 ether);

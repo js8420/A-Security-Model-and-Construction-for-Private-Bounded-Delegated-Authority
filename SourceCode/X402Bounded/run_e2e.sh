@@ -24,7 +24,9 @@ if [ -f "$circuits/target/proof_keccak.bin" ]; then cp "$circuits/target/proof_k
 a=""
 b=""
 c=""
+e=""
 cleanup() {
+    if [ -n "$e" ]; then kill $e 2>/dev/null || true; fi
     if [ -n "$a" ]; then kill $a 2>/dev/null || true; fi
     if [ -n "$b" ]; then kill $b 2>/dev/null || true; fi
     if [ -n "$c" ]; then kill $c 2>/dev/null || true; fi
@@ -47,14 +49,16 @@ npx tsc --noEmit
 
 # The x402 run has a chain of its own, since it moves the clock a day. The
 # monitor's domain A starts its clock at the time the exported payments were
-# signed.
+# signed. A fourth chain stands for Ethereum, where an answerer posts blobs.
 anvil --silent --port 8547 &
 c=$!
 anvil --silent --timestamp 5000 &
 a=$!
 anvil --silent --port 8546 --chain-id 31338 &
 b=$!
-for port in 8545 8546 8547; do
+anvil --silent --port 8548 --chain-id 31339 --timestamp 5000 &
+e=$!
+for port in 8545 8546 8547 8548; do
     for i in $(seq 1 50); do
         cast block-number --rpc-url http://127.0.0.1:$port >/dev/null 2>&1 && break
         sleep 0.2

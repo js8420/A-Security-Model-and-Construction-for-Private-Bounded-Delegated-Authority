@@ -33,6 +33,14 @@ for rpc in ${L1_RPC:-} https://ethereum-rpc.publicnode.com https://eth.drpc.org 
         break
     fi
 done
+# The Ethereum gas of posting one batch as blobs through BlobPosting, its
+# report sent by Base's messenger, on a fork of Ethereum the same way.
+for rpc in ${L1_RPC:-} https://ethereum-rpc.publicnode.com https://eth.drpc.org https://eth.llamarpc.com https://1rpc.io/eth; do
+    if L1_FORK=$rpc forge test --match-contract BlobPostingGas -vv > "$hist/run_${tag}_blobgas.txt" 2>&1; then
+        grep -E "fork block|blobs|transactions|closing call|Ethereum gas" "$hist/run_${tag}_blobgas.txt"
+        break
+    fi
+done
 grep -E "Suite result|^Ran |FAIL|rror" "$hist/run_${tag}_forge.txt" || { echo "forge test printed no results:"; tail -20 "$hist/run_${tag}_forge.txt"; exit 1; }
 
 key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80

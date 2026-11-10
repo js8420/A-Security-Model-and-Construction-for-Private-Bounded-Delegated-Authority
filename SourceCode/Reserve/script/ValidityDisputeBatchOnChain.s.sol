@@ -6,6 +6,7 @@ import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "../test/TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
+import {Postings} from "../src/Postings.sol";
 import {Deployment} from "./Deployment.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
@@ -14,7 +15,7 @@ import {Statement} from "../test/Statement.sol";
 
 /// Answers as real transactions on a local node: one answerBatch for 1, 2, 4,
 /// 8, 16, 32, 64 and 128 open challenges by the principal against payments of
-/// the exported batch, each with Pete's one Groth16 proof, so every gas figure
+/// the exported batch, opened in one openMany as a monitor opens them, each with Pete's one Groth16 proof, so every gas figure
 /// is a receipt's gasUsed. Each size settles on its own delegation, so no answer
 /// meets a settlement an earlier one closed. The node is started at the
 /// exported payments' time: anvil --timestamp 5000.
@@ -41,6 +42,7 @@ contract ValidityDisputeBatchOnChain is Script {
         token = new MockToken();
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         vd = new ValidityDispute(address(acc), address(new SP1Verifier()), vm.parseBytes32(_field("vkey")), Deployment.params(1 days, 1 days, 2 hours, 30 hours));
+        vd.setPostings(address(new Postings(address(acc), address(vd), Deployment.postingParams())));
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
@@ -63,10 +65,19 @@ contract ValidityDisputeBatchOnChain is Script {
                 ss[i] = _settled(d, id, i);
                 (ids[i], ds[i], at[i], paths[i]) = (id, Statement.digest(d, i), i, Statement.path(d, i));
             }
-            for (uint256 i = 0; i < k; ++i) vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, ds[i], ss[i]);
+            (uint64 first, uint64 last) = _span(ss);
+            vd.openMany{value: vd.principalPrice(id, k, first, last)}(id, ds, ss);
             vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();
+    }
+
+    function _span(Settlement[] memory ss) internal pure returns (uint64 first, uint64 last) {
+        first = type(uint64).max;
+        for (uint256 i = 0; i < ss.length; ++i) {
+            if (ss[i].time < first) first = ss[i].time;
+            if (ss[i].time > last) last = ss[i].time;
+        }
     }
 
     function _settled(Statement.Data memory d, uint256 id, uint256 i) internal returns (Settlement memory s) {

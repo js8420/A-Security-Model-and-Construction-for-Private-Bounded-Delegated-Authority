@@ -6,6 +6,8 @@ import {Reserve} from "../src/Reserve.sol";
 import {Poseidon2Goldilocks} from "../src/Poseidon2Goldilocks.sol";
 import {TermsOf} from "../test/TermsOf.sol";
 import {ValidityDispute} from "../src/ValidityDispute.sol";
+import {Postings} from "../src/Postings.sol";
+import {BatchReceipt} from "../src/BatchReceipt.sol";
 import {Settlement} from "../src/Settlement.sol";
 import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {MockToken} from "../test/MockToken.sol";
@@ -21,7 +23,8 @@ import {Deployment} from "./Deployment.sol";
 /// principal's challenge asks for what backs the settlement: its sealed
 /// opening, posted at its position in a tree of one 349-byte opening per
 /// payment of the batch, and the batch's STARK proof, posted in chunks under
-/// the hash the answerer's receipt names.
+/// the hash the answerer's receipt names. This answerer posts on the domain,
+/// so its receipt names no blobs.
 ///
 /// The exported payments were signed from time 5000, so the node is started
 /// with its clock there: anvil --timestamp 5000.
@@ -42,6 +45,7 @@ contract ValidityDisputeOnChain is Script {
     Reserve acc;
     SP1Verifier sp1;
     ValidityDispute vd;
+    Postings pd;
     uint256 id;
     uint64 digest;
     Settlement rec;
@@ -60,22 +64,22 @@ contract ValidityDisputeOnChain is Script {
         _settle(d);
         (bool ok, ) = address(sp1).call(abi.encodeCall(SP1Verifier.verifyProof, (vkey, publicValues, proof)));
         require(ok, "verifyProof");
-        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
+        vd.open{value: vd.principalPrice(id, 1, rec.time, rec.time)}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
         bytes memory stark = vm.readFileBinary(STARK);
         bytes32 ph = _proofHash(stark);
         _deliver(d, pk, ph);
-        console.log("sealed opening delivered", uint256(vd.challengeOf(id, digest).status) == 4);
+        console.log("sealed opening delivered", pd.deliveredUnder(vd.key(id, digest)) != bytes32(0));
         _postProof(stark);
-        console.log("proof posted, bytes", stark.length, vd.postedAt(id, ph) != 0);
+        console.log("proof posted, bytes", stark.length, pd.postedAt(id, ph) != 0);
 
         // The unanswered case, on a second reserve whose answer window is zero
         // and whose slot is one second, so the deadline falls within two
         // seconds; three blocks later it has passed.
         _deploy(d, vm.addr(pk), 0, 1);
         _settle(d);
-        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
+        vd.open{value: vd.principalPrice(id, 1, rec.time, rec.time)}(id, digest, rec);
         for (uint256 i = 0; i < 3; ++i) token.mint(vm.addr(pk), 1);
         // The script runs every call locally first, in one block; the warp
         // moves only that local clock past the deadline. On the node the three
@@ -83,6 +87,7 @@ contract ValidityDisputeOnChain is Script {
         // earlier block would see the deadline not yet passed.
         vm.warp(block.timestamp + 3);
         vd.expire{gas: 200_000}(id, digest);
+        vd.returnProving{gas: 100_000}(id);
         vd.withdraw{gas: 100_000}();
         vm.stopBroadcast();
         console.log("dispute expired", uint256(vd.challengeOf(id, digest).status) == 3);
@@ -92,10 +97,10 @@ contract ValidityDisputeOnChain is Script {
         vm.startBroadcast(pk);
         _deploy(d, vm.addr(pk), 1 days, 2 hours);
         _settle(d);
-        vd.open{value: vd.challengeBond() + vd.postingTopUp(id)}(id, digest, rec);
+        vd.open{value: vd.principalPrice(id, 1, rec.time, rec.time)}(id, digest, rec);
         vd.cancel(id, digest);
         vm.stopBroadcast();
-        console.log("dispute cancelled", uint256(vd.challengeOf(id, digest).status) == 5);
+        console.log("dispute cancelled", uint256(vd.challengeOf(id, digest).status) == 4);
     }
 
     function _deploy(Statement.Data memory d, address me, uint64 window, uint64 slot) internal {
@@ -103,6 +108,8 @@ contract ValidityDisputeOnChain is Script {
         acc = new Reserve(DOMAIN, address(token), address(0), address(new Poseidon2Goldilocks()), 1 hours, 2 days);
         if (address(sp1) == address(0)) sp1 = new SP1Verifier();
         vd = new ValidityDispute(address(acc), address(sp1), vkey, Deployment.params(1 days, window, slot, 30 hours));
+        pd = new Postings(address(acc), address(vd), Deployment.postingParams());
+        vd.setPostings(address(pd));
         acc.setDispute(address(vd));
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
@@ -130,21 +137,21 @@ contract ValidityDisputeOnChain is Script {
     function _deliver(Statement.Data memory d, uint256 pk, bytes32 proofHash) internal {
         bytes32[] memory leaves = new bytes32[](Statement.PAYMENTS);
         for (uint256 i = 0; i < leaves.length; ++i) leaves[i] = keccak256(_opening(i));
-        ValidityDispute.Receipt memory rc = _receipt(pk, KeccakTree.root(leaves), proofHash);
+        BatchReceipt memory rc = _receipt(pk, KeccakTree.root(leaves), proofHash);
         bytes32[] memory sealedPath = KeccakTree.path(leaves, 0);
-        vd.deliver(id, digest, rec, 0, Statement.path(d, 0), rc, _opening(0), sealedPath);
+        pd.deliver(id, digest, rec, 0, Statement.path(d, 0), rc, _opening(0), sealedPath);
     }
 
-    function _receipt(uint256 pk, bytes32 sealedRoot, bytes32 proofHash) internal view returns (ValidityDispute.Receipt memory) {
+    function _receipt(uint256 pk, bytes32 sealedRoot, bytes32 proofHash) internal view returns (BatchReceipt memory) {
         uint64 at = uint64(block.timestamp);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, vd.receiptDigest(id, Statement.ROOT, sealedRoot, proofHash, at));
-        return ValidityDispute.Receipt({sealedRoot: sealedRoot, proofHash: proofHash, receivedAt: at, signature: abi.encodePacked(r, s, v)});
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, pd.receiptDigest(id, Statement.ROOT, sealedRoot, proofHash, bytes32(0), at));
+        return BatchReceipt({sealedRoot: sealedRoot, proofHash: proofHash, blobsHash: bytes32(0), receivedAt: at, signature: abi.encodePacked(r, s, v)});
     }
 
     /// The chained hash postProof checks, computed in place: the word before
     /// each chunk briefly holds the hash so far.
     function _proofHash(bytes memory b) internal view returns (bytes32 h) {
-        uint256 size = vd.CHUNK();
+        uint256 size = pd.CHUNK();
         uint256 n = b.length;
         assembly {
             let base := add(b, 32)
@@ -168,7 +175,7 @@ contract ValidityDisputeOnChain is Script {
     /// reused, and the memory each call's encoding takes is given back.
     function _postProof(bytes memory b) internal {
         bytes32 h = _proofHash(b);
-        uint256 size = vd.CHUNK();
+        uint256 size = pd.CHUNK();
         bytes memory buf = new bytes(size);
         uint256 i;
         for (uint256 at = 0; at < b.length; at += size) {
@@ -181,7 +188,7 @@ contract ValidityDisputeOnChain is Script {
                 mstore(buf, len)
                 fmp := mload(0x40)
             }
-            vd.postProof(id, h, i++, buf, at + len == b.length);
+            pd.postProof(id, h, i++, buf, at + len == b.length);
             assembly {
                 mstore(0x40, fmp)
             }

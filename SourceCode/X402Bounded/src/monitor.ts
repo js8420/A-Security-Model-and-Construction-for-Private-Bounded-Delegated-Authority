@@ -1,8 +1,9 @@
 import { decodeFunctionData, encodePacked, getAddress, hexToBytes, keccak256, parseEventLogs, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
-import { ANSWERED, disputeAbi, reserveAbi } from "./abi.js";
+import { ANSWERED, disputeAbi, postingsAbi, reserveAbi } from "./abi.js";
 import { commitOpening, unitsOf, type Opening } from "./opening.js";
 import { unseal } from "./seal.js";
 import { proofHash } from "./answerer.js";
+import { readPayload, type BlobSource } from "./blobs.js";
 import type { ProofGate, Statement, Terms } from "./stark/gate.js";
 
 /** One domain the delegation spends on: its chain, its reserve, the delegation's id there, and the dispute contract if it has one. */
@@ -13,6 +14,8 @@ export interface Domain {
   reserve: Address;
   delegation: bigint;
   dispute?: Address;
+  /** Reads back from Ethereum what an answerer posted there as blobs for this domain's batches. */
+  blobs?: BlobSource;
 }
 
 /** What the principal chose. The monitor checks every opening against it directly. */
@@ -79,6 +82,8 @@ const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`
  * returns what is left.
  */
 const margin = (x: bigint) => x + x / 2n;
+/** The reserve's record of a settlement, as a challenge presents it. */
+const settlementOf = (r: Record) => ({ elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch });
 
 /** Shares live in F_p[X]/(X^2 - 7), the extension the circuit forms them in. */
 const P = 0xffffffff00000001n;
@@ -404,19 +409,20 @@ export class Monitor {
         }
         const expiries = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Expired", args: { id: d.delegation }, ...range });
         for (const l of expiries) this.expired.add(key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }));
-        const posted = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "SealedDelivered", args: { id: d.delegation }, ...range });
+        const pd = await this.postings(d);
+        const posted = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "SealedDelivered", args: { id: d.delegation }, ...range });
         const c = await this.context(d);
         for (const l of posted) {
           const a = l.args as { digest: bigint; opening: Hex };
           await this.deliverSealed(a.opening, c.domain, a.digest);
         }
-        const bindings = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "PostingBound", args: { id: d.delegation }, ...range });
+        const bindings = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "PostingBound", args: { id: d.delegation }, ...range });
         for (const l of bindings) {
           const a = l.args as { root: Hex; proofHash: Hex };
           const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
           this.bound.set(`${d.name}/${a.root}`, { domain: d.name, proofHash: a.proofHash, at: b.timestamp });
         }
-        const proofs = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "ProofPosted", args: { id: d.delegation }, ...range });
+        const proofs = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "ProofPosted", args: { id: d.delegation }, ...range });
         for (const l of proofs) {
           const posted = (l.args as { proofHash: Hex }).proofHash.toLowerCase();
           for (const [k, v] of this.bound) if (v.domain === d.name && v.proofHash.toLowerCase() === posted) this.bound.delete(k);
@@ -424,6 +430,8 @@ export class Monitor {
           const bytes = await this.postedProof(d, a.proofHash, a.poster);
           if (bytes) await this.deliverProof(bytes);
         }
+        const blobs = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "BlobsPosted", args: { id: d.delegation }, ...range });
+        for (const l of blobs) await this.postedBlobs(d, l.args as { root: Hex; blobsHash: Hex; poster: Address });
       }
       this.from.set(d.name, head + 1n);
     }
@@ -435,11 +443,11 @@ export class Monitor {
    * hash is the one posted under.
    */
   private async postedProof(d: Domain, hash: Hex, poster: Address): Promise<Uint8Array | undefined> {
-    const logs = await d.chain.getContractEvents({ address: d.dispute as Address, abi: disputeAbi, eventName: "ProofChunk", args: { id: d.delegation, proofHash: hash, poster }, fromBlock: 0n });
+    const logs = await d.chain.getContractEvents({ address: await this.postings(d), abi: postingsAbi, eventName: "ProofChunk", args: { id: d.delegation, proofHash: hash, poster }, fromBlock: 0n });
     const chunks = new Map<bigint, Uint8Array>();
     for (const l of logs) {
       const tx = await d.chain.getTransaction({ hash: l.transactionHash as Hex });
-      const call = decodeFunctionData({ abi: disputeAbi, data: tx.input });
+      const call = decodeFunctionData({ abi: postingsAbi, data: tx.input });
       if (call.functionName !== "postProof") continue;
       const [, , index, chunk] = call.args as readonly [bigint, Hex, bigint, Hex, boolean];
       chunks.set(index, hexToBytes(chunk));
@@ -455,6 +463,34 @@ export class Monitor {
     return proofHash(bytes).toLowerCase() === hash.toLowerCase() ? bytes : undefined;
   }
 
+  /**
+   * A batch posted as blobs on Ethereum, whose report reached the domain:
+   * the monitor reads the blobs back, checks them against the hash reported,
+   * and takes the proof and every sealed opening they carry, as from a
+   * posting on the domain.
+   */
+  private async postedBlobs(d: Domain, a: { root: Hex; blobsHash: Hex; poster: Address }): Promise<void> {
+    if (!d.blobs) return;
+    const payload = await d.blobs.payload(a.poster, d.delegation, a.root, a.blobsHash);
+    const read = payload && readPayload(payload);
+    if (!read) return;
+    this.bound.delete(`${d.name}/${a.root}`);
+    await this.deliverProof(read.proof);
+    const c = await this.context(d);
+    for (const s of read.sealed) await this.deliverSealed(s.blob, c.domain, s.digest);
+  }
+
+  private readonly posting = new Map<string, Address>();
+
+  /** The posting contract the domain's dispute contract names. */
+  private async postings(d: Domain): Promise<Address> {
+    const have = this.posting.get(d.name);
+    if (have) return have;
+    const p = (await d.chain.readContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "postings" })) as Address;
+    this.posting.set(d.name, p);
+    return p;
+  }
+
   private readonly windows = new Map<string, bigint>();
 
   private async acceptWindow(d: Domain): Promise<bigint> {
@@ -466,7 +502,43 @@ export class Monitor {
   }
 
   /**
-   * Step 1's challenge, topping the posting pool up to one deposit. A settlement someone else
+   * Step 1's challenges on one domain, in one call: every record due that
+   * nobody has challenged yet, under one shared deadline, paying into the
+   * proving pool for the batches they can fall in rather than a bond each.
+   * Records another party challenged first are joined one by one.
+   */
+  private async challengeAll(d: Domain, rs: Record[]): Promise<void> {
+    const dispute = d.dispute as Address;
+    const open: Record[] = [];
+    for (const r of rs) {
+      const c = await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengeOf", args: [d.delegation, r.digest] });
+      if (c.status === 0) open.push(r);
+      else await this.challenge(d, r);
+    }
+    if (open.length === 0) return;
+    if (open.length === 1) return this.challenge(d, open[0]);
+    let first = open[0].time;
+    let last = open[0].time;
+    for (const r of open) {
+      if (r.time < first) first = r.time;
+      if (r.time > last) last = r.time;
+    }
+    const price = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "principalPrice", args: [d.delegation, BigInt(open.length), first, last] })) as bigint;
+    const hash = await d.wallet.writeContract({
+      address: dispute, abi: disputeAbi, functionName: "openMany",
+      args: [d.delegation, open.map((r) => r.digest), open.map(settlementOf)], value: margin(price),
+    });
+    const receipt = await d.chain.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`challenges on ${d.name} reverted`);
+    for (const e of parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Challenged" })) {
+      const r = open.find((x) => x.digest === e.args.digest);
+      if (r) this.challenged.set(key(r), e.args.deadline);
+    }
+    for (const r of open) if (!this.challenged.has(key(r))) throw new Error(`challenge of ${key(r)} left no event`);
+  }
+
+  /**
+   * Step 1's challenge of one record, topping the posting pool up to one deposit. A settlement someone else
    * challenged first is joined instead: an open challenge then holds it as
    * the monitor's own would, and an answered one carries the monitor's
    * request from the join, so step 3 counts the delivery wait from there.
@@ -475,13 +547,13 @@ export class Monitor {
    */
   private async challenge(d: Domain, r: Record): Promise<void> {
     const dispute = d.dispute as Address;
-    const bond = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengeBond" })) as bigint;
-    const topUp = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingTopUp", args: [d.delegation] })) as bigint;
-    const s = { elems: keccak256(encodePacked(["uint64[]"], [r.elems])), amount: r.amount, payee: r.payee, time: r.time, epoch: r.epoch };
+    const price = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "principalPrice", args: [d.delegation, 1n, r.time, r.time] })) as bigint;
+    const topUp = (await d.chain.readContract({ address: await this.postings(d), abi: postingsAbi, functionName: "postingTopUp", args: [d.delegation] })) as bigint;
+    const s = settlementOf(r);
     let hash: Hex;
     let joined = false;
     try {
-      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: margin(bond + topUp) });
+      hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "open", args: [d.delegation, r.digest, s], value: margin(price) });
     } catch (e) {
       if (!String(e).includes("AlreadyChallenged")) throw e;
       try {
@@ -527,10 +599,28 @@ export class Monitor {
       let due = 0n;
       for (const v of this.bound.values()) if (v.domain === d.name && now <= v.at + wait) due += 1n;
       if (due === 0n) continue;
-      const deposit = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingDeposit" })) as bigint;
-      const pool = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "postingPool", args: [d.delegation] })) as bigint;
+      const pd = await this.postings(d);
+      const deposit = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "postingDeposit" })) as bigint;
+      const pool = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "postingPool", args: [d.delegation] })) as bigint;
       if (pool >= due * deposit) continue;
-      const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "fundPosting", args: [d.delegation], value: due * deposit - pool });
+      const hash = await d.wallet.writeContract({ address: pd, abi: postingsAbi, functionName: "fund", args: [d.delegation], value: due * deposit - pool });
+      await d.chain.waitForTransactionReceipt({ hash });
+    }
+  }
+
+  /**
+   * Takes back what each domain's proving pool still holds once none of the
+   * monitor's challenges there is open.
+   */
+  private async returnPools(): Promise<void> {
+    for (const d of this.domains) {
+      if (!d.dispute) continue;
+      const dispute = d.dispute as Address;
+      const pool = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "provingPool", args: [d.delegation] })) as bigint;
+      if (pool === 0n) continue;
+      const open = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "openByPrincipal", args: [d.delegation] })) as bigint;
+      if (open !== 0n) continue;
+      const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "returnProving", args: [d.delegation] });
       await d.chain.waitForTransactionReceipt({ hash });
     }
   }
@@ -631,6 +721,7 @@ export class Monitor {
     const breaches = await this.breaches(backed);
     const over = this.overBudget(backed);
     let freeze = false;
+    const fresh = new Map<string, Record[]>();
     for (const r of this.ordered()) {
       const k = key(r);
       const d = this.domainOf(r);
@@ -641,7 +732,9 @@ export class Monitor {
         if (why.length === 0) continue;
         reasons.push(`${k}: ${why.join("; ")}`);
         if (d.dispute && now < r.time + (await this.acceptWindow(d))) {
-          await this.challenge(d, r);
+          const due = fresh.get(d.name) ?? [];
+          due.push(r);
+          fresh.set(d.name, due);
           challenged.push(r);
         } else freeze = true;
         continue;
@@ -675,6 +768,11 @@ export class Monitor {
         freeze = true;
       }
     }
+    for (const d of this.domains) {
+      const due = fresh.get(d.name);
+      if (due) await this.challengeAll(d, due);
+    }
+    await this.returnPools();
     if (!freeze) return { total, challenged, froze: false, reasons };
     await this.freezeAll();
     this.reasons.push(...reasons);

@@ -1,0 +1,847 @@
+  Ethereum: https://ethereum-rpc.publicnode.com refused: Error: server returned an error response: error code -32602: distance to target block exceeds maximum proof window
+  Base: https://base-rpc.publicnode.com refused: Error: server returned an error response: error code -32602: distance to target block exceeds maximum proof window
+  Base: https://mainnet.base.org refused: Error: server returned an error response: error code -32603: no state found for block number 53571373
+Ethereum block 26350534 from https://eth.drpc.org, account 0x43edB88C4B80fDD2AdFF2412A7BebF9dF42cB40e, slot 0x0000000000000000000000000000000000000000000000000000000000000000: 9 account and 6 storage nodes
+Base block 53571376 from https://base.drpc.org, account 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913, slot 0x0000000000000000000000000000000000000000000000000000000000000000: 9 account and 8 storage nodes
+  fork block 26350538
+  L1 base fee, wei 324707222
+  portal execution gas for one answer 510225
+  fork block 26350538
+  L1 base fee, wei 324707222
+  portal execution gas for one chunk 4158189
+  fork block 26350538
+  L1 base fee, wei 324707222
+  portal execution gas for one delivery 310520
+  closing call, execution gas 573078
+  fork block 26350538
+  blobs 83
+  transactions 14
+  Ethereum gas of one batch's blob postings 1032754
+Ran 1 test for test/BlobPostingGas.t.sol:BlobPostingGas
+Suite result: ok. 0 passed; 0 failed; 1 skipped; finished in 349.88µs (77.38µs CPU time)
+Ran 3 tests for test/ForcedPostingGas.t.sol:ForcedPostingGas
+Suite result: ok. 0 passed; 0 failed; 3 skipped; finished in 3.23ms (128.64µs CPU time)
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 14.07ms (3.42ms CPU time)
+Ran 3 tests for test/BlobPosting.t.sol:BlobPostingTest
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 17.19ms (1.35ms CPU time)
+Ran 1 test for test/StateRead.t.sol:StateReadTest
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 45.07ms (44.68ms CPU time)
+Ran 19 tests for test/RevealDispute.t.sol:RevealDisputeTest
+Suite result: ok. 19 passed; 0 failed; 0 skipped; finished in 56.66ms (168.08ms CPU time)
+Ran 18 tests for test/TranscriptGas.t.sol:TranscriptGas
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 85.56ms (52.80ms CPU time)
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 139.35ms (59.47ms CPU time)
+Ran 19 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
+Suite result: ok. 19 passed; 0 failed; 0 skipped; finished in 277.16ms (182.49ms CPU time)
+Ran 93 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
+Suite result: ok. 93 passed; 0 failed; 0 skipped; finished in 969.17ms (2.11s CPU time)
+Ran 11 tests for test/StepGas.t.sol:StepGas
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.78s (5.52s CPU time)
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.78s (8.36ms CPU time)
+Ran 12 test suites in 2.80s (7.16s CPU time): 179 tests passed, 0 failed, 4 skipped (183 total tests)
+ValidityDisputeOnChain
+  deploy MockToken                375,695
+  deploy Poseidon2Goldilocks      871,186
+  deploy Reserve                3,199,953
+  deploy SP1Verifier            1,508,005
+  deploy ValidityDispute        5,141,365
+  deploy Postings               2,778,031
+  setPostings                      44,199
+  setDispute                       47,576
+  mint                             68,279
+  mint                             51,119
+  approve                          46,463
+  register                        357,995
+  deploy                           21,000
+  accept                           83,827
+  stakeAnswerer                    49,674
+  settleLogged                    119,798
+  verifyProof                     246,708
+  open                            254,649
+  answer                          491,069
+  deliver                         239,788
+  deploy MockToken                375,695
+  deploy Poseidon2Goldilocks      871,186
+  deploy Reserve                3,199,941
+  deploy ValidityDispute        5,141,317
+  deploy Postings               2,778,043
+  setPostings                      44,199
+  setDispute                       47,588
+  mint                             68,279
+  mint                             51,119
+  approve                          46,463
+  register                        357,995
+  deploy                           21,000
+  accept                           83,827
+  stakeAnswerer                    49,674
+  settleLogged                    119,798
+  open                            254,533
+  mint                             34,019
+  mint                             34,019
+  mint                             34,019
+  expire                           85,904
+  returnProving                    51,943
+  withdraw                         28,585
+  deploy MockToken                375,695
+  deploy Poseidon2Goldilocks      871,186
+  deploy Reserve                3,199,953
+  deploy ValidityDispute        5,141,365
+  deploy Postings               2,778,043
+  setPostings                      44,199
+  setDispute                       47,588
+  mint                             68,279
+  mint                             51,119
+  approve                          46,463
+  register                        357,995
+  deploy                           21,000
+  accept                           83,827
+  stakeAnswerer                    49,674
+  settleLogged                    119,810
+  open                            254,649
+  cancel                           52,927
+  postProof, all chunks        414,854,690  in 106 transactions, the largest 3,945,940
+ValidityDisputeBatchOnChain
+  deploy MockToken                375,695
+  deploy Poseidon2Goldilocks      871,186
+  deploy Reserve                3,199,953
+  deploy SP1Verifier            1,508,005
+  deploy ValidityDispute        5,141,365
+  deploy Postings               2,778,031
+  setPostings                      44,199
+  setDispute                       47,576
+  mint                             68,279
+  mint                             51,119
+  approve                          46,463
+  register                        337,855
+  deploy                           21,000
+  accept                           83,827
+  settleLogged                    119,798
+  openMany                        255,359
+  answerBatch                     497,163
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  openMany                        274,326
+  answerBatch                     529,579
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,266
+  openMany                        346,156
+  answerBatch                     628,777
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,747
+  openMany                        489,880
+  answerBatch                     827,775
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,228
+  settleLogged                    105,241
+  openMany                        777,412
+  answerBatch                   1,227,987
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    107,723
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,747
+  settleLogged                    110,242
+  settleLogged                    115,279
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    112,724
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,724
+  settleLogged                     97,734
+  openMany                      1,352,860
+  answerBatch                   2,037,119
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,231
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,748
+  settleLogged                     97,734
+  settleLogged                    102,722
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,228
+  settleLogged                    105,229
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,747
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    112,712
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,712
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,242
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,710
+  settleLogged                    102,722
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    112,748
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,723
+  settleLogged                    112,748
+  settleLogged                     97,734
+  settleLogged                    100,240
+  openMany                      2,505,532
+  answerBatch                   3,690,258
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,810
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    107,735
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    110,242
+  settleLogged                    112,700
+  settleLogged                     97,722
+  settleLogged                    102,722
+  settleLogged                    107,735
+  settleLogged                    112,724
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,242
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,722
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    115,267
+  settleLogged                    100,228
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,241
+  settleLogged                    110,242
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,735
+  settleLogged                    112,772
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    112,772
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,747
+  settleLogged                    112,748
+  settleLogged                     97,734
+  settleLogged                    100,204
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,267
+  settleLogged                    100,228
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    107,747
+  settleLogged                    112,772
+  settleLogged                     97,722
+  settleLogged                    102,710
+  settleLogged                    107,747
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    112,772
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,254
+  openMany                      4,817,776
+  answerBatch                   7,137,652
+  register                        303,655
+  deploy                           21,000
+  accept                           37,119
+  settleLogged                    119,822
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,735
+  settleLogged                    112,748
+  settleLogged                     97,722
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,722
+  settleLogged                    107,747
+  settleLogged                    110,230
+  settleLogged                    115,279
+  settleLogged                    100,228
+  settleLogged                    105,229
+  settleLogged                    110,242
+  settleLogged                    112,712
+  settleLogged                     97,710
+  settleLogged                    102,722
+  settleLogged                    107,735
+  settleLogged                    112,724
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,242
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,722
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,723
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,243
+  settleLogged                    100,228
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    115,207
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,723
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,734
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    112,772
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    100,216
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,267
+  settleLogged                    100,216
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,229
+  settleLogged                    107,747
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    107,723
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,229
+  settleLogged                    110,266
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,255
+  settleLogged                    100,228
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    105,241
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    107,723
+  settleLogged                    110,254
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,711
+  settleLogged                    112,748
+  settleLogged                     97,734
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,735
+  settleLogged                    112,724
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,747
+  settleLogged                    112,760
+  settleLogged                     97,722
+  settleLogged                    102,746
+  settleLogged                    107,747
+  settleLogged                    110,266
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    102,734
+  settleLogged                    107,747
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,735
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    107,735
+  settleLogged                    110,266
+  settleLogged                    115,267
+  settleLogged                    100,228
+  settleLogged                    105,229
+  settleLogged                    110,254
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,241
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,723
+  settleLogged                    112,760
+  settleLogged                     97,734
+  settleLogged                    102,734
+  settleLogged                    105,253
+  settleLogged                    110,242
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    105,253
+  settleLogged                    107,747
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    102,746
+  settleLogged                    107,735
+  settleLogged                    110,254
+  settleLogged                    115,279
+  settleLogged                    100,240
+  settleLogged                    105,241
+  settleLogged                    110,242
+  settleLogged                    112,736
+  settleLogged                     97,722
+  settleLogged                    102,722
+  settleLogged                    107,747
+  settleLogged                    112,772
+  settleLogged                     97,734
+  settleLogged                    100,228
+  settleLogged                    105,253
+  settleLogged                    110,266
+  settleLogged                    115,255
+  settleLogged                    100,240
+  settleLogged                    102,746
+  settleLogged                    107,735
+  openMany                      9,470,237
+  answerBatch                  14,594,008
+RevealDisputeOnChain
+  deploy RevealDispute          1,723,839
+  register                        157,173
+  settle                           56,541
+  open                             58,410
+  answer                          105,133
+  withdraw                         28,563
+  deploy RevealDispute          1,723,839
+  register                        157,161
+  settle                           56,541
+  open                             58,410
+  answer                          114,885
+  withdraw                         28,563
+  deploy RevealDispute          1,723,839
+  register                        157,173
+  settle                           56,541
+  open                             58,410
+  cancel                           58,829
+  withdraw                         28,563
+StateReadOnChain
+  deploy StateRead              1,402,325
+  deploy Reader                   273,681
+  read                          1,350,051
+POSTING A BATCH PROOF ON BASE
+==============================================================================
+  2026-11-05 19:06 UTC, Base block 53576143, endpoint https://base-rpc.publicnode.com
+  base fee, median of the last 1025 blocks        0.005000 gwei
+  base fee, least and greatest              0.005000   0.005041 gwei
+  ETH / USD, Chainlink on Base                   2242.93
+
+  proof, all chunks    106 tx   414,854,690 gas  10,386,344 bytes
+                       execution 0.00207427 ETH, L1 data 0.00040021 ETH, total 0.00247448 ETH = 5.5501 USD
+                       on Ethereum at 1 gwei 0.41485469 ETH = 930.4897 USD
+  one answer             1 tx       491,069 gas       1,028 bytes
+                       execution 0.00000246 ETH, L1 data 0.00000005 ETH, total 0.00000250 ETH = 0.0056 USD
+                       on Ethereum at 1 gwei 0.00049107 ETH = 1.1014 USD
+  one delivery           1 tx       239,788 gas       1,636 bytes
+                       execution 0.00000120 ETH, L1 data 0.00000007 ETH, total 0.00000127 ETH = 0.0028 USD
+                       on Ethereum at 1 gwei 0.00023979 ETH = 0.5378 USD
+THE GROTH16 RUNS, SECONDS
+==============================================================================
+  out_s9_batch_a               default      setup    23.3  prove    6000.0
+  out_s9_batch_b               default      setup    23.3  prove    5990.1
+  out_s9_batch_low_a           low memory   setup    23.1  prove    9674.6
+  out_s9_batch_low_b           low memory   setup    23.1  prove    9667.3
+  one answer for two batch proofs:
+  out_s9_agg_a                 default      setup    22.6  prove   11319.4
+  out_s9_agg_b                 default      setup    22.3  prove   11345.9
+  the second batch adds 5345.9 s to the slower default run, 89.1% of one answer
+
+THE CHALLENGER'S BOND AND THE BOUNTY
+==============================================================================
+  proving one answer, the slower default run, 6000.0 s at 3.616 USD an hour     6.0267 USD
+  proving bond as deployed 0.005153 ETH = 11.5578 USD at 2242.93 USD an ether
+  that is 1.92 x the proving; 2 x at today's price would be 0.005374 ETH
+  it covers the proving while ether stays above 1169.55 USD
+  sending the answer on Base, measured                                      0.0056 USD
+  forcing it in through Ethereum: 572,345 L1 gas, measured on a fork
+  bond at a challenge, proving bond + 2 x forcing at the Ethereum base fee then:
+    at    1 gwei:     14.13 USD; forcing at 1 gwei costs     1.28, at 2 gwei     2.57
+    at   10 gwei:     37.23 USD; forcing at 10 gwei costs    12.84, at 20 gwei    25.67
+    at   50 gwei:    139.93 USD; forcing at 50 gwei costs    64.19, at 100 gwei   128.37
+    at  200 gwei:    525.05 USD; forcing at 200 gwei costs   256.75, at 400 gwei   513.49
+  An answer pays whenever the Ethereum base fee at the answer is at most 2 times
+  the fee at the challenge and ether has not fallen below the bound above.
+
+THE POSTING DEPOSIT, SET AT THE PRINCIPAL'S CHALLENGE
+==============================================================================
+  posting the batch proof and 256 sealed openings on Base, measured, USD     6.2669
+  the proof's postings: 106 transactions, 10,386,344 bytes of call data
+  deposit, 2 x the postings at the domain's fee then, at the measured fee     12.5338 USD
+  A posting forced in through Ethereum is refunded what it costs on the domain; what forcing adds
+  is the answerer's:
+  portal's L1 gas beyond call data, measured: one chunk 4,158,189, one answer 510,225, one delivery 310,520
+  forcing every chunk and 256 deliveries in, L1 gas         960,069,554
+    at    1 gwei: 0.9601 ETH = 2,153.37 USD, paid by the answerer only under censorship
+    at   10 gwei: 9.6007 ETH = 21,533.69 USD, paid by the answerer only under censorship
+
+WINDOWS ON BASE, HOURS
+==============================================================================
+  delivery w_d                                    8.0
+  posting wait w_p >= Delta_f + sigma_x + m      30.0
+  forced inclusion Delta_f                       14.0
+  clock bound sigma_x                            12.5
+  signed-time tolerance theta                     1.0
+  monitor's margin m                              1.0
+  acceptance window w = w_d + theta + m + Delta_f + sigma_x  36.5
+  decision time after the signed time, w - Delta_f - sigma_x 10.0
+  rate window W                                  24.0
+  windows a bond covers, ceil((w+theta)/W)+1        3
+  slowest proving run, setup included              2.69
+  answer window w_a >= t_ans + Delta_f + sigma_x   29.2, set to 32
+  slot eta >= t_ans                                2.69, set to 4
+  one challenge forfeits by w_a + 2 eta             40.0
+
+BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY, ONE PAYMENT A MINUTE
+==============================================================================
+                                        B, USD    bonds  with stake  stake adds
+  Steady, one price, 30 days            432.00    10.0%       22.7%       12.7
+  Peak 5x mean, 30 days                 432.00    50.0%      102.7%       52.7
+  Three prices, 30 days                 864.00    25.0%       51.3%       26.3
+  One day, one price                     14.40   300.0%      680.3%      380.3
+  One day, expiry 300 days               14.40   300.0%      680.3%      380.3
+  One day, 5x peak, 3 prices             28.80  3750.0%     7540.1%     3790.1
+  That task, 30-day delegation          864.00   125.0%      251.3%      126.3
+  The stake is the bond plus the bounty, 11.56 USD, on each domain; the
+  bounty is fixed in dollars, so it weighs more as the budget falls.
+  A declared expiry longer than the task changes none of these: the bond
+  follows the rate the task needs and the life it actually spends.
+
+HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD
+FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
+==============================================================================
+  declared expiry       f   bonds   stake  deposit  funding fB     total  total/B
+  1 x the task       1.03   43.20   54.76    12.53      446.40    556.89     1.29
+  2 x the task       2.03   43.20   54.76    12.53      878.40    988.89     2.29
+  5 x the task       5.03   43.20   54.76    12.53     2174.40   2284.89     5.29
+  10 x the task     10.03   43.20   54.76    12.53     4334.40   4444.89    10.29
+  The stake is the bond plus the bounty, 11.56; without an answerer the total
+  is less by the stake, 54.76. The deposit is one posting deposit at the measured
+  Base fee, which the principal holds while a challenge of its own is open.
+  Carrying the stake for the task costs 0.0450 USD per percentage
+  point of annual interest on it.
+  The same f reached by a short declared life instead needs bonds of
+    f =  1.03: about   10.3% of B in bonds, plus funding fB
+    f =  2.03: about   20.3% of B in bonds, plus funding fB
+    f =  5.03: about   50.3% of B in bonds, plus funding fB
+    f = 10.03: about  100.3% of B in bonds, plus funding fB
+
+ONE-DAY TASK, ONE PRICE, UNDER A LONG DECLARED EXPIRY
+==============================================================================
+  declared   1 days: f =    2.00, bonds / B = 300.0%, funding fB =     28.80 USD
+  declared  30 days: f =   31.00, bonds / B = 300.0%, funding fB =    446.40 USD
+  declared 300 days: f =  301.00, bonds / B = 300.0%, funding fB =   4334.40 USD
+
+ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
+==============================================================================
+   budget, ETH  L1 base fee, gwei  by filling L1  by filling deposits  minutes, worse
+            10                  1             26                    8             5.2
+            10                 10              9                    8             1.8
+            10                 50              2                    8             1.6
+           100                  1             45                   11             9.0
+           100                 10             26                   11             5.2
+           100                 50             13                   11             2.6
+          1000                  1             64                   14            12.8
+          1000                 10             45                   14             9.0
+          1000                 50             31                   14             6.2
+         10000                  1             84                   17            16.8
+         10000                 10             64                   17            12.8
+         10000                 50             51                   17            10.2
+
+  The monitor tips nothing here; any priority fee it pays makes the adversary
+  outbid it on every slot of every block, so the delay only shrinks. The last
+  column is the longer of the two routes.
+
+PROPOSERS THAT EXCLUDE A FORCED TRANSACTION
+==============================================================================
+   including share   P(out for 2 h, 600 slots)   slots for 2^-40   minutes
+             0.540                   4.52e-203                36       7.2
+             0.210                    3.77e-62               118      23.6
+             0.100                    3.51e-28               264      52.8
+             0.052                    1.22e-14               520     104.0
+
+BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN
+==============================================================================
+  blocks in the margin: 600
+    adversary gains, USD    tip that makes it unprofitable, USD
+                   43.20                                 0.0720
+                  432.00                                 0.7200
+                4,320.00                                 7.2000
+               43,200.00                                72.0000
+  A block built by anyone the bribe does not reach includes it at once,
+  so every such block only shortens the delay.
+

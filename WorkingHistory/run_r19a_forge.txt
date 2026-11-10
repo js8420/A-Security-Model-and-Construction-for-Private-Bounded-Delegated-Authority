@@ -1,0 +1,343 @@
+Compiling 9 files with Solc 0.8.28
+Solc 0.8.28 finished in 6.08s
+Compiler run successful!
+
+Ran 1 test for test/BlobPostingGas.t.sol:BlobPostingGas
+[SKIP] testGasOfOneBatchAsBlobs() (gas: 0)
+Suite result: ok. 0 passed; 0 failed; 1 skipped; finished in 349.88µs (77.38µs CPU time)
+
+Ran 3 tests for test/ForcedPostingGas.t.sol:ForcedPostingGas
+[SKIP] testPortalGasForOneAnswer() (gas: 0)
+[SKIP] testPortalGasForOneChunk() (gas: 0)
+[SKIP] testPortalGasForOneDelivery() (gas: 0)
+Suite result: ok. 0 passed; 0 failed; 3 skipped; finished in 3.23ms (128.64µs CPU time)
+
+Ran 5 tests for test/ConstraintGas.t.sol:ConstraintGas
+[PASS] testMedian() (gas: 56985)
+Logs:
+  median
+    operations 94
+    slots read and constants 17
+    evaluation gas 50148
+
+[PASS] testNonCanonicalValueReverts() (gas: 5824)
+[PASS] testOperationReadingAheadReverts() (gas: 6633)
+[PASS] testWorstByOperations() (gas: 379007)
+Logs:
+  worst by operations
+    operations 816
+    slots read and constants 45
+    evaluation gas 369331
+
+[PASS] testWorstByReads() (gas: 56036)
+Logs:
+  worst by values read
+    operations 64
+    slots read and constants 65
+    evaluation gas 45783
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 14.07ms (3.42ms CPU time)
+
+Ran 3 tests for test/BlobPosting.t.sol:BlobPostingTest
+[PASS] testPostersKeepTheirOwnChains() (gas: 379001)
+[PASS] testPostingChainsTheHashesAndTellsTheDomain() (gas: 330817)
+Logs:
+  blob post, 6 blobs, not last 77099
+  blob post, 3 blobs, last 231567
+
+[PASS] testWrongCountRefused() (gas: 256393)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 17.19ms (1.35ms CPU time)
+
+Ran 1 test for test/StateRead.t.sol:StateReadTest
+[PASS] testReadAcrossDomains() (gas: 4877229)
+Logs:
+  cross-domain read, execution gas 1061135
+  calldata bytes 17124 of them zero 2917
+  Ethereum proof nodes, account and storage 9 6
+  Base proof nodes, account and storage 9 8
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 45.07ms (44.68ms CPU time)
+
+Ran 19 tests for test/RevealDispute.t.sol:RevealDisputeTest
+[PASS] testAboveCapRefused() (gas: 2657993)
+[PASS] testAnswerGasByDepth() (gas: 18517310)
+Logs:
+  reveal answer, list depth 1 execution gas 40970
+  reveal answer, list depth 4 execution gas 45911
+  reveal answer, list depth 7 execution gas 51838
+  reveal answer, list depth 10 execution gas 68256
+
+[PASS] testCancelAfterTheDeadlineRefused() (gas: 2271866)
+[PASS] testCancelReleasesTheHoldAndReturnsTheBond() (gas: 2718882)
+[PASS] testCategoryOutsideTheListRefused() (gas: 2665118)
+[PASS] testChallengeAfterTheAcceptanceWindowRefused() (gas: 2244531)
+[PASS] testHonestAnswerReleasesTheHold() (gas: 2730267)
+[PASS] testMerchantOutsideTheListRefused() (gas: 2662241)
+[PASS] testMerchantPaidElsewhereRefused() (gas: 2662290)
+[PASS] testOnlyThePrincipalCancels() (gas: 2271954)
+[PASS] testOpeningOfAnotherDomainRefused() (gas: 2656737)
+[PASS] testOutsideTheValidityWindowRefused() (gas: 2866128)
+[PASS] testOverspendAcrossTwoDomainsPassesOnBoth() (gas: 5550079)
+[PASS] testOverspendOnOneDomainRefused() (gas: 2720268)
+[PASS] testRevokedRunRefused() (gas: 2673683)
+[PASS] testRunBetweenTwoRevokedRangesPasses() (gas: 2700167)
+[PASS] testRunOutsideTheRangeRefused() (gas: 2666595)
+[PASS] testUnansweredChallengeFreezes() (gas: 2300127)
+[PASS] testWrongPolicyRefused() (gas: 2657155)
+Suite result: ok. 19 passed; 0 failed; 0 skipped; finished in 56.66ms (168.08ms CPU time)
+
+Ran 18 tests for test/TranscriptGas.t.sol:TranscriptGas
+[PASS] testAllOperationsOneWarming() (gas: 1659237)
+Logs:
+  Open, deposit 318878
+  Accept, first from this principal 59075
+  Open, permit2 237378
+  Accept, a principal already served 10355
+  Settle logged, 64 units 180586
+  Revoke, first range 74098
+  Revoke, later range 52766
+  Claim 307528
+
+[PASS] testClaimedBondIsNotReturnedAtClose() (gas: 686963)
+[PASS] testCloseReturnsDepositAndBond() (gas: 797010)
+[PASS] testDepositAgainstPermit2() (gas: 1844881)
+Logs:
+  settle logged, 64 units, deposit 180572
+  settle logged, 64 units, permit2 182421
+    permit2 minus deposit 1849
+
+[PASS] testDigestSettlesOnce() (gas: 563571)
+[PASS] testLoggedAgainstPreventive() (gas: 1224488)
+Logs:
+  accountable, logged, 64 units 180559
+  preventive 32606
+  ratio x100 553
+
+[PASS] testNoSettlementAfterExpiry() (gas: 438728)
+[PASS] testOpeningIsBound() (gas: 436922)
+[PASS] testOpeningModeIsRecorded() (gas: 654535)
+[PASS] testPayeeIsBound() (gas: 436883)
+[PASS] testRevocationAfterSignatureRefusesSettlement() (gas: 619291)
+[PASS] testRevokeIsThePrincipals() (gas: 392852)
+[PASS] testRevokeRangeRules() (gas: 605917)
+[PASS] testSettledCarriesTimeAndOpening() (gas: 520180)
+[PASS] testSlotCountFollowsTheAmount() (gas: 575613)
+[PASS] testStaleOrFutureTimeRefused() (gas: 575892)
+[PASS] testStoredAgainstLogged() (gas: 10916050)
+Logs:
+  units 1
+    stored 65965
+    logged 44556
+    ratio x100 148
+  units 3
+    stored 115821
+    logged 48858
+    ratio x100 237
+  units 8
+    stored 195101
+    logged 59636
+    ratio x100 327
+  units 14
+    stored 322060
+    logged 72645
+    ratio x100 443
+  units 30
+    stored 630472
+    logged 107502
+    ratio x100 586
+  units 64
+    stored 1275276
+    logged 182675
+    ratio x100 698
+
+[PASS] testWrongSecretCannotClaim() (gas: 670766)
+Suite result: ok. 18 passed; 0 failed; 0 skipped; finished in 85.56ms (52.80ms CPU time)
+
+Ran 5 tests for test/SP1Groth16Gas.t.sol:SP1Groth16Gas
+[PASS] testTamperedProofRevert() (gas: 1024175252)
+[PASS] testTamperedPublicValuesRevert() (gas: 263183)
+[PASS] testVerifies() (gas: 24561768)
+[PASS] testWrongProgramRevert() (gas: 262610)
+[PASS] testWrongVerifierSelectorRevert() (gas: 45871)
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 139.35ms (59.47ms CPU time)
+
+Ran 19 tests for test/ValidityDispute.t.sol:ValidityDisputeTest
+[PASS] testAnswerPaysTheAgent() (gas: 555137)
+[PASS] testBatchAcrossTwoRootsRefused() (gas: 794440)
+[PASS] testEarlyExpireRefused() (gas: 148141)
+[PASS] testLateAnswerRefused() (gas: 203564)
+[PASS] testLeafAtAnotherPositionFails() (gas: 451745)
+[PASS] testLeavesAreTheReserveRecords() (gas: 24706854)
+[PASS] testNoAnswerForfeitsTheAgentBond() (gas: 199153)
+[PASS] testNoExpireAfterAnswer() (gas: 536517)
+[PASS] testOneProofAnswersEveryPaymentOfTheBatch() (gas: 35148796)
+[PASS] testOneRealAnswerForTwoBatches() (gas: 826418)
+Logs:
+  answer for two batches, real Groth16 proof 358254
+
+[PASS] testOverlongOrMisplacedPathRefused() (gas: 264605)
+[PASS] testProofAfterRevocationStillAnswersItsEpoch() (gas: 615495)
+[PASS] testProofOfAnotherRecordFails() (gas: 877799)
+[PASS] testRaisedAmountCannotBeAnswered() (gas: 864216)
+[PASS] testSecondChallengeRefused() (gas: 158112)
+[PASS] testSubstitutedShareCannotBeAnswered() (gas: 881232)
+[PASS] testUnsettledDigestCannotOpen() (gas: 48481)
+[PASS] testWrongBondCannotOpen() (gas: 51883)
+[PASS] testWrongEpochCannotOpen() (gas: 48800)
+Suite result: ok. 19 passed; 0 failed; 0 skipped; finished in 277.16ms (182.49ms CPU time)
+
+Ran 93 tests for test/ValidityDisputeScale.t.sol:ValidityDisputeScaleTest
+[PASS] testAgentCapacityLimitsItsPrincipals() (gas: 2130986)
+[PASS] testAgentThatRefusesEtherCannotBlockClose() (gas: 521945)
+[PASS] testAnEmptyPoolForBlobsLapsesTheDuty() (gas: 1460289)
+[PASS] testAnEmptyPoolOnTheDomainLapsesNothing() (gas: 43214481)
+[PASS] testAnotherPrincipalDoesNotDelayTheQueue() (gas: 2414121)
+[PASS] testAnswerCreditsTheAnswererWhoeverSendsIt() (gas: 967866)
+[PASS] testAnswerOfABatchOfOne() (gas: 778175)
+[PASS] testAnswerToThePrincipalAsksForTheSealedOpening() (gas: 1876091)
+[PASS] testAnsweredChallengeJoinedThenDelivered() (gas: 1662950)
+[PASS] testAnsweredSettlementCannotBeChallengedAgain() (gas: 787433)
+[PASS] testAnswererGas() (gas: 918400)
+Logs:
+  stake answerer 29721
+  slash answerer, batch of one 74998
+
+[PASS] testAnswererStakeLifecycle() (gas: 461481)
+[PASS] testBatchAfterAnyDeadlineFails() (gas: 896475)
+[PASS] testBatchAnswersEveryChallengeAndCreditsEachAgent() (gas: 2204762)
+[PASS] testBatchIsPaidOnceAcrossAnswers() (gas: 1164524)
+[PASS] testBatchNamingASettlementTwiceFails() (gas: 823471)
+[PASS] testBatchWithAnUnchallengedSettlementFails() (gas: 843310)
+[PASS] testBatchWithWrongValuesFails() (gas: 972240)
+[PASS] testBindingNeedsTheAnsweredBatch() (gas: 1774506)
+[PASS] testBlobsPostedEndTheDutyAndAreRefunded() (gas: 1720527)
+[PASS] testBlobsPostedLateSlash() (gas: 12818197)
+[PASS] testBondFollowsTheEthereumFee() (gas: 968940)
+[PASS] testCancelLiftsTheHoldAndThePoolReturns() (gas: 879117)
+[PASS] testCancelWithdrawsTheRequest() (gas: 1643394)
+[PASS] testCancellingAJoinLeavesTheOtherChallenge() (gas: 1005870)
+[PASS] testCensoredReportStillCounts() (gas: 12815099)
+[PASS] testChallengeAfterTheAcceptanceWindowRefused() (gas: 558611)
+[PASS] testChallengerThatRefusesEtherCannotBlockForfeit() (gas: 812521)
+[PASS] testCloseAfterAnAnsweredChallengeReturnsTheBond() (gas: 766885)
+[PASS] testCloseWaitsForOpenChallenges() (gas: 712039)
+[PASS] testDeliveredOpeningIsPostedAndEndsTheDuty() (gas: 2244983)
+[PASS] testDeliveryAfterTheWaitRefused() (gas: 1345690)
+[PASS] testDeliveryGas() (gas: 1494163)
+Logs:
+  deliver sealed opening, batch of 256 157483
+
+[PASS] testDeliveryUnderAnotherReceiptSlashes() (gas: 1812361)
+[PASS] testDepositFollowsTheDomainFee() (gas: 783954)
+[PASS] testDepositIsTheDearerWay() (gas: 2646175)
+[PASS] testDisputeWindowMustFitTheCloseDelay() (gas: 3753968)
+[PASS] testEmptyBatchFails() (gas: 9514)
+[PASS] testExpiredPrincipalChallengeReturnsThePool() (gas: 726765)
+[PASS] testFloorsSizeTheBondAndTheDeposit() (gas: 7484210)
+[PASS] testForcedPostingIsRefundedAtTheDomainFee() (gas: 43231548)
+[PASS] testForfeitFreezesSettlementAndReleasesTheDeposit() (gas: 662223)
+[PASS] testFreezeByThePrincipalStopsSettlement() (gas: 561523)
+[PASS] testGuestAndReserveHashTheSharesAlike() (gas: 5614146)
+[PASS] testJoinAfterTheAcceptanceWindowRefused() (gas: 668716)
+[PASS] testJoinKeepingItsDeadlineLeavesTheQueue() (gas: 1011846)
+[PASS] testJunkPostingIsNotRefunded() (gas: 43233608)
+[PASS] testLapseIsPerBatch() (gas: 2165981)
+[PASS] testLateBatchIsPaidOnceAtCost() (gas: 2356794)
+[PASS] testLeafLayout() (gas: 574425)
+[PASS] testMonitorAddressHoldsAndFreezes() (gas: 1081657)
+[PASS] testNoAnswererCreditsTheAgent() (gas: 912403)
+[PASS] testNoMonitorMeansOnlyThePrincipal() (gas: 392395)
+[PASS] testNoTwoDeadlinesInOneSlot() (gas: 2520979)
+[PASS] testNothingSettlesBeforeTheAgentAccepts() (gas: 575662)
+[PASS] testOneAnswerForSeveralBatches() (gas: 1616264)
+Logs:
+  answer for two batches of two delegations 292991
+
+[PASS] testOneDepositForManyChallenges() (gas: 1696581)
+[PASS] testOnlyThePrincipalJoinsAndOnlyWithTheDeposit() (gas: 788277)
+[PASS] testOnlyThePrincipalOpensMany() (gas: 568988)
+[PASS] testOnlyThePrincipalSideCancelsInTime() (gas: 1012819)
+[PASS] testOtherAgentsAreNotQueued() (gas: 1614195)
+[PASS] testOtherChallengesDoNotHold() (gas: 772672)
+[PASS] testOtherOpeningCannotBeDelivered() (gas: 1777861)
+[PASS] testPoolAndDeadlineFollowTheBatchBound() (gas: 970097)
+[PASS] testPostingIsRefundedFromThePool() (gas: 43619540)
+[PASS] testPrincipalChallengeHoldsSettlementUntilAnswered() (gas: 1037335)
+[PASS] testPrincipalJoinsAChallengeSomeoneElseOpened() (gas: 932418)
+Logs:
+  join another party's challenge 82570
+
+[PASS] testPrincipalJoinsAnAnsweredChallenge() (gas: 1400553)
+[PASS] testPrincipalsBeforeTheDeclarationCount() (gas: 942440)
+[PASS] testProofPostedInChunks() (gas: 274009523)
+[PASS] testProofPostedLateSlashes() (gas: 1730391)
+[PASS] testProvingPoolWaitsForOpenChallenges() (gas: 777385)
+[PASS] testQueueDrainsOverTime() (gas: 1220704)
+[PASS] testQueuesAreSpacedAndOnAlternateSlots() (gas: 1959592)
+[PASS] testRebuiltLeavesReachTheRootTheGuestCommits() (gas: 18664775)
+[PASS] testReceiptAfterTheAnswerCannotSlashWithholding() (gas: 1459629)
+[PASS] testReceiptByAnotherKeyRefused() (gas: 883750)
+[PASS] testReceiptForAnotherBatchRefused() (gas: 896254)
+[PASS] testReceiptTimeIsSigned() (gas: 998585)
+[PASS] testReceiptWithoutAFullWindowRefused() (gas: 866723)
+[PASS] testReclaimNeedsAFreeze() (gas: 391327)
+[PASS] testSecondReceiptForABoundBatchSlashes() (gas: 1565813)
+[PASS] testSelfChallengesDoNotDelayThePrincipal() (gas: 4515572)
+[PASS] testSilentAnswererLosesItsStake() (gas: 924905)
+[PASS] testSlashBeforeExpiryRefused() (gas: 1053722)
+[PASS] testStakeStaysForASlashAfterTheClose() (gas: 916015)
+[PASS] testUnspentPostingReturnsToThePrincipal() (gas: 1203599)
+[PASS] testWindowsOfTheBaseDeployment() (gas: 12985399)
+[PASS] testWithdrawWithNoCreditFails() (gas: 10705)
+[PASS] testWithheldOpeningSlashesTheStake() (gas: 1305184)
+Logs:
+  slash for withholding, batch of one 88953
+
+[PASS] testWithheldProofSlashesTheStake() (gas: 1556992)
+[PASS] testWithholdingSlashesAfterTheClose() (gas: 1259804)
+[PASS] testWrongRecordRefused() (gas: 726612)
+Suite result: ok. 93 passed; 0 failed; 0 skipped; finished in 969.17ms (2.11s CPU time)
+
+Ran 11 tests for test/StepGas.t.sol:StepGas
+[PASS] testAlgebraicMatchesThePermutation() (gas: 577966)
+[PASS] testEvaluationPointsMatchTheBlobLayout() (gas: 10160)
+[PASS] testFalseInputsRevert() (gas: 3098376)
+[PASS] testFoldIgnoresBetaWhenOdd() (gas: 11514)
+[PASS] testFoldLinearInBeta() (gas: 13510)
+[PASS] testInverseIsAnInverse() (gas: 15138)
+[PASS] testLoadBlobReadsTheProof() (gas: 1291079)
+Logs:
+  load step, one proof word from a blob, gas 90955
+
+[PASS] testLoadBlobRejectsAFalseOpening() (gas: 1072699741)
+[PASS] testLoadPublic() (gas: 316239)
+Logs:
+  load step, one public value, gas 32802
+
+[PASS] testPackRoundTrip() (gas: 11074)
+[PASS] testStepCosts() (gas: 5589125)
+Logs:
+  memory depth 22
+  program depth 20
+  fold step, gas 78212
+  Poseidon2 Merkle level step, gas 337100
+  linear step, 8 terms, gas 150855
+  equality step, gas 63130
+
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 2.78s (5.52s CPU time)
+
+Ran 5 tests for test/Poseidon2Gas.t.sol:Poseidon2Gas
+[PASS] testAgainstTheCrateCounting() (gas: 282579)
+[PASS] testAgainstTheCrateLargeFirst() (gas: 282622)
+[PASS] testAgainstTheCrateZeros() (gas: 282572)
+[PASS] testMerkleLevelGas() (gas: 286007)
+Logs:
+  one Merkle level over the proof's trees, gas 282435
+
+[PASS] testPermutationGas() (gas: 284058)
+Logs:
+  one permutation, gas 280499
+
+Suite result: ok. 5 passed; 0 failed; 0 skipped; finished in 2.78s (8.36ms CPU time)
+
+Ran 12 test suites in 2.80s (7.16s CPU time): 179 tests passed, 0 failed, 4 skipped (183 total tests)

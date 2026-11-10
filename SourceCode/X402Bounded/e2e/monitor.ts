@@ -16,8 +16,8 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  Answerer, Monitor, ProofGate, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
-  proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
+  Answerer, Monitor, ProofGate, anvilBlobs, ethereumBlobs, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
+  loadKzg, postBlobs, postingsAbi, proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
   type Check, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
@@ -67,6 +67,17 @@ const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
 const BOND = parseEther("0.01");
+/**
+ * The deposit inclusion wait the posting contract allows a report of blobs
+ * from Ethereum: Base's is 12 hours, and a local chain includes at once, so
+ * one slot stands for it here.
+ */
+const INCLUSION = SLOT;
+/** The domain's messenger from Ethereum, at its OP Stack address. */
+const MESSENGER: Address = "0x4200000000000000000000000000000000000007";
+const ZERO32 = `0x${"00".repeat(32)}` as Hex;
+/** A receipt as the posting contract takes it. */
+type Rc = { sealedRoot: Hex; proofHash: Hex; blobsHash: Hex; receivedAt: bigint; signature: Hex };
 
 /**
  * A reserve on one local chain, with a dispute contract whose answer system
@@ -98,10 +109,16 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const vkey = keccak256("0x01");
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
   const params = {
-    acceptWindow: ACCEPT_WINDOW, answerWindow: ANSWER_WINDOW, slot: SLOT, deliveryWait: WAIT, provingBond: BOND,
-    forceGas: 572_345n, feeFactor: 2n, postingGas: 125_000_000n, postingBytes: 10_800_000n,
+    acceptWindow: ACCEPT_WINDOW, answerWindow: ANSWER_WINDOW, slot: SLOT, deliveryWait: WAIT, deliveryTime: 8n * 3600n,
+    provingBond: BOND, provingCost: BOND / 2n, forceGas: 572_345n, l1Factor: 2n, l2Factor: 2n, l1FeeFloor: 0n, l2FeeFloor: 0n,
   };
   const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, params]);
+  const postingParams = {
+    postingGas: 125_000_000n, postingBytes: 10_800_000n, blobs: 86n, blobGas: 3_000_000n, l2Factor: 2n, l1Factor: 2n, blobFactor: 2n,
+    l2FeeFloor: 0n, l1FeeFloor: 0n, blobFeeFloor: 0n, messenger: MESSENGER, inclusionWait: INCLUSION,
+  };
+  const pd = await deploy("Postings.sol", "Postings", [reserve, vd, postingParams]);
+  await done(await principal.writeContract({ address: vd, abi: artifact("ValidityDispute.sol", "ValidityDispute").abi, functionName: "setPostings", args: [pd] }));
   await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "setDispute", args: [vd] }));
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
@@ -158,10 +175,10 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
    * The answerer's receipt for a settlement standing as a batch of one, as the
    * stand-in answer system takes it: the settlement's leaf is the batch's root.
    */
-  const receipt = async (d: Domain, r: Record, sealedRoot: Hex, proof: Hex, receivedAt: bigint) => {
+  const receipt = async (d: Domain, r: Record, sealedRoot: Hex, proof: Hex, receivedAt: bigint, blobs: Hex = ZERO32): Promise<Rc> => {
     const root = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "rootOf", args: [d.delegation, r.digest, recordOf(r), 0n, []] })) as Hex;
-    const h = (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "receiptDigest", args: [d.delegation, root, sealedRoot, proof, receivedAt] })) as Hex;
-    return { sealedRoot, proofHash: proof, receivedAt, signature: await answererKey.sign({ hash: h }) };
+    const h = (await pub.readContract({ address: pd, abi: postingsAbi, functionName: "receiptDigest", args: [d.delegation, root, sealedRoot, proof, blobs, receivedAt] })) as Hex;
+    return { sealedRoot, proofHash: proof, blobsHash: blobs, receivedAt, signature: await answererKey.sign({ hash: h }) };
   };
 
   /** The answerer posts a batch proof in chunks, one transaction each. */
@@ -170,26 +187,26 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     const chunks = proofChunks(proof);
     for (let i = 0; i < chunks.length; i++) {
       const data = `0x${Buffer.from(chunks[i]).toString("hex")}` as Hex;
-      await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "postProof", args: [d.delegation, h, BigInt(i), data, i === chunks.length - 1], gas: 15_000_000n }));
+      await done(await answering.writeContract({ address: pd, abi: postingsAbi, functionName: "postProof", args: [d.delegation, h, BigInt(i), data, i === chunks.length - 1], gas: 15_000_000n }));
     }
     return chunks.length;
   };
 
   /** The answerer posts a settlement's sealed opening on chain under its receipt. */
-  const deliver = async (d: Domain, r: Record, rc: { sealedRoot: Hex; proofHash: Hex; receivedAt: bigint; signature: Hex }, opening: Hex, sealedPath: Hex[]) => {
+  const deliver = async (d: Domain, r: Record, rc: Rc, opening: Hex, sealedPath: Hex[]) => {
     // The refund branch the named answerer takes depends on the gas price, so
     // the estimate is made at the price the transaction pays: one made at a
     // zero price takes the branch of a deposit forced in from Ethereum.
     const fees = await pub.estimateFeesPerGas();
-    const data = encodeFunctionData({ abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] });
-    const gas = await pub.estimateGas({ account: answering.account, to: vd, data, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
-    await done(await answering.writeContract({ address: vd, abi: disputeAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath], gas, ...fees }));
+    const data = encodeFunctionData({ abi: postingsAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath] });
+    const gas = await pub.estimateGas({ account: answering.account, to: pd, data, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+    await done(await answering.writeContract({ address: pd, abi: postingsAbi, functionName: "deliver", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc, opening, sealedPath], gas, ...fees }));
   };
 
   /** Anyone holding the receipt slashes an answerer that withheld; returns whether it went through. */
-  const slashWithholding = async (d: Domain, r: Record, rc: { sealedRoot: Hex; proofHash: Hex; receivedAt: bigint; signature: Hex }) => {
+  const slashWithholding = async (d: Domain, r: Record, rc: Rc) => {
     try {
-      await done(await sender.writeContract({ address: vd, abi: disputeAbi, functionName: "slashWithholding", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
+      await done(await sender.writeContract({ address: pd, abi: postingsAbi, functionName: "slashWithholding", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
       return true;
     } catch {
       return false;
@@ -224,7 +241,40 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  return { delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf, principalCredit, disputeCredit, principalAddress };
+  /** What a delegation's proving pool holds. */
+  const provingPool = async (id: bigint) => (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "provingPool", args: [id] })) as bigint;
+  /** What the posting contract owes an address: postings refunded, or the pool returned. */
+  const postingCredit = async (who: Address) => (await pub.readContract({ address: pd, abi: postingsAbi, functionName: "credit", args: [who] })) as bigint;
+  const request = pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>;
+  /**
+   * Names BlobPosting on Ethereum as the only sender whose reports the
+   * posting contract takes, and puts at the messenger's address a stand-in
+   * that names it as the sender of what it relays.
+   */
+  const trustBlobPoster = async (blobPosting: Address, stand: Hex) => {
+    await done(await principal.writeContract({ address: pd, abi: postingsAbi, functionName: "setBlobPoster", args: [blobPosting] }));
+    await request({ method: "anvil_setCode", params: [MESSENGER, stand] });
+    await request({ method: "anvil_setBalance", params: [MESSENGER, "0x56bc75e2d63100000"] });
+  };
+  /** The messenger delivers a message from Ethereum, as a deposit does. */
+  const relay = async (target: Address, data: Hex) => {
+    await request({ method: "anvil_impersonateAccount", params: [MESSENGER] });
+    const hash = (await request({ method: "eth_sendTransaction", params: [{ from: MESSENGER, to: target, data, gas: "0x1e8480" }] })) as Hex;
+    await request({ method: "anvil_stopImpersonatingAccount", params: [MESSENGER] });
+    return done(hash);
+  };
+  /** The root an answer through the stand-in proves for a settlement: its own leaf. */
+  const rootOf = async (d: Domain, r: Record) =>
+    (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "rootOf", args: [d.delegation, r.digest, recordOf(r), 0n, []] })) as Hex;
+  /** The answerer binds a batch to the hashes its receipt names. */
+  const bind = async (d: Domain, r: Record, rc: Rc) => {
+    await done(await answering.writeContract({ address: pd, abi: postingsAbi, functionName: "bindPosting", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
+  };
+  return {
+    deploy, rootOf, bind, code: async (a: Address) => (await pub.getCode({ address: a })) as Hex,
+    delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf,
+    principalCredit, disputeCredit, principalAddress, provingPool, postingCredit, trustBlobPoster, relay, postings: pd, answering,
+  };
 }
 
 const lines: string[] = [];
@@ -269,6 +319,42 @@ async function main() {
     return (a > b ? a : b) + 1n;
   };
   const ids = new Map([["domain A", 8453n], ["domain B", 10n]]);
+
+  // Ethereum, where an answerer posts blobs: BlobPosting reports to domain
+  // A's posting contract through a stand-in for Ethereum's messenger, whose
+  // messages the run relays to domain A as the domain's deposits would.
+  const l1Rpc = process.env.RPC_L1 ?? "http://127.0.0.1:8548";
+  const l1Def = defineChain({ id: 31339, name: "ethereum", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [l1Rpc] } } });
+  const l1 = createPublicClient({ chain: l1Def, transport: http(l1Rpc) }) as PublicClient;
+  const l1Deployer = createWalletClient({ account: privateKeyToAccount(KEYS.principal), chain: l1Def, transport: http(l1Rpc) });
+  const l1Answerer = createWalletClient({ account: answererKey, chain: l1Def, transport: http(l1Rpc) });
+  const l1Deploy = async (file: string, cname: string, args: unknown[] = []) => {
+    const a = artifact(file, cname);
+    const r = await l1.waitForTransactionReceipt({ hash: await l1Deployer.deployContract({ abi: a.abi, bytecode: a.bytecode, args }) });
+    if (!r.contractAddress) throw new Error(`deploy ${cname} on Ethereum`);
+    return r.contractAddress;
+  };
+  const l1Messenger = await l1Deploy("BlobPosting.t.sol", "MockL1Messenger");
+  const blobPosting = await l1Deploy("BlobPosting.sol", "BlobPosting", [l1Messenger, A.postings]);
+  {
+    const stand = await A.deploy("ValidityDisputeScale.t.sol", "MockL2Messenger", [blobPosting]);
+    const code = await A.code(stand);
+    await A.trustBlobPoster(blobPosting, code);
+  }
+  /** Sets Ethereum's clock to domain A's, as the two keep one time. */
+  const syncEthereum = async () => {
+    const t = await A.now();
+    const req = l1.request as (a: { method: string; params: unknown[] }) => Promise<unknown>;
+    await req({ method: "evm_setNextBlockTimestamp", params: [Number(t)] });
+    await req({ method: "evm_mine", params: [] });
+  };
+  /** Relays BlobPosting's last message to domain A, as the domain includes a deposit. */
+  const relayToA = async () => {
+    const abi = artifact("BlobPosting.t.sol", "MockL1Messenger").abi;
+    const target = (await l1.readContract({ address: l1Messenger, abi, functionName: "target" })) as Address;
+    const message = (await l1.readContract({ address: l1Messenger, abi, functionName: "message" })) as Hex;
+    return A.relay(target, message);
+  };
   const UNIT = 10_000n;
   const DECIDE = ACCEPT_WINDOW - 600n;
   const PAST_DEADLINE = Number(ANSWER_WINDOW + 40n * SLOT);
@@ -403,6 +489,13 @@ async function main() {
   const answererP = new Answerer(gateBoth());
   const sealedP = sealAll(sP.os);
   const heldP = await answererP.receive(honest, sealedP);
+  const kzg = await loadKzg();
+  const dB = await A.delegate({ ...proven, answerer: true });
+  const mB = new Monitor([{ ...dB, blobs: ethereumBlobs(l1, blobPosting, anvilBlobs(l1)) }], provenPolicy, proving(gateBoth(), KEYS.seal));
+  const sB = await settleProven(dB);
+  const answererB = new Answerer(gateBoth(), kzg);
+  const sealedB = sealAll(sB.os);
+  const heldB = await answererB.receive(honest, sealedB);
   let twice = false;
   try {
     await answererR.receive(honest, sealedS);
@@ -426,7 +519,7 @@ async function main() {
   const afterRefusals = await refusedBy(answererF, honest, sealedS);
   const receivedAt = await A.now();
 
-  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR, mQ, mL, mP];
+  const all = [mX, mZ, mY, mW, mV, mU, mU2, mT, mS, mR, mQ, mL, mP, mB];
   const early = await Promise.all(all.map((m) => m.poll()));
   check("before the decision time the monitor acts on nothing: no challenge and no freeze under any delegation", early.every((r) => r.challenged.length === 0 && !r.froze));
   check("the honest batch passes both verifiers; the forged one is refused beside a deployed verifier that accepts anything", acceptedX && !acceptedY);
@@ -503,9 +596,11 @@ async function main() {
   const nextL = await A.settle(dL, engine(ids, pt.unitSize)(dL, await A.now(), 1n).s);
   check(`an honest agent that delivers late: all ${n} challenged at the decision time and held; once its proof and openings arrive the monitor cancels all ${n}, the hold lifts, nothing is proved or frozen, and the next payment settles`,
     rL.challenged.length === n && heldL.holds === n && mL.cancellations().length === n && !cL.froze && afterL.holds === 0 && !afterL.frozen && nextL !== "Held", `${cL.reasons.length} cancelled, next ${nextL}`);
-  check(`the late agent earns nothing: each of the ${n} bonds goes back to the principal`,
-    returned === BigInt(n) * BOND && (await A.disputeCredit(agent.address)) === 0n, `${returned} wei returned`);
+  const poolL = await A.provingPool(dL.delegation);
+  check(`the late agent earns nothing: the principal's challenges of all ${n} drew on one proving pool, which goes back to the principal whole`,
+    returned > 0n && poolL === 0n && (await A.disputeCredit(agent.address)) === 0n, `${returned} wei returned`);
   const rP = await mP.poll();
+  const rB = await mB.poll();
 
   for (const r of rY.challenged) await A.answer(dY, r);
   const lifted = await A.state(dY);
@@ -528,7 +623,28 @@ async function main() {
   for (const r of rP.challenged) await A.answer(dP, r);
   const servedP = await answererP.serve(mP);
   const cP = await mP.poll();
-  await A.advance(Number(WAIT) + 1);
+  // The answerer whose postings on domain A are censored answers every
+  // challenge, binds the batch it answered first, and posts the batch's
+  // proof and sealed openings as blobs on Ethereum; BlobPosting's report
+  // reaches the domain as a deposit. Its receipts for the other batches of
+  // one name the same blobs.
+  for (const r of rB.challenged) await A.answer(dB, r);
+  const rcB = async (r: Record) => {
+    const i = sealedB.findIndex((x) => x.digest === r.digest);
+    return A.receipt(dB, r, tree([sealedB[i]]).root, heldB.proofHash, receivedAt, heldB.blobsHash);
+  };
+  const b0r = rB.challenged[0];
+  await A.bind(dB, b0r, await rcB(b0r));
+  await syncEthereum();
+  const payloadB = answererB.payloadOf(payments[0].domain, payments[0].digest) as Uint8Array;
+  const postedB = await postBlobs(l1, l1Answerer, blobPosting, dB.delegation, await A.rootOf(dB, b0r), payloadB, kzg);
+  const refundBefore = await A.postingCredit(answererKey.address);
+  await relayToA();
+  const refundB = (await A.postingCredit(answererKey.address)) - refundBefore;
+  const pB = await mB.poll();
+  // Past the delivery wait, and the inclusion wait after it, by which a
+  // report of blobs posted in time has reached the domain.
+  await A.advance(Number(WAIT + INCLUSION) + 1);
   const fY = await mY.poll();
   check("no backing proof arrives within the delivery wait, so the monitor freezes the delegation", fY.froze && (await A.state(dY)).frozen, fY.reasons[0] ?? "");
   const fW = await mW.poll();
@@ -551,13 +667,19 @@ async function main() {
   const slashedP = await A.slashWithholding(dP, rP0, await A.receipt(dP, rP0, tree([sealedP[iP0]]).root, heldP.proofHash, receivedAt));
   check(`a staked answerer answers all ${n} and then hands the proof and sealed openings over off chain: the monitor cancels every request, so nothing is posted or refunded, nothing is frozen, and no withholding can be slashed`,
     rP.challenged.length === n && servedP.proofs === 1 && servedP.opened === n && mP.cancellations().length === n && !cP.froze && !fP.froze && !(await A.state(dP)).frozen && !slashedP && (await A.stakeOf(dP)) > 0n, fP.reasons.join("; "));
+  const fB = await mB.poll();
+  const b1r = rB.challenged[rB.challenged.length - 1];
+  const slashedB = await A.slashWithholding(dB, b1r, await rcB(b1r));
+  check(`a staked answerer censored on the domain answers all ${n} and posts the proof and every sealed opening as blobs on Ethereum, in ${postedB.txs.length} transactions; the report reaches the domain, the monitor reads the blobs back, checks them against their versioned hashes and freezes nothing, the posting is refunded what it cost, and once the inclusion wait has passed no receipt can slash`,
+    rB.challenged.length === n && postedB.blobsHash === heldB.blobsHash && mB.openedCount() === n && !pB.froze && !fB.froze && !(await A.state(dB)).frozen && refundB > 0n && !slashedB && (await A.stakeOf(dB)) > 0n,
+    `${refundB} wei refunded; ${fB.reasons.join("; ")}`);
   const fQ = await mQ.poll();
   check("opening on request, an answer to the principal's challenge asks for the opening: an answerer that answers and hands over only the proof leaves the delegation frozen", rQ.challenged.length === n && servedQ.proofs === 1 && mQ.openedCount() === 0 && fQ.froze && (await A.state(dQ)).frozen, fQ.reasons[0] ?? "");
   const zBefore = await A.state(dZ);
   await A.advance(PAST_DEADLINE);
   const fZ = await mZ.poll();
   check("the extra unit's challenge goes unanswered, as no proof of it exists; past its deadline the monitor expires it and the delegation is frozen", !zBefore.frozen && fZ.froze && (await A.state(dZ)).frozen, fZ.reasons[0] ?? "");
-  const ends = await Promise.all([dX, dU, dT, dS, dL, dP].map((d) => A.state(d)));
+  const ends = await Promise.all([dX, dU, dT, dS, dL, dP, dB].map((d) => A.state(d)));
   check("the honest delegations, the offline ones with sealed openings among them, are neither held nor frozen", ends.every((e) => !e.frozen && e.holds === 0));
 
   section("budget tripwire, no proof read");

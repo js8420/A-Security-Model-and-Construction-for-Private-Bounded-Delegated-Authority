@@ -1,7 +1,8 @@
 export { BoundedEvmClient } from "./client.js";
 export { BoundedEvmServer } from "./server.js";
 export { BoundedEvmFacilitator } from "./facilitator.js";
-export { reserveAbi, disputeAbi } from "./abi.js";
+export { reserveAbi, disputeAbi, postingsAbi } from "./abi.js";
+export { BLOB_BYTES, anvilBlobs, beaconBlobs, blobPayload, payloadOf, blobPostingAbi, blobsHash, blobsOf, ethereumBlobs, loadKzg, postBlobs, readPayload, versionedHash, type BlobFetch, type BlobSource, type Kzg } from "./blobs.js";
 export { Monitor, extractSecret, type Domain, type Policy, type Record, type Settings } from "./monitor.js";
 export { Answerer, CHUNK, proofChunks, proofHash, sealedTree, type Sealed } from "./answerer.js";
 export { commitOpening, decodeOpening, encodeOpening, unitsOf, type Opening } from "./opening.js";

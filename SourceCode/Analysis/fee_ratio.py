@@ -5,6 +5,8 @@ blob base fee in the posting window. The fee factor F is chosen from these.
 
   python3 fee_ratio.py fetch DATA_DIR      download, resumable; run again to continue
   python3 fee_ratio.py analyze DATA_DIR    print the distributions
+  python3 fee_ratio.py floors DATA_DIR     the same with the fee at the challenge read
+                                           no lower than a floor, to choose floors and factors
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
@@ -48,13 +50,16 @@ T_ANS_HOURS = 9697.7 / 3600
 SEQ_HOURS = 12
 CHI_HOURS = 12.5
 W_P_HOURS = 30
-# One batch's postings as blobs: the proof file and 256 sealed openings, at
-# 31 usable bytes in each of a blob's 4,096 field elements.
+# One batch's postings as blobs, as blobPayload lays them out: the proof
+# file's length and the file, the count of sealed openings and each 349-byte
+# opening after its 8-byte digest, then the end byte, at 31 usable bytes in
+# each of a blob's 4,096 field elements.
 PROOF_FILE_BYTES = 10_365_547
-OPENING_BYTES = 1_604
+OPENING_BYTES = 349
 BATCH = 256
 BLOB_USABLE = 31 * 4096
 BLOB_GAS = 131_072
+PAYLOAD_BYTES = 4 + PROOF_FILE_BYTES + 4 + BATCH * (8 + OPENING_BYTES) + 1
 
 
 def rpc(urls, method, params, start=0):
@@ -208,7 +213,7 @@ def edge(b):
     return 10 ** (LO + (b + 1) * (HI - LO) / BINS)
 
 
-def ratio_stats(fee, w, m=None):
+def ratio_stats(fee, w, m=None, floor=0):
     if m is None:
         m = window_max(fee, w)
     hist = [0] * (BINS + 1)
@@ -216,7 +221,7 @@ def ratio_stats(fee, w, m=None):
     top, top_at = 0.0, 0
     over = {2: 0, 3: 0, 5: 0, 10: 0}
     for i in range(len(m)):
-        f = fee[i]
+        f = fee[i] if fee[i] > floor else floor
         if f == 0:
             continue
         r = m[i] / f
@@ -287,7 +292,7 @@ def analyze(data):
         if c["blob"]:
             w = math.ceil(W_POST_HOURS * 3600 / c["block_seconds"])
             m = window_max(blob, w)
-            blobs = math.ceil(PROOF_FILE_BYTES / BLOB_USABLE) + math.ceil(BATCH * OPENING_BYTES / BLOB_USABLE)
+            blobs = math.ceil(PAYLOAD_BYTES / BLOB_USABLE)
             vals = sorted(m)
             def q(p):
                 return vals[min(len(vals) - 1, int(p / 100 * len(vals)))]
@@ -304,7 +309,51 @@ def analyze(data):
         print()
 
 
+# Floors to try for the fee read at the challenge, in wei: Ethereum's base
+# fee, Base's base fee, and Ethereum's blob base fee.
+FLOORS = {
+    "ethereum": [0, 10**8, 2 * 10**8, 5 * 10**8, 10**9, 2 * 10**9],
+    "base": [0, 10**6, 2 * 10**6, 5 * 10**6, 10**7],
+    "blob": [0, 10**6, 10**7, 10**8, 10**9],
+}
+
+
+def share_at_or_below(fee, floor):
+    return sum(1 for f in fee if f <= floor) / len(fee)
+
+
+def floors(data):
+    """For each way an answerer pays, the lowest fee it can still land at over
+    the fee at the challenge read no lower than a floor: the factor that
+    covers all but a share of challenges, and how often the floor decides."""
+    print("FEE FLOORS AND FACTORS: THE LOWEST FEE AN ANSWERER CAN LAND AT OVER max(FEE AT THE CHALLENGE, FLOOR)")
+    print("=" * 78)
+    eth_meta, eth_fee, blob = load(data, "ethereum")
+    base_meta, base_fee, _ = load(data, "base")
+    ready_h = T_ANS_HOURS
+    posting_h = T_ANS_HOURS + W_P_HOURS
+    cases = [
+        ("bond: the answer forced in through Ethereum, landing by", "ethereum", eth_fee, 12, W_A_HOURS - SEQ_HOURS - CHI_HOURS),
+        ("deposit, domain way: postings sent on Base by", "base", base_fee, 2, posting_h),
+        ("deposit, blob way, call gas: Ethereum base fee by", "ethereum", eth_fee, 12, posting_h),
+        ("deposit, blob way, blob gas: Ethereum blob base fee by", "blob", blob, 12, posting_h),
+    ]
+    for label, kind, fee, bs, until in cases:
+        a = math.ceil(ready_h * 3600 / bs)
+        b = math.ceil(until * 3600 / bs)
+        m = window_min_ahead(fee, a, b)
+        print(f"  {label} {until:.2f} h, ready at {ready_h:.2f} h; {len(m):,} windows")
+        print("    floor wei      at or below   >2x        >3x        >5x        >10x       F at 1e-3  F at 1e-4  F at 1e-5  max")
+        for fl in FLOORS[kind]:
+            n, top, top_at, over, pcts, hist = ratio_stats(fee, 0, m, fl)
+            below = share_at_or_below(fee, fl)
+            fs = "  ".join(f"{smallest_factor(hist, n, s, top):9.3f}" for s in (1e-3, 1e-4, 1e-5))
+            print(f"    {fl:>13,}  {below:10.6f}  " + "  ".join(f"{over[k] / n:.7f}" for k in (2, 3, 5, 10)) + f"  {fs}  {top:.3f}")
+        print()
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] not in ("fetch", "analyze"):
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors}
+    if len(sys.argv) != 3 or sys.argv[1] not in modes:
         raise SystemExit(__doc__)
-    (fetch if sys.argv[1] == "fetch" else analyze)(sys.argv[2])
+    modes[sys.argv[1]](sys.argv[2])

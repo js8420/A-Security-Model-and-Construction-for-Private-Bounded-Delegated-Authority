@@ -1,4 +1,5 @@
 import { bytesToHex, concat, encodePacked, keccak256, sha256, type Hex } from "viem";
+import { blobPayload, blobsHash, blobsOf, type Kzg } from "./blobs.js";
 import type { Monitor } from "./monitor.js";
 import type { ProofGate } from "./stark/gate.js";
 
@@ -62,16 +63,24 @@ export function proofHash(proof: Uint8Array): Hex {
  * It takes each payment once: a batch that repeats a proof it holds, or names
  * a payment of a batch it holds, is refused, since it would then receipt two
  * trees for one settlement and either receipt could slash it.
+ *
+ * Given the KZG library, it also signs the hash of the blobs that carry the
+ * batch's proof and sealed openings, so it may post them on Ethereum instead
+ * of on the domain, as it must when the domain's sequencer censors it.
+ * Without it the receipt names no blobs, and only the domain way remains.
  */
 export class Answerer {
   private readonly batches: { proof: Uint8Array; sealed: readonly Sealed[] }[] = [];
   private readonly proofs = new Set<Hex>();
   private readonly payments = new Set<string>();
 
-  constructor(private readonly gate: ProofGate) {}
+  constructor(
+    private readonly gate: ProofGate,
+    private readonly kzg?: Kzg,
+  ) {}
 
-  /** Takes a batch and returns what its receipt signs: the root of its sealed openings and the proof's hash. */
-  async receive(proof: Uint8Array, sealed: readonly Sealed[]): Promise<{ sealedRoot: Hex; proofHash: Hex }> {
+  /** Takes a batch and returns what its receipt signs: the root of its sealed openings, the proof's hash and the blobs' hash. */
+  async receive(proof: Uint8Array, sealed: readonly Sealed[]): Promise<{ sealedRoot: Hex; proofHash: Hex; blobsHash: Hex }> {
     const id = sha256(proof);
     if (this.proofs.has(id)) throw new Error("batch already held");
     const r = await this.gate.deliver(proof);
@@ -93,7 +102,14 @@ export class Answerer {
     this.proofs.add(id);
     for (const n of named) this.payments.add(n);
     this.batches.push({ proof, sealed });
-    return { sealedRoot: sealedTree(sealed.map((s) => s.blob)).root, proofHash: proofHash(proof) };
+    const blobs = this.kzg ? blobsHash(blobsOf(blobPayload(proof, sealed), this.kzg).versioned) : ZERO;
+    return { sealedRoot: sealedTree(sealed.map((s) => s.blob)).root, proofHash: proofHash(proof), blobsHash: blobs };
+  }
+
+  /** What the blobs of the batch holding a settlement carry. */
+  payloadOf(domain: bigint, digest: bigint): Uint8Array | undefined {
+    const b = this.batches.find((x) => x.sealed.some((s) => s.domain === domain && s.digest === digest));
+    return b && blobPayload(b.proof, b.sealed);
   }
 
   /** The proof of the batch holding a settlement. */
