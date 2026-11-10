@@ -95,8 +95,9 @@ interface IPostings {
 ///
 /// Cancelling. The principal, or its monitor, withdraws its own challenge or
 /// request once what backs the settlement reaches it some other way, as an
-/// agent that delivers late hands it the batch proof. An open challenge it
-/// opened is closed and the hold lifts: nobody proves. A challenge it joined
+/// agent that delivers late hands it the batch proof, one at a time or a
+/// whole batch's in one call. An open challenge it opened is closed and the
+/// hold lifts: nobody proves. A challenge it joined
 /// reverts to the other party's alone. An answered challenge's request is
 /// withdrawn, and nothing more is due under it.
 ///
@@ -540,13 +541,24 @@ contract ValidityDispute {
 
     /// The principal, or its monitor, withdraws its challenge or its request
     /// before the deadline, once what backs the settlement reached it another
-    /// way. Its own open challenge closes with the bond back to it and the
-    /// hold lifted; a joined one goes back to being the other party's alone,
+    /// way. Its own open challenge closes with the hold lifted, and what it
+    /// put in the proving pool waits there for the principal; a joined one goes back to being the other party's alone,
     /// still open; an answered one's request is withdrawn, so no delivery is
     /// due and no posting is refunded under it.
     function cancel(uint256 id, uint64 digest) external {
-        Challenge storage c = challenges[key(id, digest)];
         if (msg.sender != reserve.principalOf(id) && msg.sender != reserve.monitorOf(id)) revert NotPrincipal();
+        _cancel(id, digest);
+    }
+
+    /// Cancels several of the principal's challenges under one delegation in
+    /// one call, as a monitor does once a late batch reaches it.
+    function cancelMany(uint256 id, uint64[] calldata digests) external {
+        if (msg.sender != reserve.principalOf(id) && msg.sender != reserve.monitorOf(id)) revert NotPrincipal();
+        for (uint256 i = 0; i < digests.length; ++i) _cancel(id, digests[i]);
+    }
+
+    function _cancel(uint256 id, uint64 digest) private {
+        Challenge storage c = challenges[key(id, digest)];
         if (!c.byPrincipal) revert NotCancellable();
         if (block.timestamp > c.deadline) revert TooLate();
         bool joined = c.joined;

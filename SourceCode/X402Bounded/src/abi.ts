@@ -49,6 +49,7 @@ export const disputeAbi = parseAbi([
   "function rootOf(uint256 id, uint64 digest, Settlement s, uint256 index, bytes32[] path) view returns (bytes32)",
   "function challengeBond() view returns (uint256)",
   "function cancel(uint256 id, uint64 digest)",
+  "function cancelMany(uint256 id, uint64[] digests)",
   "function credit(address) view returns (uint256)",
   "function acceptWindow() view returns (uint64)",
   "function expire(uint256 id, uint64 digest)",

@@ -13,11 +13,13 @@ import {SP1Verifier} from "../src/sp1/v6.1.0/SP1VerifierGroth16.sol";
 import {MockToken} from "../test/MockToken.sol";
 import {Statement} from "../test/Statement.sol";
 
-/// Answers as real transactions on a local node: one answerBatch for 1, 2, 4,
-/// 8, 16, 32, 64 and 128 open challenges by the principal against payments of
-/// the exported batch, opened in one openMany as a monitor opens them, each with Pete's one Groth16 proof, so every gas figure
-/// is a receipt's gasUsed. Each size settles on its own delegation, so no answer
-/// meets a settlement an earlier one closed. The node is started at the
+/// Disputes as real transactions on a local node, for 1, 2, 4 and on to 256
+/// challenges by the principal against payments of the exported batch, opened
+/// in one openMany as a monitor opens them: one answerBatch with Pete's one
+/// Groth16 proof, and, on a second delegation, one cancelMany as a monitor
+/// sends once a late batch reaches it. Every gas figure is a receipt's
+/// gasUsed. Each sequence settles on its own delegation, so none meets a
+/// settlement an earlier one closed. The node is started at the
 /// exported payments' time: anvil --timestamp 5000.
 contract ValidityDisputeBatchOnChain is Script {
     /// Stands for the agent's commitment to a payment's hidden fields, which
@@ -47,7 +49,9 @@ contract ValidityDisputeBatchOnChain is Script {
         token.mint(me, 1e15);
         token.mint(Statement.payee(d, 0), 1);
         token.approve(address(acc), type(uint256).max);
-        for (uint256 k = 1; k <= Statement.PAYMENTS; k *= 2) {
+        for (uint256 j = 0; j < 2 * _sizes(); ++j) {
+            uint256 k = 1 << (j / 2);
+            bool cancelled = j % 2 == 1;
             uint256 id = acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));
             payable(vm.addr(AGENT_PK)).transfer(TermsOf.BOND + 0.01 ether);
             vm.stopBroadcast();
@@ -67,9 +71,15 @@ contract ValidityDisputeBatchOnChain is Script {
             }
             (uint64 first, uint64 last) = _span(ss);
             vd.openMany{value: vd.principalPrice(id, k, first, last)}(id, ds, ss);
-            vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
+            if (cancelled) vd.cancelMany(id, ds);
+            else vd.answerBatch(_items(ids, ds, ss, at, paths), proof);
         }
         vm.stopBroadcast();
+    }
+
+    /// How many sizes, from one challenge doubling up to every payment of the batch.
+    function _sizes() internal pure returns (uint256 n) {
+        for (uint256 k = 1; k <= Statement.PAYMENTS; k *= 2) ++n;
     }
 
     function _span(Settlement[] memory ss) internal pure returns (uint64 first, uint64 last) {

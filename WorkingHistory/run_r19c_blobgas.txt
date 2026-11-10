@@ -1,0 +1,14 @@
+No files changed, compilation skipped
+
+Ran 1 test for test/BlobPostingGas.t.sol:BlobPostingGas
+[PASS] testGasOfOneBatchAsBlobs() (gas: 1526460)
+Logs:
+  closing call, execution gas 573078
+  fork block 26384630
+  blobs 83
+  transactions 14
+  Ethereum gas of one batch's blob postings 1032754
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 802.02ms (801.75ms CPU time)
+
+Ran 1 test suite in 811.41ms (802.02ms CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)

@@ -1784,6 +1784,38 @@ contract ValidityDisputeScaleTest is Test {
         vd.expire(r, 5);
     }
 
+    /// A whole batch's challenges cancel in one call: every one closes, the
+    /// hold lifts once the last does, and nobody but the principal or its
+    /// monitor can cancel them.
+    function testCancelManyCancelsEach() public {
+        uint256 r = _register(AGENT_PK, 10);
+        _settle(AGENT_PK, r, 5);
+        _settle(AGENT_PK, r, 6);
+        _settle(AGENT_PK, r, 7);
+        uint64[] memory ds = new uint64[](3);
+        Settlement[] memory ss = new Settlement[](3);
+        for (uint256 i = 0; i < 3; ++i) {
+            ds[i] = uint64(5 + i);
+            ss[i] = _rec(r, ds[i]);
+        }
+        uint256 price = vd.principalPrice(r, 3, ss[0].time, ss[2].time);
+        vm.prank(principal);
+        vd.openMany{value: price}(r, ds, ss);
+        assertEq(vd.openByPrincipal(r), 3);
+        vm.prank(challenger);
+        vm.expectRevert(ValidityDispute.NotPrincipal.selector);
+        vd.cancelMany(r, ds);
+        vm.prank(principal);
+        vd.cancelMany(r, ds);
+        for (uint256 i = 0; i < 3; ++i) assertEq(uint256(vd.challengeOf(r, ds[i]).status), uint256(ValidityDispute.Status.Cancelled));
+        assertEq(vd.openByPrincipal(r), 0);
+        assertEq(vd.openCount(r), 0);
+        _settle(AGENT_PK, r, 8);
+        uint256 before = vd.credit(principal);
+        vd.returnProving(r);
+        assertEq(vd.credit(principal) - before, price - pd.postingPool(r));
+    }
+
     /// The monitor address cancels as the principal does; nobody else can,
     /// and no one cancels after the deadline.
     function testOnlyThePrincipalSideCancelsInTime() public {

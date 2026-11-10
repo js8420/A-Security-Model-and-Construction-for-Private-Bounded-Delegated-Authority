@@ -644,6 +644,32 @@ export class Monitor {
     return true;
   }
 
+  /**
+   * Withdraws the challenges of, or requests for, several settlements of one
+   * domain now in order, in one call, as a late batch brings them all into
+   * order at once. If the call fails, as when one of them is past its
+   * deadline, each is tried alone. Returns those cancelled.
+   */
+  private async cancelAll(d: Domain, rs: Record[]): Promise<Record[]> {
+    if (rs.length > 1) {
+      try {
+        const { request } = await d.chain.simulateContract({
+          account: d.wallet.account, address: d.dispute as Address, abi: disputeAbi, functionName: "cancelMany", args: [d.delegation, rs.map((r) => r.digest)],
+        });
+        const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
+        if (receipt.status === "success") {
+          for (const r of rs) this.cancelled.add(key(r));
+          return rs;
+        }
+      } catch {
+        // fall through to one at a time
+      }
+    }
+    const done: Record[] = [];
+    for (const r of rs) if (await this.cancel(d, r)) done.push(r);
+    return done;
+  }
+
   /** The records whose challenge or request the monitor cancelled. */
   cancellations(): string[] {
     return [...this.cancelled];
@@ -722,6 +748,17 @@ export class Monitor {
     const over = this.overBudget(backed);
     let freeze = false;
     const fresh = new Map<string, Record[]>();
+    const inOrder = new Map<string, Record[]>();
+    for (const r of this.ordered()) {
+      const k = key(r);
+      if (!this.challenged.has(k) || this.expired.has(k) || this.cancelled.has(k)) continue;
+      if (this.faultsWith(r, backed, breaches, over).length > 0) continue;
+      const d = this.domainOf(r);
+      inOrder.set(d.name, [...(inOrder.get(d.name) ?? []), r]);
+    }
+    for (const [name, rs] of inOrder) {
+      for (const r of await this.cancelAll(this.domains.find((x) => x.name === name) as Domain, rs)) reasons.push(`${key(r)}: now in order, cancelled`);
+    }
     for (const r of this.ordered()) {
       const k = key(r);
       const d = this.domainOf(r);
@@ -745,10 +782,6 @@ export class Monitor {
         continue;
       }
       if (this.cancelled.has(k)) continue;
-      if (this.faultsWith(r, backed, breaches, over).length === 0 && (await this.cancel(d, r))) {
-        reasons.push(`${k}: now in order, cancelled`);
-        continue;
-      }
       const at = this.answered.get(k);
       if (at === undefined) {
         const deadline = this.challenged.get(k) as bigint;
