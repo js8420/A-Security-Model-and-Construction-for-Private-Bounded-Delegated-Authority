@@ -1,20 +1,29 @@
 """How far the base fee rises after a challenge: for every block since the
 Dencun upgrade, the largest base fee in the window that follows it divided by
 the base fee at its start, on Ethereum and on Base, and the largest Ethereum
-blob base fee in the posting window. The fee factor F is chosen from these.
+blob base fee in the posting window. The fee factors are chosen from these.
 
   python3 fee_ratio.py fetch DATA_DIR      download, resumable; run again to continue
   python3 fee_ratio.py analyze DATA_DIR    print the distributions
   python3 fee_ratio.py floors DATA_DIR     the same with the fee at the challenge read
                                            no lower than a floor, to choose floors and factors
+  python3 fee_ratio.py oos DATA_DIR        the deployed factors tested out of sample: fitted
+                                           on the windows that start before July 2025 and
+                                           tested on those after, in windows that do not overlap
+  python3 fee_ratio.py blobs DATA_DIR      how often, and by how much, posting a batch as blobs
+                                           on Ethereum costs more than posting it on Base
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
 analysis is the result. The first fetch fixes the last block and records it.
+The oos and blobs modes also look up, once, the block at the split time and
+the time of one Ethereum block in every 900, and record them in DATA_DIR.
 """
+import heapq
 import json
 import math
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -60,6 +69,19 @@ BATCH = 256
 BLOB_USABLE = 31 * 4096
 BLOB_GAS = 131_072
 PAYLOAD_BYTES = 4 + PROOF_FILE_BYTES + 4 + BATCH * (8 + OPENING_BYTES) + 1
+# The proof's postings on Base: one transaction for each 96 KiB chunk.
+CHUNKS = math.ceil(PROOF_FILE_BYTES / 98304)
+# Blobs travel six to a transaction since Fusaka.
+BLOBS_PER_TX = 6
+# The domain records the Ethereum base fee of its L1 origin, which may lag
+# the domain's clock by up to max_sequencer_drift, 1,800 s: 150 Ethereum
+# blocks. The fee a bond is sized at may be that stale.
+LAG_ETH = 1800 // 12
+# Fit before this time, test after: 2025-07-01 00:00 UTC.
+SPLIT_TIME = 1751328000
+# One Ethereum block in this many has its time looked up, to place Ethereum
+# blocks against Base's, whose blocks come every 2 s.
+TIME_STEP = 7200
 
 
 def rpc(urls, method, params, start=0):
@@ -213,15 +235,30 @@ def edge(b):
     return 10 ** (LO + (b + 1) * (HI - LO) / BINS)
 
 
-def ratio_stats(fee, w, m=None, floor=0):
+def lagged(fee, lag):
+    """out[i] = min(fee[i - lag], ..., fee[i]): the lowest fee a record up to
+    lag blocks stale can show at block i."""
+    if lag == 0:
+        return fee
+    m = window_min_ahead(fee, 0, lag)
+    out = array("Q", fee[:lag])
+    for i in range(1, lag):
+        out[i] = min(out[i - 1], out[i])
+    out.extend(m)
+    return out
+
+
+def ratio_stats(fee, w, m=None, floor=0, ref=None):
     if m is None:
         m = window_max(fee, w)
+    if ref is None:
+        ref = fee
     hist = [0] * (BINS + 1)
     n = 0
     top, top_at = 0.0, 0
     over = {2: 0, 3: 0, 5: 0, 10: 0}
     for i in range(len(m)):
-        f = fee[i] if fee[i] > floor else floor
+        f = ref[i] if ref[i] > floor else floor
         if f == 0:
             continue
         r = m[i] / f
@@ -323,37 +360,240 @@ def share_at_or_below(fee, floor):
 
 
 def floors(data):
-    """For each way an answerer pays, the lowest fee it can still land at over
-    the fee at the challenge read no lower than a floor: the factor that
-    covers all but a share of challenges, and how often the floor decides."""
+    """For each payment sized at a challenge, the lowest fee the answerer can
+    still land at over the fee at the challenge read no lower than a floor:
+    the factor that covers all but a share of challenges, and how often the
+    floor decides. The bond is sized at the Ethereum fee the domain records,
+    which may be up to LAG_ETH blocks stale, so it is shown both ways."""
     print("FEE FLOORS AND FACTORS: THE LOWEST FEE AN ANSWERER CAN LAND AT OVER max(FEE AT THE CHALLENGE, FLOOR)")
     print("=" * 78)
     eth_meta, eth_fee, blob = load(data, "ethereum")
     base_meta, base_fee, _ = load(data, "base")
     ready_h = T_ANS_HOURS
-    posting_h = T_ANS_HOURS + W_P_HOURS
     cases = [
-        ("bond: the answer forced in through Ethereum, landing by", "ethereum", eth_fee, 12, W_A_HOURS - SEQ_HOURS - CHI_HOURS),
-        ("deposit, domain way: postings sent on Base by", "base", base_fee, 2, posting_h),
-        ("deposit, blob way, call gas: Ethereum base fee by", "ethereum", eth_fee, 12, posting_h),
-        ("deposit, blob way, blob gas: Ethereum blob base fee by", "blob", blob, 12, posting_h),
+        ("bond: the answer forced in through Ethereum, landing by", "ethereum", eth_fee, 12, W_A_HOURS - SEQ_HOURS - CHI_HOURS, 0),
+        (f"bond, the recorded fee up to {LAG_ETH} blocks stale: the answer forced in, landing by", "ethereum", eth_fee, 12, W_A_HOURS - SEQ_HOURS - CHI_HOURS, LAG_ETH),
+        ("gas pool: the answer sent on Base by", "base", base_fee, 2, W_A_HOURS, 0),
     ]
-    for label, kind, fee, bs, until in cases:
+    for label, kind, fee, bs, until, lag in cases:
         a = math.ceil(ready_h * 3600 / bs)
         b = math.ceil(until * 3600 / bs)
         m = window_min_ahead(fee, a, b)
+        ref = lagged(fee, lag)
         print(f"  {label} {until:.2f} h, ready at {ready_h:.2f} h; {len(m):,} windows")
         print("    floor wei      at or below   >2x        >3x        >5x        >10x       F at 1e-3  F at 1e-4  F at 1e-5  max")
         for fl in FLOORS[kind]:
-            n, top, top_at, over, pcts, hist = ratio_stats(fee, 0, m, fl)
+            n, top, top_at, over, pcts, hist = ratio_stats(fee, 0, m, fl, ref)
             below = share_at_or_below(fee, fl)
             fs = "  ".join(f"{smallest_factor(hist, n, s, top):9.3f}" for s in (1e-3, 1e-4, 1e-5))
             print(f"    {fl:>13,}  {below:10.6f}  " + "  ".join(f"{over[k] / n:.7f}" for k in (2, 3, 5, 10)) + f"  {fs}  {top:.3f}")
         print()
 
 
+def deployed(name):
+    """A constant of the deployment library, in wei for ether and gwei amounts,
+    so the analysis tests what is deployed."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    src = open(os.path.join(here, "..", "Reserve", "script", "Deployment.sol"), encoding="utf8").read()
+    m = re.search(rf"\b{name}\s*=\s*([\d_.]+)\s*(ether|gwei)?\s*;", src)
+    if not m:
+        raise SystemExit(f"no {name} in Deployment.sol")
+    v = float(m.group(1).replace("_", ""))
+    return int(round(v * {"ether": 1e18, "gwei": 1e9, None: 1}[m.group(2)]))
+
+
+def recorded(data, name, compute):
+    """A value looked up once and kept in DATA_DIR, so later runs read the same."""
+    p = os.path.join(data, name)
+    if os.path.exists(p):
+        return json.load(open(p))
+    v = compute()
+    json.dump(v, open(p, "w"))
+    return v
+
+
+def split_index(data, chain, meta):
+    """The place in the chain's fee array of the first block at SPLIT_TIME."""
+    urls = CHAINS[chain]["rpcs"]
+    v = recorded(data, f"split_{chain}.json", lambda: {"time": SPLIT_TIME, "block": block_at(urls, SPLIT_TIME)})
+    if v["time"] != SPLIT_TIME:
+        raise SystemExit(f"{data}/split_{chain}.json is for another split time")
+    return v["block"] - meta["first"]
+
+
+def block_time(urls, n):
+    return int(rpc(urls, "eth_getBlockByNumber", [hex(n), False])["timestamp"], 16)
+
+
+def eth_times(data, meta):
+    """The time of every TIME_STEP-th Ethereum block from the first, and of the last."""
+    urls = CHAINS["ethereum"]["rpcs"]
+    blocks = list(range(meta["first"], meta["last"], TIME_STEP)) + [meta["last"]]
+
+    def look():
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            ts = list(pool.map(lambda n: block_time(urls, n), blocks))
+        return {"step": TIME_STEP, "blocks": blocks, "times": ts}
+
+    v = recorded(data, "times_ethereum.json", look)
+    if v["step"] != TIME_STEP or v["blocks"][0] != meta["first"] or v["blocks"][-1] != meta["last"]:
+        raise SystemExit(f"{data}/times_ethereum.json does not match the fetched blocks")
+    return v
+
+
+def eth_index(times, t):
+    """The place of the Ethereum block at time t, between the looked-up times."""
+    ts, bs = times["times"], times["blocks"]
+    if t <= ts[0]:
+        return 0
+    if t >= ts[-1]:
+        return bs[-1] - bs[0]
+    lo, hi = 0, len(ts) - 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if ts[mid] <= t:
+            lo = mid
+        else:
+            hi = mid
+    return bs[lo] - bs[0] + round((t - ts[lo]) / (ts[hi] - ts[lo]) * (bs[hi] - bs[lo]))
+
+
+def binom_cdf(k, n, p):
+    if k < 0:
+        return 0.0
+    if k >= n or p <= 0:
+        return 1.0
+    if p >= 1:
+        return 0.0
+    lp, lq = math.log(p), math.log1p(-p)
+    c = math.lgamma(n + 1)
+    return min(1.0, sum(math.exp(c - math.lgamma(j + 1) - math.lgamma(n - j + 1) + j * lp + (n - j) * lq) for j in range(k + 1)))
+
+
+def clopper_pearson(k, n, conf=0.95):
+    """The exact two-sided interval for a share of k in n."""
+    a = (1 - conf) / 2
+
+    def bisect(f):
+        lo, hi = 0.0, 1.0
+        for _ in range(80):
+            mid = (lo + hi) / 2
+            if f(mid):
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    low = 0.0 if k == 0 else bisect(lambda p: binom_cdf(k - 1, n, p) > 1 - a)
+    high = 1.0 if k == n else bisect(lambda p: binom_cdf(k, n, p) > a)
+    return low, high
+
+
+def share(k, n):
+    lo, hi = clopper_pearson(k, n)
+    return f"{k} of {n:,}, {k / n:.5f} (95% CI {lo:.5f} to {hi:.5f})"
+
+
+def oos(data):
+    """Each payment sized at one moment and spent later, in windows that do
+    not overlap: the cost the payer can land at, over the fee at the moment
+    read no lower than the deployed floor. The factor the windows before the
+    split need is fitted on them alone; the windows after the split test it
+    and the deployed factor. A window that spans the split is in neither."""
+    l1_floor, l1_factor = deployed("L1_FEE_FLOOR"), deployed("L1_FACTOR")
+    l2_floor, l2_factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
+    land = W_A_HOURS - SEQ_HOURS - CHI_HOURS
+    cases = [
+        ("bond: the answer forced in through Ethereum, landing by", "ethereum", T_ANS_HOURS, land, 0, 1, l1_floor, l1_factor),
+        (f"bond, the recorded fee up to {LAG_ETH} blocks stale, landing by", "ethereum", T_ANS_HOURS, land, LAG_ETH, 1, l1_floor, l1_factor),
+        ("gas pool: the answer sent on Base by", "base", T_ANS_HOURS, W_A_HOURS, 0, 1, l2_floor, l2_factor),
+        (f"posting deposit: from the payment, its {CHUNKS} chunks in the {CHUNKS} cheapest Base blocks by", "base", 0, W_P_HOURS, 0, CHUNKS, l2_floor, l2_factor),
+    ]
+    print("THE DEPLOYED FEE FACTORS OUT OF SAMPLE: FITTED BEFORE 1 JULY 2025, TESTED AFTER, WINDOWS THAT DO NOT OVERLAP")
+    print("=" * 78)
+    loaded = {}
+    for label, chain, start_h, until_h, lag, k, floor, factor in cases:
+        if chain not in loaded:
+            meta, fee, _ = load(data, chain)
+            loaded[chain] = (meta, fee, split_index(data, chain, meta))
+        meta, fee, s = loaded[chain]
+        bs = CHAINS[chain]["block_seconds"]
+        a = math.ceil(start_h * 3600 / bs)
+        b = math.ceil(until_h * 3600 / bs)
+        fit, test, below = [], [], 0
+        for i in range(lag, len(fee) - b, b + 1):
+            ref = min(fee[i - lag:i + 1])
+            if ref <= floor:
+                below += 1
+            ref = max(ref, floor)
+            seg = fee[i + a:i + b + 1]
+            cost = min(seg) if k == 1 else sum(heapq.nsmallest(k, seg)) / k
+            r = cost / ref
+            if i + b < s:
+                fit.append(r)
+            elif i >= s:
+                test.append(r)
+        both = fit + test
+        f_fit = max(fit)
+        print(f"  {label} {until_h:.2f} h, from {start_h:.2f} h; floor {floor / 1e9:g} gwei, deployed factor {factor}")
+        print(f"    windows of {b + 1:,} blocks: {len(fit):,} before the split, {len(test):,} after; fee at or below the floor in {below / (len(both) or 1):.4f} of all")
+        print(f"    fit, before: largest ratio {f_fit:.3f}, the factor the fit needs")
+        print(f"    test, after: largest ratio {max(test):.3f}; above the fitted factor: {share(sum(r > f_fit for r in test), len(test))}")
+        print(f"                 above the deployed factor: {share(sum(r > factor for r in test), len(test))}")
+        print(f"    all windows: largest ratio {max(both):.3f}; above the deployed factor: {share(sum(r > factor for r in both), len(both))}")
+        print()
+
+
+def blobs(data):
+    """Under censorship of its domain postings, the answerer posts a batch as
+    blobs, and is refunded no more than posting it on the domain costs when
+    the report arrives. In posting waits that do not overlap, the cheapest the
+    blob way can be, its transactions in the cheapest Ethereum blocks of the
+    wait, against the domain way at Base's lowest base fee in the wait and
+    without the data fee: a domain way that cheap only overstates the excess
+    the answerer bears."""
+    eth_meta, eth_fee, blob = load(data, "ethereum")
+    base_meta, base_fee, _ = load(data, "base")
+    times = eth_times(data, eth_meta)
+    base_t0 = recorded(data, "time_base_first.json", lambda: block_time(CHAINS["base"]["rpcs"], base_meta["first"]))
+    n_blobs, call_gas, posting_gas = deployed("BLOBS"), deployed("BLOB_GAS"), deployed("POSTING_GAS")
+    l2_floor, l2_factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
+    txs = math.ceil(n_blobs / BLOBS_PER_TX)
+    deposit = l2_factor * posting_gas * l2_floor
+    L = math.ceil(W_P_HOURS * 3600 / 2)
+    rows = []
+    for j in range(0, len(base_fee) - L, L + 1):
+        t0 = base_t0 + 2 * j
+        e0, e1 = eth_index(times, t0), eth_index(times, t0 + 2 * L)
+        if e1 >= len(eth_fee):
+            break
+        units = [n_blobs * BLOB_GAS * blob[e] + call_gas * eth_fee[e] for e in range(e0, e1 + 1)]
+        blob_way = sum(heapq.nsmallest(txs, units)) / txs
+        domain_way = posting_gas * min(base_fee[j:j + L + 1])
+        rows.append((blob_way, domain_way))
+    n = len(rows)
+    excess = sorted(max(0, bw - dw) for bw, dw in rows)
+    over = [x for x in excess if x > 0]
+
+    def q(v, p):
+        return v[min(len(v) - 1, int(p / 100 * len(v)))]
+
+    print(f"BLOBS ON ETHEREUM AGAINST POSTINGS ON BASE: ONE BATCH, IN POSTING WAITS OF {W_P_HOURS} H THAT DO NOT OVERLAP")
+    print("=" * 78)
+    print(f"  {n_blobs} blobs in {txs} transactions and {call_gas:,} Ethereum gas, against {posting_gas:,} Base gas; {n:,} waits")
+    bws = sorted(bw for bw, _ in rows)
+    dws = sorted(dw for _, dw in rows)
+    print("  blob way, ETH:   " + "  ".join(f"p{p:g} {q(bws, p) / 1e18:.3g}" for p in (50, 90, 99)) + f"  max {bws[-1] / 1e18:.3g}")
+    print("  domain way, ETH: " + "  ".join(f"p{p:g} {q(dws, p) / 1e18:.3g}" for p in (50, 90, 99)) + f"  max {dws[-1] / 1e18:.3g}")
+    print(f"  waits in which the blob way costs more: {share(len(over), n)}")
+    if over:
+        print("  the excess when it does, ETH: " + "  ".join(f"p{p:g} {q(over, p) / 1e18:.3g}" for p in (50, 90)) + f"  max {over[-1] / 1e18:.3g}")
+        print(f"  the largest excess is {over[-1] / deposit:.3f} posting deposits at the floor ({deposit / 1e18:.6f} ETH, without the data fee)")
+    print()
+
+
 if __name__ == "__main__":
-    modes = {"fetch": fetch, "analyze": analyze, "floors": floors}
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs}
     if len(sys.argv) != 3 or sys.argv[1] not in modes:
         raise SystemExit(__doc__)
     modes[sys.argv[1]](sys.argv[2])

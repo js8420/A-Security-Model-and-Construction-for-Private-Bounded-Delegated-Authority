@@ -76,10 +76,10 @@ interface Chained {
 const key = (r: { domain: string; digest: bigint }) => `${r.domain}/${r.digest}`;
 
 /**
- * The bond and the deposit follow the fees, which move between the reading
- * and the block the challenge lands in, so the monitor sends half again as
- * much; the dispute contract puts the excess in the posting pool, which
- * returns what is left.
+ * The gas pool and the posting deposit follow the fees, which move between
+ * the reading and the block the call lands in, so the monitor sends half
+ * again as much; the contracts keep the excess in the pool, which returns
+ * what is left.
  */
 const margin = (x: bigint) => x + x / 2n;
 /** The reserve's record of a settlement, as a challenge presents it. */
@@ -144,9 +144,17 @@ export function extractSecret(settled: readonly { digest: bigint; domain: bigint
  *
  * A challenge or request of the monitor's whose settlement comes into order
  * later, as when an agent that was late delivers, is cancelled at the next
- * poll: the hold lifts, the bond comes back, and nothing more is proved or
- * posted. Whether a settlement is in order never depends on the budget for a
- * settlement the agent made honestly, so neither does a cancel.
+ * poll: the hold lifts, the gas pool and the proving cost set aside come
+ * back, and nothing more is proved or posted. Whether a settlement is in
+ * order never depends on the budget for a settlement the agent made
+ * honestly, so neither does a cancel. A request still standing after the
+ * poll that cancels what came into order is paid for at once, so the
+ * answerer's duty to post starts then.
+ *
+ * Every settlement the monitor has read stays in its own copy, which
+ * snapshot() writes out and restore() reads back: a node keeps logs only so
+ * long, and a unit consumed twice is found by setting a new settlement
+ * against every earlier one, however old.
  *
  * So what the chain shows depends only on whether backing was delivered in
  * time, never on which rule a settlement broke. A party who signs with the
@@ -176,6 +184,10 @@ export class Monitor {
   private readonly cancelled = new Set<string>();
   /** Batches bound for posting and not yet posted, by domain and root: the proof hash and when the binding landed. */
   private readonly bound = new Map<string, { domain: string; proofHash: Hex; at: bigint }>();
+  /** Batches whose postings the monitor paid for, by domain and root. */
+  private readonly paid = new Set<string>();
+  /** The root each answered record's answer proved. */
+  private readonly answerRoots = new Map<string, Hex>();
   private claimed = false;
   private frozen = false;
   readonly reasons: string[] = [];
@@ -492,6 +504,16 @@ export class Monitor {
   }
 
   private readonly windows = new Map<string, bigint>();
+  private readonly inclusion = new Map<string, bigint>();
+
+  /** How long after the delivery falls due a report of blobs posted in time may still arrive. */
+  private async inclusionWait(d: Domain): Promise<bigint> {
+    const have = this.inclusion.get(d.name);
+    if (have !== undefined) return have;
+    const w = (await d.chain.readContract({ address: await this.postings(d), abi: postingsAbi, functionName: "inclusionWait" })) as bigint;
+    this.inclusion.set(d.name, w);
+    return w;
+  }
 
   private async acceptWindow(d: Domain): Promise<bigint> {
     const have = this.windows.get(d.name);
@@ -503,9 +525,10 @@ export class Monitor {
 
   /**
    * Step 1's challenges on one domain, in one call: every record due that
-   * nobody has challenged yet, under one shared deadline, paying into the
-   * proving pool for the batches they can fall in rather than a bond each.
-   * Records another party challenged first are joined one by one.
+   * nobody has challenged yet, under one shared deadline, paying the gas of
+   * answering them into the gas pool rather than a bond each; the reserve
+   * sets the proving cost aside from the delegation's own funds. Records
+   * another party challenged first are joined one by one.
    */
   private async challengeAll(d: Domain, rs: Record[]): Promise<void> {
     const dispute = d.dispute as Address;
@@ -538,17 +561,16 @@ export class Monitor {
   }
 
   /**
-   * Step 1's challenge of one record, topping the posting pool up to one deposit. A settlement someone else
-   * challenged first is joined instead: an open challenge then holds it as
-   * the monitor's own would, and an answered one carries the monitor's
-   * request from the join, so step 3 counts the delivery wait from there.
-   * One already expired froze the delegation on its domain, and step 2
-   * freezes it on the others.
+   * Step 1's challenge of one record, paying the gas of answering it. A
+   * settlement someone else challenged first is joined instead, for the
+   * join's gas alone: an open challenge then holds it as the monitor's own
+   * would, and an answered one carries the monitor's request from the join,
+   * so step 3 counts the delivery wait from there. One already expired froze
+   * the delegation on its domain, and step 2 freezes it on the others.
    */
   private async challenge(d: Domain, r: Record): Promise<void> {
     const dispute = d.dispute as Address;
     const price = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "principalPrice", args: [d.delegation, 1n, r.time, r.time] })) as bigint;
-    const topUp = (await d.chain.readContract({ address: await this.postings(d), abi: postingsAbi, functionName: "postingTopUp", args: [d.delegation] })) as bigint;
     const s = settlementOf(r);
     let hash: Hex;
     let joined = false;
@@ -557,7 +579,7 @@ export class Monitor {
     } catch (e) {
       if (!String(e).includes("AlreadyChallenged")) throw e;
       try {
-        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s], value: margin(topUp) });
+        hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "join", args: [d.delegation, r.digest, s] });
         joined = true;
       } catch (f) {
         if (String(f).includes("NotOpen")) {
@@ -586,41 +608,67 @@ export class Monitor {
   }
 
   /**
-   * Keeps one posting deposit in each domain's pool for every batch bound for
-   * posting whose proof is not yet posted and whose posting wait is still
-   * running, so batches due at once do not share one deposit.
+   * Pays for the postings of every batch an answer proved under a request of
+   * the monitor's that still stands, once a batch: the batch's pool is
+   * topped up to one posting deposit, and the answerer's duty to post runs
+   * from then. A request the monitor cancelled is not paid for.
    */
-  private async fundPostings(): Promise<void> {
-    for (const d of this.domains) {
+  private async payPostings(): Promise<void> {
+    for (const k of this.answered.keys()) {
+      if (this.cancelled.has(k) || !this.challenged.has(k)) continue;
+      const r = this.records.get(k);
+      if (!r) continue;
+      const d = this.domainOf(r);
       if (!d.dispute) continue;
-      const dispute = d.dispute as Address;
-      const now = await this.now(d);
-      const wait = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "deliveryWait" })) as bigint;
-      let due = 0n;
-      for (const v of this.bound.values()) if (v.domain === d.name && now <= v.at + wait) due += 1n;
-      if (due === 0n) continue;
+      let root = this.answerRoots.get(k);
+      if (!root) {
+        root = (await d.chain.readContract({ address: d.dispute, abi: disputeAbi, functionName: "answeredRoot", args: [d.delegation, r.digest] })) as Hex;
+        this.answerRoots.set(k, root);
+      }
+      const b = `${d.name}/${root}`;
+      if (this.paid.has(b)) continue;
       const pd = await this.postings(d);
-      const deposit = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "postingDeposit" })) as bigint;
-      const pool = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "postingPool", args: [d.delegation] })) as bigint;
-      if (pool >= due * deposit) continue;
-      const hash = await d.wallet.writeContract({ address: pd, abi: postingsAbi, functionName: "fund", args: [d.delegation], value: due * deposit - pool });
-      await d.chain.waitForTransactionReceipt({ hash });
+      const topUp = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "postingTopUp", args: [d.delegation, root] })) as bigint;
+      try {
+        const { request } = await d.chain.simulateContract({
+          account: d.wallet.account, address: pd, abi: postingsAbi, functionName: "payPosting", args: [d.delegation, root], value: margin(topUp),
+        });
+        const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
+        if (receipt.status !== "success") continue;
+      } catch {
+        // Past the delivery wait after the request, the payment is refused
+        // and the request lapses; step 3 still freezes if nothing came.
+        continue;
+      }
+      this.paid.add(b);
     }
   }
 
   /**
-   * Takes back what each domain's proving pool still holds once none of the
-   * monitor's challenges there is open.
+   * Takes back what each domain's gas pool still holds, and what the reserve
+   * set aside for proving, once none of the monitor's challenges there is
+   * open; and each paid batch's posting pool once its delivery is no longer
+   * due and the inclusion wait after it has passed.
    */
   private async returnPools(): Promise<void> {
     for (const d of this.domains) {
       if (!d.dispute) continue;
       const dispute = d.dispute as Address;
-      const pool = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "provingPool", args: [d.delegation] })) as bigint;
-      if (pool === 0n) continue;
+      const pool = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "gasPool", args: [d.delegation] })) as bigint;
+      const set = (await d.chain.readContract({ address: d.reserve, abi: reserveAbi, functionName: "earmarked", args: [d.delegation] })) as bigint;
+      if (pool === 0n && set === 0n) continue;
       const open = (await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "openByPrincipal", args: [d.delegation] })) as bigint;
       if (open !== 0n) continue;
       const hash = await d.wallet.writeContract({ address: dispute, abi: disputeAbi, functionName: "returnProving", args: [d.delegation] });
+      await d.chain.waitForTransactionReceipt({ hash });
+    }
+    for (const b of this.paid) {
+      const [name, root] = b.split("/") as [string, Hex];
+      const d = this.domains.find((x) => x.name === name) as Domain;
+      const pd = await this.postings(d);
+      const batch = (await d.chain.readContract({ address: pd, abi: postingsAbi, functionName: "batchOf", args: [d.delegation, root] })) as { until: bigint; pool: bigint };
+      if (batch.pool === 0n || (await this.now(d)) <= batch.until + (await this.inclusionWait(d))) continue;
+      const hash = await d.wallet.writeContract({ address: pd, abi: postingsAbi, functionName: "returnPosting", args: [d.delegation, root] });
       await d.chain.waitForTransactionReceipt({ hash });
     }
   }
@@ -731,7 +779,6 @@ export class Monitor {
    */
   async poll(): Promise<{ total: bigint; challenged: Record[]; froze: boolean; reasons: string[] }> {
     await this.read();
-    await this.fundPostings();
     const total = this.total();
     const challenged: Record[] = [];
     const reasons: string[] = [];
@@ -759,6 +806,7 @@ export class Monitor {
     for (const [name, rs] of inOrder) {
       for (const r of await this.cancelAll(this.domains.find((x) => x.name === name) as Domain, rs)) reasons.push(`${key(r)}: now in order, cancelled`);
     }
+    await this.payPostings();
     for (const r of this.ordered()) {
       const k = key(r);
       const d = this.domainOf(r);
@@ -826,6 +874,52 @@ export class Monitor {
       asked.push(r);
     }
     return asked;
+  }
+
+  /**
+   * The monitor's own copy of everything it has read and done, as text: every
+   * settlement record, every opening and proof's statements delivered, its
+   * challenges, requests, payments and cancels, and where its reading of
+   * each domain stopped. A monitor that restores it reads on from there and
+   * needs no log older than that from any node.
+   */
+  snapshot(): string {
+    return JSON.stringify(
+      {
+        from: [...this.from], records: [...this.records], openings: [...this.openings], backing: [...this.backing],
+        challenged: [...this.challenged], answered: [...this.answered], expired: [...this.expired], joinedAnswered: [...this.joinedAnswered],
+        requested: [...this.requested], cancelled: [...this.cancelled], bound: [...this.bound], paid: [...this.paid],
+        claimed: this.claimed, frozen: this.frozen,
+      },
+      (_k, v) => (typeof v === "bigint" ? { $n: v.toString() } : v),
+    );
+  }
+
+  /** Reads back a copy snapshot() wrote, in place of what this monitor holds. */
+  restore(copy: string): void {
+    const j = JSON.parse(copy, (_k, v) => (v && typeof v === "object" && typeof v.$n === "string" && Object.keys(v).length === 1 ? BigInt(v.$n) : v));
+    const load = <K, V>(m: Map<K, V>, xs: [K, V][]) => {
+      m.clear();
+      for (const [k, v] of xs) m.set(k, v);
+    };
+    const loadSet = <K>(m: Set<K>, xs: K[]) => {
+      m.clear();
+      for (const k of xs) m.add(k);
+    };
+    load(this.from, j.from);
+    load(this.records, j.records);
+    load(this.openings, j.openings);
+    load(this.backing, j.backing);
+    load(this.challenged, j.challenged);
+    load(this.answered, j.answered);
+    loadSet(this.expired, j.expired);
+    loadSet(this.joinedAnswered, j.joinedAnswered);
+    load(this.requested, j.requested);
+    loadSet(this.cancelled, j.cancelled);
+    load(this.bound, j.bound);
+    loadSet(this.paid, j.paid);
+    this.claimed = j.claimed;
+    this.frozen = j.frozen;
   }
 
   /** How many payments' fields the principal holds in the clear. */

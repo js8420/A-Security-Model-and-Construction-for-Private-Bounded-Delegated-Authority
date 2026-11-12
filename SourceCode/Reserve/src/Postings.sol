@@ -21,18 +21,12 @@ interface IDisputeP {
         external
         view
         returns (bytes32);
-    function openCount(uint256 id) external view returns (uint256);
     function slashFor(uint256 id, address caller) external;
 }
 
 interface IGasPriceOracleP {
     function getL1Fee(bytes memory data) external view returns (uint256);
     function getL1FeeUpperBound(uint256 unsignedTxSize) external view returns (uint256);
-}
-
-interface IL1BlockP {
-    function basefee() external view returns (uint256);
-    function blobBaseFee() external view returns (uint256);
 }
 
 interface IL2Messenger {
@@ -55,23 +49,33 @@ interface IL2Messenger {
 /// receipt slashes the answerer's stake, provided the answerer held it before
 /// the answer.
 ///
-/// Posting costs. A principal's challenge, or its join, tops the
-/// delegation's posting pool up to one posting deposit: the dearer of the two
-/// ways to post one batch at the fees then, each at its fee factor, and never
-/// below the fee floors. A receipt binds its batch to the hashes it names,
-/// once. While a request under the batch is outstanding and a delivery is
-/// due, the named answerer's postings of what the receipt names are refunded
-/// from the pool at what they cost: on the domain at its base fee with the
+/// Paying for the postings. A request costs the principal nothing when it is
+/// filed. The duty starts when the principal, or anyone, pays the batch's
+/// posting pool up to one posting deposit, which it may do within the
+/// delivery wait of the latest request under the batch: what posting the
+/// batch on the domain costs at the domain's fees then, at its fee factor,
+/// and never below the fee floor. The delivery is then due within the
+/// delivery wait. A request never paid for lapses: nothing is due under it.
+/// A receipt binds its batch to the hashes it names, once. While a request
+/// under the batch is outstanding and its delivery is due, the named
+/// answerer's postings of what the receipt names are refunded from the
+/// batch's pool at what they cost: on the domain at its base fee with the
 /// call data at the floor price, plus the L1 data fee; on Ethereum at what
 /// the BlobPosting contract measured, the blob gas at the blob base fee and
-/// the calls' gas at the base fee. A blob posting counts from the Ethereum
-/// block it was made in, since its report may wait up to the domain's
-/// inclusion wait; a withholding is slashed, and the pool returned, only
-/// once that wait has passed too. If the pool runs out during the blob
-/// postings of a batch, that batch's duty lapses and no withholding can be
-/// slashed under it; a shortfall on the domain lapses nothing, since the blob
-/// way remains. Nothing else is refunded. What is left once no delivery is
-/// due goes back to the principal.
+/// the calls' gas at the base fee, but never more, with what the batch was
+/// already refunded, than posting it on the domain costs when the report
+/// arrives. The blob way is for when the domain will not include the
+/// answerer's postings; when it costs more than the domain way, the answerer
+/// bears the excess, so the route it picks cannot drain the pool beyond what
+/// the deposit was sized to. Once blobs were reported posted for a batch, no
+/// later domain posting of it is refunded. A blob posting counts from the
+/// Ethereum block it was made in, since its report may wait up to the
+/// domain's inclusion wait; a withholding is slashed, and the pool returned,
+/// only once that wait has passed too. If the pool cannot pay a blob refund,
+/// that batch's duty lapses and no withholding can be slashed under it; a
+/// shortfall on the domain lapses nothing, since the blob way remains.
+/// Nothing else is refunded. What is left once the delivery is no longer due
+/// goes back to the principal.
 contract Postings {
     using SettlementHash for Settlement;
 
@@ -79,14 +83,21 @@ contract Postings {
     uint8 private constant EXPIRED = 3;
 
     /// A batch's posting: what its first receipt bound, whether its blob
-    /// refunds ran the pool out, and the principal's requests under it not
-    /// yet withdrawn.
+    /// refunds ran the pool out, the principal's requests under it not yet
+    /// withdrawn, when the latest was filed, when the postings were last
+    /// paid for, when the delivery is due once paid for (zero before), the
+    /// pool that pays for it and what it has refunded.
     struct Batch {
         bytes32 proofHash;
         bytes32 sealedRoot;
         bytes32 blobsHash;
         bool lapsed;
         uint32 due;
+        uint64 requestedAt;
+        uint64 paidAt;
+        uint64 until;
+        uint256 pool;
+        uint256 refunded;
     }
 
     /// A proof being posted on the domain by one poster: the chained hash so
@@ -102,17 +113,10 @@ contract Postings {
         /// Domain gas and call-data bytes of one batch's postings on the domain.
         uint256 postingGas;
         uint256 postingBytes;
-        /// Blobs and Ethereum gas of one batch's postings as blobs.
-        uint256 blobs;
-        uint256 blobGas;
-        /// Fee factors for the domain's base fee, Ethereum's base fee and
-        /// Ethereum's blob base fee, and the floors each is read at.
+        /// The fee factor for the domain's base fee, and the floor it is
+        /// read at.
         uint256 l2Factor;
-        uint256 l1Factor;
-        uint256 blobFactor;
         uint256 l2FeeFloor;
-        uint256 l1FeeFloor;
-        uint256 blobFeeFloor;
         /// The domain's messenger from Ethereum.
         address messenger;
         /// How long after an Ethereum block the domain must include a deposit
@@ -127,33 +131,22 @@ contract Postings {
     /// The chunks of the deployed batch proof with its public values,
     /// 10,365,547 bytes: the most chunks of one posting that are refunded.
     uint256 public constant MAX_CHUNKS = 106;
-    uint256 private constant BLOB_GAS_PER_BLOB = 131_072;
     /// Gas the refund itself spends after it measures, an upper bound.
     uint256 private constant REFUND_GAS = 40_000;
     address private constant GAS_PRICE_ORACLE = 0x420000000000000000000000000000000000000F;
-    address private constant L1_BLOCK = 0x4200000000000000000000000000000000000015;
 
     IReserveP public immutable reserve;
     IDisputeP public immutable dispute;
     uint256 public immutable postingGas;
     uint256 public immutable postingBytes;
-    uint256 public immutable blobs;
-    uint256 public immutable blobGas;
     uint256 public immutable l2Factor;
-    uint256 public immutable l1Factor;
-    uint256 public immutable blobFactor;
     uint256 public immutable l2FeeFloor;
-    uint256 public immutable l1FeeFloor;
-    uint256 public immutable blobFeeFloor;
     address public immutable messenger;
     uint64 public immutable inclusionWait;
     /// The BlobPosting contract on Ethereum, set once by the deployer.
     address public blobPoster;
     address private immutable deployer;
 
-    mapping(uint256 => uint256) public postingPool;
-    /// The latest delivery deadline under a delegation.
-    mapping(uint256 => uint64) public dutyUntil;
     mapping(uint256 => mapping(bytes32 => Batch)) private batches;
     /// The batch a bound proof hash belongs to.
     mapping(uint256 => mapping(bytes32 => bytes32)) public boundRoot;
@@ -184,6 +177,7 @@ contract Postings {
     error NothingToWithdraw();
     error NotMessenger();
     error AlreadySet();
+    error DepositTooSmall();
 
     event SealedDelivered(uint256 indexed id, uint64 digest, bytes opening);
     event ProofChunk(uint256 indexed id, bytes32 indexed proofHash, address indexed poster, uint256 index);
@@ -192,6 +186,7 @@ contract Postings {
     event PostingRefunded(uint256 indexed id, address poster, uint256 amount);
     event PostingBound(uint256 indexed id, bytes32 root, bytes32 proofHash);
     event PostingLapsed(uint256 indexed id, bytes32 root);
+    event PostingPaid(uint256 indexed id, bytes32 root, uint64 until);
     event AnswererSlashed(uint256 indexed id, uint64 digest);
 
     constructor(address reserve_, address dispute_, Params memory p) {
@@ -199,14 +194,8 @@ contract Postings {
         dispute = IDisputeP(dispute_);
         postingGas = p.postingGas;
         postingBytes = p.postingBytes;
-        blobs = p.blobs;
-        blobGas = p.blobGas;
         l2Factor = p.l2Factor;
-        l1Factor = p.l1Factor;
-        blobFactor = p.blobFactor;
         l2FeeFloor = p.l2FeeFloor;
-        l1FeeFloor = p.l1FeeFloor;
-        blobFeeFloor = p.blobFeeFloor;
         messenger = p.messenger;
         inclusionWait = p.inclusionWait;
         deployer = msg.sender;
@@ -224,65 +213,74 @@ contract Postings {
         _;
     }
 
-    function _floored(uint256 f, uint256 floor) private pure returns (uint256) {
-        return f < floor ? floor : f;
+    /// What posting one batch on the domain costs at the domain's fees now.
+    function domainCost() public view returns (uint256 fee) {
+        fee = postingGas * block.basefee;
+        if (GAS_PRICE_ORACLE.code.length != 0) fee += IGasPriceOracleP(GAS_PRICE_ORACLE).getL1FeeUpperBound(postingBytes);
     }
 
-    /// What posting one batch costs now, the dearer of the two ways, each
-    /// times its fee factor: what a principal's challenge keeps in the pool.
+    /// The posting deposit: what posting one batch on the domain costs now,
+    /// with the base fee read no lower than its floor, times the fee factor.
     function postingDeposit() public view returns (uint256) {
         uint256 data = GAS_PRICE_ORACLE.code.length != 0 ? IGasPriceOracleP(GAS_PRICE_ORACLE).getL1FeeUpperBound(postingBytes) : 0;
-        uint256 onDomain = l2Factor * (postingGas * _floored(block.basefee, l2FeeFloor) + data);
-        uint256 l1;
-        uint256 blob;
-        if (L1_BLOCK.code.length != 0) {
-            l1 = IL1BlockP(L1_BLOCK).basefee();
-            blob = IL1BlockP(L1_BLOCK).blobBaseFee();
-        }
-        uint256 asBlobs = blobFactor * blobs * BLOB_GAS_PER_BLOB * _floored(blob, blobFeeFloor)
-            + l1Factor * blobGas * _floored(l1, l1FeeFloor);
-        return onDomain > asBlobs ? onDomain : asBlobs;
+        uint256 fee = block.basefee < l2FeeFloor ? l2FeeFloor : block.basefee;
+        return l2Factor * (postingGas * fee + data);
     }
 
-    /// What brings a delegation's pool up to one deposit.
-    function postingTopUp(uint256 id) public view returns (uint256) {
-        uint256 pool = postingPool[id];
+    /// What brings a batch's pool up to one deposit.
+    function postingTopUp(uint256 id, bytes32 root) public view returns (uint256) {
+        uint256 pool = batches[id][root].pool;
         uint256 target = postingDeposit();
         return pool >= target ? 0 : target - pool;
     }
 
-    /// Adds to a delegation's posting pool, as the dispute contract does with
-    /// a principal's challenge and a principal does when the postings of more
-    /// than one batch are due at once.
-    function fund(uint256 id) external payable {
-        postingPool[id] += msg.value;
-    }
-
     /// A principal's challenge answered under `root`, or joined once
-    /// answered: a delivery is due by `deadline`.
-    function request(uint256 id, bytes32 root, uint64 deadline) external onlyDispute {
-        batches[id][root].due += 1;
-        if (deadline > dutyUntil[id]) dutyUntil[id] = deadline;
+    /// answered: a request, which binds the answerer once paid for.
+    function request(uint256 id, bytes32 root) external onlyDispute {
+        Batch storage b = batches[id][root];
+        b.due += 1;
+        b.requestedAt = uint64(block.timestamp);
     }
 
-    /// The principal withdrew a request under `root`.
+    /// Pays for the postings of batch `root`, within the delivery wait of
+    /// the latest request under it: the pool must then hold one deposit, and
+    /// the delivery falls due within the delivery wait from now. Anyone may
+    /// pay; what is left goes back to the principal.
+    function payPosting(uint256 id, bytes32 root) external payable {
+        Batch storage b = batches[id][root];
+        uint64 wait = IDisputeWait(address(dispute)).deliveryWait();
+        if (b.due == 0) revert NotDue();
+        if (block.timestamp > uint256(b.requestedAt) + wait) revert TooLate();
+        uint256 pool = b.pool + msg.value;
+        if (pool < postingDeposit()) revert DepositTooSmall();
+        b.pool = pool;
+        b.paidAt = uint64(block.timestamp);
+        uint64 until = uint64(block.timestamp) + wait;
+        if (until > b.until) b.until = until;
+        emit PostingPaid(id, root, b.until);
+    }
+
+    /// The principal withdrew a request under `root`, before its delivery
+    /// fell due.
     function withdrawRequest(uint256 id, bytes32 root) external onlyDispute {
-        batches[id][root].due -= 1;
+        Batch storage b = batches[id][root];
+        if (b.until != 0 && block.timestamp > b.until) revert TooLate();
+        b.due -= 1;
     }
 
     function batchOf(uint256 id, bytes32 root) external view returns (Batch memory) {
         return batches[id][root];
     }
 
-    /// What is left of the posting pool goes back to the principal once no
-    /// delivery under the delegation is still due, and every report of blobs
-    /// posted on Ethereum in time has reached the domain.
-    function returnPosting(uint256 id) external {
-        if (block.timestamp <= uint256(dutyUntil[id]) + inclusionWait) revert TooEarly();
-        if (dispute.openCount(id) != 0) revert TooEarly();
-        uint256 left = postingPool[id];
+    /// What is left of a batch's pool goes back to the principal once its
+    /// delivery is no longer due, and every report of blobs posted on
+    /// Ethereum in time has reached the domain.
+    function returnPosting(uint256 id, bytes32 root) external {
+        Batch storage b = batches[id][root];
+        if (block.timestamp <= uint256(b.until) + inclusionWait) revert TooEarly();
+        uint256 left = b.pool;
         if (left == 0) revert NothingToReturn();
-        postingPool[id] = 0;
+        b.pool = 0;
         credit[reserve.principalOf(id)] += left;
     }
 
@@ -328,12 +326,13 @@ contract Postings {
         if (s.hash() != reserve.settled(id, digest)) revert WrongRecord();
     }
 
-    /// The challenge of a principal's that was answered, and is still within
-    /// its delivery wait, and the root its answer proved.
+    /// The challenge of a principal's that was answered, whose delivery has
+    /// not fallen due yet, and the root its answer proved.
     function _due(uint256 id, uint64 digest) private view returns (bytes32 root) {
-        (uint8 status, bool byPrincipal, uint64 deadline, bytes32 r) = dispute.challengeState(id, digest);
+        (uint8 status, bool byPrincipal, , bytes32 r) = dispute.challengeState(id, digest);
         if (status != ANSWERED || !byPrincipal) revert NotDue();
-        if (block.timestamp > deadline) revert TooLate();
+        uint64 until = batches[id][r].until;
+        if (until != 0 && block.timestamp > until) revert TooLate();
         root = r;
     }
 
@@ -460,43 +459,55 @@ contract Postings {
     }
 
     /// Refunds the named answerer's posting for batch `root` while a request
-    /// under the batch is outstanding and a delivery under the delegation is
-    /// due at `at`, when the posting was made, from the principal's pool, as
-    /// far as it reaches. A blob posting the pool cannot cover lapses the
-    /// batch's duty.
+    /// under the batch is outstanding and paid for, and its delivery was not
+    /// yet due at `at`, when the posting was made, from the batch's pool, as
+    /// far as it reaches. A blob posting is refunded no more, with what the
+    /// batch was already refunded, than the domain way costs now, and a
+    /// domain posting after blobs were reported is not refunded. A blob
+    /// refund the pool cannot pay lapses the batch's duty.
     function _pay(uint256 id, bytes32 root, address poster, uint256 fee, bool asBlobs, uint64 at) private {
         (address answerer, ) = reserve.answererOf(id);
-        if (poster != answerer || at > dutyUntil[id] || batches[id][root].due == 0) return;
-        uint256 pool = postingPool[id];
+        Batch storage b = batches[id][root];
+        if (poster != answerer || b.until == 0 || at > b.until || b.due == 0) return;
+        if (asBlobs) {
+            uint256 cap = domainCost();
+            cap = cap > b.refunded ? cap - b.refunded : 0;
+            if (fee > cap) fee = cap;
+        } else if (b.blobsHash != bytes32(0) && blobsPostedAt[id][b.blobsHash] != 0) {
+            return;
+        }
+        uint256 pool = b.pool;
         if (fee > pool) {
             fee = pool;
-            if (asBlobs && !batches[id][root].lapsed) {
-                batches[id][root].lapsed = true;
+            if (asBlobs && !b.lapsed) {
+                b.lapsed = true;
                 emit PostingLapsed(id, root);
             }
         }
-        postingPool[id] = pool - fee;
+        b.pool = pool - fee;
+        b.refunded += fee;
         credit[poster] += fee;
         emit PostingRefunded(id, poster, fee);
     }
 
     /// Slashes the answerer that held a settlement's batch before the
-    /// principal's challenge of it was answered, if by the end of the delivery
-    /// wait neither way of posting delivered what its receipt names, unless
-    /// that batch's duty lapsed; and at any time if the opening was delivered
+    /// principal's request under it, if the request was paid for and by the
+    /// time the delivery fell due neither way of posting delivered what its
+    /// receipt names, unless that batch's duty lapsed; and at any time if the
+    /// opening was delivered
     /// under another sealed root than the receipt's, or the batch is bound to
     /// other hashes than the receipt's, either of which takes a second
     /// receipt for the batch.
     function slashWithholding(uint256 id, uint64 digest, Settlement calldata s, uint256 index, bytes32[] calldata path, BatchReceipt calldata r)
         external
     {
-        (uint8 status, bool byPrincipal, uint64 deadline, ) = dispute.challengeState(id, digest);
+        (uint8 status, bool byPrincipal, uint64 requestedAt, ) = dispute.challengeState(id, digest);
         _record(id, digest, s);
         bytes32 root = dispute.rootOf(id, digest, s, index, path);
         _receipt(id, root, r);
         if (!byPrincipal || status != ANSWERED) revert NotWithheld();
         bytes32 under = deliveredUnder[_key(id, digest)];
-        if (!_swapped(id, root, under, r) && !_missed(id, root, under, r, deadline)) revert NotWithheld();
+        if (!_swapped(id, root, under, r) && !_missed(id, root, under, r, requestedAt)) revert NotWithheld();
         emit AnswererSlashed(id, digest);
         dispute.slashFor(id, msg.sender);
     }
@@ -509,17 +520,20 @@ contract Postings {
             || (b.proofHash != bytes32(0) && (b.proofHash != r.proofHash || b.sealedRoot != r.sealedRoot || b.blobsHash != r.blobsHash));
     }
 
-    /// The delivery wait is over, and so is the inclusion wait after it, by
-    /// which any report of blobs posted in time has arrived; neither way of
-    /// posting delivered what the receipt names; the duty did not lapse; and
-    /// the receipt is dated no later than the request it answers.
-    function _missed(uint256 id, bytes32 root, bytes32 under, BatchReceipt calldata r, uint64 deadline) private view returns (bool) {
-        if (batches[id][root].lapsed || block.timestamp <= uint256(deadline) + inclusionWait) return false;
-        if (r.receivedAt > deadline - IDisputeWait(address(dispute)).deliveryWait()) revert ReceiptTooLate();
+    /// The request was paid for after it was filed; the delivery wait is over, and so is the
+    /// inclusion wait after it, by which any report of blobs posted in time
+    /// has arrived; neither way of posting delivered what the receipt names;
+    /// the duty did not lapse; and the receipt is dated no later than the
+    /// request.
+    function _missed(uint256 id, bytes32 root, bytes32 under, BatchReceipt calldata r, uint64 requestedAt) private view returns (bool) {
+        Batch storage b = batches[id][root];
+        uint64 until = b.until;
+        if (until == 0 || requestedAt > b.paidAt || b.lapsed || block.timestamp <= uint256(until) + inclusionWait) return false;
+        if (r.receivedAt > requestedAt) revert ReceiptTooLate();
         uint64 chunksAt = postedAt[id][r.proofHash];
         uint64 blobsAt = blobsPostedAt[id][r.blobsHash];
-        bool onDomain = under != bytes32(0) && chunksAt != 0 && chunksAt <= deadline;
-        bool asBlobs = blobsAt != 0 && blobsAt <= deadline;
+        bool onDomain = under != bytes32(0) && chunksAt != 0 && chunksAt <= until;
+        bool asBlobs = blobsAt != 0 && blobsAt <= until;
         return !onDomain && !asBlobs;
     }
 

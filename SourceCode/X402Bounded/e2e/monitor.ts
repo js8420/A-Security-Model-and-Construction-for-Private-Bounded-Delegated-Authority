@@ -67,6 +67,8 @@ const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
 const BOND = parseEther("0.01");
+/** What an answer to the principal's challenges is paid for each batch, in the reserve's token: 6.03 at six decimals. */
+const PROVING_COST = 6_030_000n;
 /**
  * The deposit inclusion wait the posting contract allows a report of blobs
  * from Ethereum: Base's is 12 hours, and a local chain includes at once, so
@@ -110,12 +112,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
   const params = {
     acceptWindow: ACCEPT_WINDOW, answerWindow: ANSWER_WINDOW, slot: SLOT, deliveryWait: WAIT, deliveryTime: 8n * 3600n,
-    provingBond: BOND, provingCost: BOND / 2n, forceGas: 572_345n, l1Factor: 2n, l2Factor: 2n, l1FeeFloor: 0n, l2FeeFloor: 0n,
+    provingBond: BOND, provingCost: PROVING_COST, forceGas: 572_345n, l1Factor: 2n, l2Factor: 2n, l1FeeFloor: 0n, l2FeeFloor: 0n,
   };
   const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, params]);
   const postingParams = {
-    postingGas: 125_000_000n, postingBytes: 10_800_000n, blobs: 86n, blobGas: 3_000_000n, l2Factor: 2n, l1Factor: 2n, blobFactor: 2n,
-    l2FeeFloor: 0n, l1FeeFloor: 0n, blobFeeFloor: 0n, messenger: MESSENGER, inclusionWait: INCLUSION,
+    postingGas: 125_000_000n, postingBytes: 10_800_000n, l2Factor: 2n, l2FeeFloor: 0n, messenger: MESSENGER, inclusionWait: INCLUSION,
   };
   const pd = await deploy("Postings.sol", "Postings", [reserve, vd, postingParams]);
   await done(await principal.writeContract({ address: vd, abi: artifact("ValidityDispute.sol", "ValidityDispute").abi, functionName: "setPostings", args: [pd] }));
@@ -241,8 +242,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_increaseTime", params: [seconds] });
     await (pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>)({ method: "evm_mine", params: [] });
   };
-  /** What a delegation's proving pool holds. */
-  const provingPool = async (id: bigint) => (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "provingPool", args: [id] })) as bigint;
+  /** What a delegation's gas pool holds, and what the reserve set aside for proving under it. */
+  const gasPool = async (id: bigint) => (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "gasPool", args: [id] })) as bigint;
+  const earmarked = async (id: bigint) => (await pub.readContract({ address: reserve, abi: reserveAbi, functionName: "earmarked", args: [id] })) as bigint;
+  /** What the reserve owes an address in its token: proving paid for the principal's challenges. */
+  const tokenCredit = async (who: Address) => (await pub.readContract({ address: reserve, abi: reserveAbi, functionName: "tokenCredit", args: [who] })) as bigint;
   /** What the posting contract owes an address: postings refunded, or the pool returned. */
   const postingCredit = async (who: Address) => (await pub.readContract({ address: pd, abi: postingsAbi, functionName: "credit", args: [who] })) as bigint;
   const request = pub.request as (a: { method: string; params: unknown[] }) => Promise<unknown>;
@@ -273,7 +277,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   return {
     deploy, rootOf, bind, code: async (a: Address) => (await pub.getCode({ address: a })) as Hex,
     delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf,
-    principalCredit, disputeCredit, principalAddress, provingPool, postingCredit, trustBlobPoster, relay, postings: pd, answering,
+    principalCredit, disputeCredit, principalAddress, gasPool, earmarked, tokenCredit, postingCredit, trustBlobPoster, relay, postings: pd, answering,
   };
 }
 
@@ -596,9 +600,9 @@ async function main() {
   const nextL = await A.settle(dL, engine(ids, pt.unitSize)(dL, await A.now(), 1n).s);
   check(`an honest agent that delivers late: all ${n} challenged at the decision time and held; once its proof and openings arrive the monitor cancels all ${n}, the hold lifts, nothing is proved or frozen, and the next payment settles`,
     rL.challenged.length === n && heldL.holds === n && mL.cancellations().length === n && !cL.froze && afterL.holds === 0 && !afterL.frozen && nextL !== "Held", `${cL.reasons.length} cancelled, next ${nextL}`);
-  const poolL = await A.provingPool(dL.delegation);
-  check(`the late agent earns nothing: the principal's challenges of all ${n} drew on one proving pool, which goes back to the principal whole`,
-    returned > 0n && poolL === 0n && (await A.disputeCredit(agent.address)) === 0n, `${returned} wei returned`);
+  const poolL = await A.gasPool(dL.delegation);
+  check(`the late agent earns nothing: the principal's challenges of all ${n} paid the gas of answering into one gas pool and had one proving cost set aside, and both go back to the principal whole`,
+    returned > 0n && poolL === 0n && (await A.earmarked(dL.delegation)) === 0n && (await A.disputeCredit(agent.address)) === 0n && (await A.tokenCredit(agent.address)) === 0n, `${returned} wei returned`);
   const rP = await mP.poll();
   const rB = await mB.poll();
 
@@ -618,6 +622,9 @@ async function main() {
   const chunksS = await A.postProof(dS, answererS.proofOf(sealedS[0].domain, sealedS[0].digest) as Uint8Array);
   for (const r of rR.challenged) await A.answer(dR, r);
   const servedR = await answererR.serve(mR, true);
+  // The monitor, still without the openings, pays for the postings, so the
+  // answerer's duty to post them runs from now.
+  const payR = await mR.poll();
   for (const r of rQ.challenged) await A.answer(dQ, r);
   const servedQ = await answererQ.serve(mQ, true);
   for (const r of rP.challenged) await A.answer(dP, r);
@@ -629,6 +636,7 @@ async function main() {
   // reaches the domain as a deposit. Its receipts for the other batches of
   // one name the same blobs.
   for (const r of rB.challenged) await A.answer(dB, r);
+  const payB = await mB.poll();
   const rcB = async (r: Record) => {
     const i = sealedB.findIndex((x) => x.digest === r.digest);
     return A.receipt(dB, r, tree([sealedB[i]]).root, heldB.proofHash, receivedAt, heldB.blobsHash);
@@ -660,7 +668,7 @@ async function main() {
   const r0 = rR.challenged[0];
   const i0 = sealedR.findIndex((x) => x.digest === r0.digest);
   const slashed = await A.slashWithholding(dR, r0, await A.receipt(dR, r0, tree([sealedR[i0]]).root, heldR.proofHash, receivedAt));
-  check("an answerer that answers, hands over the proof and withholds the openings: the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
+  check("an answerer that answers, hands over the proof and withholds the openings: the monitor pays for the postings, the delegation is frozen, and the agent's receipt burns its stake", servedR.proofs === 1 && !payR.froze && fR.froze && slashed && stakeBefore > 0n && (await A.stakeOf(dR)) === 0n, fR.reasons[0] ?? "");
   const fP = await mP.poll();
   const rP0 = rP.challenged[0];
   const iP0 = sealedP.findIndex((x) => x.digest === rP0.digest);
@@ -670,8 +678,8 @@ async function main() {
   const fB = await mB.poll();
   const b1r = rB.challenged[rB.challenged.length - 1];
   const slashedB = await A.slashWithholding(dB, b1r, await rcB(b1r));
-  check(`a staked answerer censored on the domain answers all ${n} and posts the proof and every sealed opening as blobs on Ethereum, in ${postedB.txs.length} transactions; the report reaches the domain, the monitor reads the blobs back, checks them against their versioned hashes and freezes nothing, the posting is refunded what it cost, and once the inclusion wait has passed no receipt can slash`,
-    rB.challenged.length === n && postedB.blobsHash === heldB.blobsHash && mB.openedCount() === n && !pB.froze && !fB.froze && !(await A.state(dB)).frozen && refundB > 0n && !slashedB && (await A.stakeOf(dB)) > 0n,
+  check(`a staked answerer censored on the domain answers all ${n}, the monitor pays for the postings, and the answerer posts the proof and every sealed opening as blobs on Ethereum, in ${postedB.txs.length} transactions; the report reaches the domain, the monitor reads the blobs back, checks them against their versioned hashes and freezes nothing, the posting is refunded no more than the domain way costs, and once the inclusion wait has passed no receipt can slash`,
+    rB.challenged.length === n && !payB.froze && postedB.blobsHash === heldB.blobsHash && mB.openedCount() === n && !pB.froze && !fB.froze && !(await A.state(dB)).frozen && refundB > 0n && !slashedB && (await A.stakeOf(dB)) > 0n,
     `${refundB} wei refunded; ${fB.reasons.join("; ")}`);
   const fQ = await mQ.poll();
   check("opening on request, an answer to the principal's challenge asks for the opening: an answerer that answers and hands over only the proof leaves the delegation frozen", rQ.challenged.length === n && servedQ.proofs === 1 && mQ.openedCount() === 0 && fQ.froze && (await A.state(dQ)).frozen, fQ.reasons[0] ?? "");
@@ -861,6 +869,59 @@ async function main() {
     check("the monitor recovers the secret from the two shares at once, before any decision time, and claims the bond on both domains, which freezes both", sent.every((x) => x === "settled") && r.froze && paid && frozen && r.challenged.length === 0, r.reasons.join("; "));
     const wrong = extractSecret([{ digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }, { digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }]);
     check("Extract skips two entries at one index: one settlement read twice gives no line", wrong.length === 0);
+  }
+
+  section("a node that keeps logs for a time only: the monitor's own copy");
+  {
+    const secret = [222_333_444n, 555_666_777n] as const;
+    const terms = { ...plain, secretHash: await A.secretHashOf(secret) };
+    const dA = await A.delegate(terms);
+    const dB = await B.delegate(terms);
+    const k = [0x2468_ace0_1357n, 0x0bad_cafe_f00dn] as const;
+    const nf = 0x0dd5_eed5n;
+    const share = (digest: bigint, dom: bigint) => [
+      (secret[0] + k[0] * digest + 7n * k[1] * dom) % P,
+      (secret[1] + k[0] * dom + k[1] * digest) % P,
+      nf,
+    ];
+    const m = new Monitor([dA, dB], policy(1_000_000n), proving(null));
+    const time = await later();
+    const one = { digest: 8_001n, amount: UNIT, payee, time, elems: share(8_001n, 8453n), opening: keccak256("0x21") as Hex };
+    const sentOne = await A.settle(dA, one);
+    const r0 = await m.poll();
+    const copy = m.snapshot();
+    // From here on each node serves no log from before now, as a full node
+    // that prunes receipts keeps them only for its last blocks.
+    const pruned = (c: PublicClient, keep: bigint) =>
+      new Proxy(c, {
+        get(t, p) {
+          if (p === "getContractEvents") {
+            return async (a: { fromBlock?: bigint; toBlock?: bigint }) => {
+              const from = (a.fromBlock ?? 0n) < keep ? keep : (a.fromBlock as bigint);
+              const to = a.toBlock ?? (await t.getBlockNumber({ cacheTime: 0 }));
+              return from > to ? [] : t.getContractEvents({ ...a, fromBlock: from, toBlock: to } as never);
+            };
+          }
+          const v = Reflect.get(t, p, t);
+          return typeof v === "function" ? v.bind(t) : v;
+        },
+      }) as PublicClient;
+    const prunedA = { ...dA, chain: pruned(dA.chain, (await dA.chain.getBlockNumber()) + 1n) };
+    const prunedB = { ...dB, chain: pruned(dB.chain, (await dB.chain.getBlockNumber()) + 1n) };
+    const two = { digest: 8_002n, amount: UNIT, payee, time: time + 1n, elems: share(8_002n, 10n), opening: keccak256("0x22") as Hex };
+    const sentTwo = await B.settle(dB, two);
+    const fresh = new Monitor([prunedA, prunedB], policy(1_000_000n), proving(null));
+    const rFresh = await fresh.poll();
+    check("the earlier settlement's logs pruned, a monitor without its own copy reads the later settlement alone and finds no unit consumed twice",
+      sentOne === "settled" && sentTwo === "settled" && !r0.froze && fresh.all().length === 1 && !rFresh.froze, rFresh.reasons.join("; "));
+    const before = [await A.principalCredit(), await B.principalCredit()];
+    const kept = new Monitor([prunedA, prunedB], policy(1_000_000n), proving(null));
+    kept.restore(copy);
+    const rKept = await kept.poll();
+    const after = [await A.principalCredit(), await B.principalCredit()];
+    const paid = after[0] - before[0] === parseEther("0.1") && after[1] - before[1] === parseEther("0.1");
+    check("the monitor restored from its own copy sets the later settlement against the earlier one, recovers the secret and claims the bond on both domains, which freezes both",
+      kept.all().length === 2 && rKept.froze && paid && (await A.state(dA)).frozen && (await B.state(dB)).frozen, rKept.reasons.join("; "));
   }
 
   section("the chain shows the same whatever the cause: an adversary with the agent's key and no proof");

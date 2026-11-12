@@ -15,6 +15,9 @@ interface IReserveV {
     function forfeit(uint256 id) external;
     function hold(uint256 id) external;
     function release(uint256 id) external;
+    function earmark(uint256 id, uint256 target) external;
+    function payProving(uint256 id, address to, uint256 amount) external;
+    function releaseEarmark(uint256 id) external returns (uint256);
     function domain() external view returns (uint64);
     function commitmentOf(uint256 id) external view returns (bytes32);
     function rootAt(uint256 id, uint64 epoch) external view returns (bytes32);
@@ -34,9 +37,7 @@ interface IL1Block {
 
 /// The posting duty, kept in a contract of its own.
 interface IPostings {
-    function postingTopUp(uint256 id) external view returns (uint256);
-    function fund(uint256 id) external payable;
-    function request(uint256 id, bytes32 root, uint64 deadline) external;
+    function request(uint256 id, bytes32 root) external;
     function withdrawRequest(uint256 id, bytes32 root) external;
     function receiptSigned(uint256 id, bytes32 root, BatchReceipt calldata r) external view returns (bool);
 }
@@ -76,17 +77,23 @@ interface IPostings {
 /// credits that bond to the agent challenged, or to its answerer if it has
 /// one, whoever sends the answer, so copying an answer gains nothing.
 ///
-/// The principal's challenges carry no bond of their own. They draw on the
-/// delegation's proving pool, which each of them tops up to cover every batch
-/// its open challenges could fall in: one batch for each 256 of them and one
-/// for each delivery time their signed times span, and one more. An answer
-/// to them pays what the answer costs and no more: the price of proving one
-/// batch, once for each batch of the delegation it proves, and the gas the
-/// answer spent, measured as it runs. An agent that delivers late therefore
-/// gains nothing from the principal's challenges, and an honest agent the
-/// principal challenges anyway is paid back what answering cost it. What the
-/// pool still holds once no challenge of the principal is open goes back to
-/// the principal.
+/// The principal's challenges carry no bond, and hold settlement whatever the
+/// principal holds in cash. An answer to them is paid what the answer costs
+/// and no more: the price of proving one batch, in the reserve's token, once
+/// for each batch of the delegation it proves, and the gas the answer spent,
+/// measured as it runs. The price of proving comes from the principal's own
+/// funds under the delegation: each challenge has the reserve set aside, from
+/// the deposit or through the Permit2 allowance, that price for every batch
+/// its open challenges could fall in, one for each 256 of them and one for
+/// each delivery time their signed times span, and one more, as far as those
+/// funds reach; the agent could not have spent what is set aside. The gas is
+/// paid from the delegation's gas pool, which each challenge tops up with
+/// the answer's gas at the fee factor, so the principal's challenge takes
+/// gas money alone. An agent that delivers late therefore gains nothing from the
+/// principal's challenges, and an honest agent the principal challenges
+/// anyway is paid back what answering cost it. What is still set aside, and
+/// what the gas pool holds, go back to the principal once no challenge of
+/// the principal is open.
 ///
 /// No answer by the deadline credits a bond back to its challenger and
 /// forfeits the agent's bond in the reserve to the principal, which the
@@ -101,7 +108,7 @@ interface IPostings {
 /// reverts to the other party's alone. An answered challenge's request is
 /// withdrawn, and nothing more is due under it.
 ///
-/// Answerers. An answerer signs a receipt for each batch it holds (Receipt).
+/// Answerers. An answerer signs a receipt for each batch it holds (BatchReceipt).
 /// If a challenge against a settlement in that batch then expires, and the
 /// receipt left the answerer a full answer window, the receipt and the
 /// settlement's path to the root burn the answerer's stake, less a bounty of
@@ -120,10 +127,9 @@ interface IPostings {
 ///
 /// Delivery. An answer to the principal's challenge is also its request for
 /// what backs the settlement, which a contract of its own, Postings, holds
-/// the answerer to, with the principal's deposit that pays for the postings.
-/// A principal's challenge or join tops that deposit up; an answer to it, or
-/// a join of an answered one, files the request there, and a cancel
-/// withdraws it.
+/// the answerer to once the principal pays the deposit for the postings
+/// there. An answer to the principal's challenge, or a join of an answered
+/// one, files the request; a cancel withdraws it.
 ///
 /// The verifier is Succinct's Groth16 verifier for one circuit version,
 /// called directly. Its routing gateway is not used: the gateway's owner can
@@ -135,7 +141,8 @@ contract ValidityDispute {
     enum Status { None, Open, Answered, Expired, Cancelled }
 
     /// `deadline` is the answer's deadline while the challenge is open, and,
-    /// once the principal's challenge is answered, the delivery's.
+    /// once the principal's challenge is answered, when the request was
+    /// filed: the answer, or the join of an answered challenge.
     struct Challenge {
         address challenger;
         uint64 deadline;
@@ -187,8 +194,9 @@ contract ValidityDispute {
     /// deployment chose: the bond's fixed part for anyone but the principal,
     /// and the bounty a slash pays.
     uint256 public immutable provingBond;
-    /// The price of proving one answer, in ether, without margin: what an
-    /// answer to the principal's challenges is paid for each batch it proves.
+    /// The price of proving one answer, in the reserve's token, without
+    /// margin: what an answer to the principal's challenges is paid for each
+    /// batch it proves.
     uint256 public immutable provingCost;
     /// The time an honest agent has to deliver a batch from its first
     /// payment, so the batches a set of settlements can fall in is bounded by
@@ -208,8 +216,9 @@ contract ValidityDispute {
     /// not size it near zero.
     uint256 public immutable l1FeeFloor;
     uint256 public immutable l2FeeFloor;
-    /// How long after answering the principal's challenge the sealed opening
-    /// and the proof may be posted.
+    /// How long the answerer has to post the sealed opening and the proof once
+    /// the principal pays the posting deposit, and how long after the request
+    /// the principal may pay it.
     uint64 public immutable deliveryWait;
     address private constant GAS_PRICE_ORACLE = 0x420000000000000000000000000000000000000F;
     address private constant L1_BLOCK = 0x4200000000000000000000000000000000000015;
@@ -230,8 +239,8 @@ contract ValidityDispute {
         uint64 last;
     }
     mapping(uint256 => Episode) public episode;
-    /// Ether the principal holds against answers to its challenges.
-    mapping(uint256 => uint256) public provingPool;
+    /// Ether the principal holds against the gas of answers to its challenges.
+    mapping(uint256 => uint256) public gasPool;
     /// Whether an answer to the principal's challenges was paid the price of
     /// proving a batch, by the delegation and the batch's root.
     mapping(uint256 => mapping(bytes32 => bool)) public provingPaid;
@@ -337,26 +346,31 @@ contract ValidityDispute {
         return count / BATCH_SIZE + (last - first) / deliveryTime + 1;
     }
 
-    /// What the proving pool must hold for answers to `count` challenges of
+    /// What the gas pool must hold for the answers to `count` challenges of
     /// the principal whose signed times span `first` to `last`.
-    function provingNeed(uint256 count, uint64 first, uint64 last) public view returns (uint256) {
-        uint256 nb = batchBound(count, first, last);
-        uint256 gas = nb * ANSWER_GAS + count * ITEM_GAS;
-        return nb * provingCost + l2Factor * (gas * _l2Fee() + _dataFee(count * ITEM_BYTES));
+    function gasNeed(uint256 count, uint64 first, uint64 last) public view returns (uint256) {
+        uint256 gas = batchBound(count, first, last) * ANSWER_GAS + count * ITEM_GAS;
+        return l2Factor * (gas * _l2Fee() + _dataFee(count * ITEM_BYTES));
     }
 
-    /// What a principal's challenges against settlements signed between
-    /// `first` and `last`, `count` of them, must add to the delegation's two
-    /// pools now.
-    function principalPrice(uint256 id, uint256 count, uint64 first, uint64 last) public view returns (uint256) {
+    /// The principal's open challenges once `count` more, signed from
+    /// `first` to `last`, join them: how many, and the span of their times.
+    function _episode(uint256 id, uint256 count, uint64 first, uint64 last) private view returns (uint256, uint64, uint64) {
         Episode memory e = episode[id];
         if (e.count != 0) {
             if (e.first < first) first = e.first;
             if (e.last > last) last = e.last;
         }
-        uint256 need = provingNeed(e.count + count, first, last);
-        uint256 pool = provingPool[id];
-        return (need > pool ? need - pool : 0) + postings.postingTopUp(id);
+        return (e.count + count, first, last);
+    }
+
+    /// The ether a principal's challenges against settlements signed between
+    /// `first` and `last`, `count` of them, must add to the gas pool now.
+    function principalPrice(uint256 id, uint256 count, uint64 first, uint64 last) public view returns (uint256) {
+        (uint256 n, uint64 a, uint64 b) = _episode(id, count, first, last);
+        uint256 need = gasNeed(n, a, b);
+        uint256 pool = gasPool[id];
+        return need > pool ? need - pool : 0;
     }
 
     function key(uint256 id, uint64 digest) public pure returns (bytes32) {
@@ -401,7 +415,7 @@ contract ValidityDispute {
 
     /// `s` opens the reserve's record of the settlement. Anyone but the
     /// principal sends the bond; the principal, or its monitor, sends what
-    /// `principalPrice` asks for its two pools.
+    /// `principalPrice` asks for the gas pool.
     function open(uint256 id, uint64 digest, Settlement calldata s) external payable {
         address owner = reserve.principalOf(id);
         if (msg.sender == owner || msg.sender == reserve.monitorOf(id)) {
@@ -477,8 +491,9 @@ contract ValidityDispute {
         openByPrincipal[id] += n;
     }
 
-    /// Takes the price of the principal's challenges into its two pools and
-    /// returns their deadline.
+    /// Takes the gas of answering the principal's challenges into the gas
+    /// pool, has the reserve set the price of proving them aside, and returns
+    /// their deadline.
     function _fundAndSchedule(uint256 id, address owner, Settlement[] memory s) private returns (uint64 deadline) {
         uint256 n = s.length;
         uint64 first = type(uint64).max;
@@ -487,17 +502,14 @@ contract ValidityDispute {
             if (s[i].time < first) first = s[i].time;
             if (s[i].time > last) last = s[i].time;
         }
-        // Both prices move with the fees between a reading and the block the
-        // challenges land in, so the call may send more: the excess joins the
-        // proving pool, which returns what is left.
+        // The gas price moves with the domain's fee between a reading and the
+        // block the challenges land in, so the call may send more: the excess
+        // joins the gas pool, which returns what is left.
         if (msg.value < principalPrice(id, n, first, last)) revert BondTooSmall();
-        uint256 posting = postings.postingTopUp(id);
-        if (posting != 0) postings.fund{value: posting}(id);
-        provingPool[id] += msg.value - posting;
-        Episode storage e = episode[id];
-        if (e.count == 0 || first < e.first) e.first = first;
-        if (last > e.last) e.last = last;
-        e.count += n;
+        gasPool[id] += msg.value;
+        (uint256 count, uint64 a, uint64 b) = _episode(id, n, first, last);
+        episode[id] = Episode({count: count, first: a, last: b});
+        reserve.earmark(id, batchBound(count, a, b) * provingCost);
         address agent = reserve.agentOf(id);
         deadline = _next(agent, owner, true);
         uint256 nb = batchBound(n, first, last);
@@ -506,13 +518,13 @@ contract ValidityDispute {
     }
 
     /// The principal, or its monitor address, joins a challenge someone else
-    /// opened, within the acceptance window, topping the posting pool up as a
-    /// challenge does. An open challenge then holds settlement and falls due
-    /// no later than the principal's own queue would place it; the queue
-    /// takes that deadline only if the challenge does. A challenge already
-    /// answered stays answered, and the join is the principal's request for
-    /// what backs the settlement, due within the delivery wait from the join.
-    function join(uint256 id, uint64 digest, Settlement calldata s) external payable {
+    /// opened, within the acceptance window, for nothing but its gas. An open
+    /// challenge then holds settlement and falls due no later than the
+    /// principal's own queue would place it; the queue takes that deadline
+    /// only if the challenge does. A challenge already answered stays
+    /// answered, and the join is the principal's request for what backs the
+    /// settlement.
+    function join(uint256 id, uint64 digest, Settlement calldata s) external {
         Challenge storage c = challenges[key(id, digest)];
         if (c.status != Status.Open && c.status != Status.Answered) revert NotOpen();
         if (c.byPrincipal) revert AlreadyChallenged();
@@ -520,13 +532,11 @@ contract ValidityDispute {
         if (block.timestamp > uint256(s.time) + acceptWindow) revert WindowClosed();
         address owner = reserve.principalOf(id);
         if (msg.sender != owner && msg.sender != reserve.monitorOf(id)) revert NotPrincipal();
-        if (msg.value < postings.postingTopUp(id)) revert BondTooSmall();
-        postings.fund{value: msg.value}(id);
         c.byPrincipal = true;
         c.joined = true;
         if (c.status == Status.Answered) {
-            c.deadline = uint64(block.timestamp) + deliveryWait;
-            postings.request(id, answeredRoots[id][c.batch - 1], c.deadline);
+            c.deadline = uint64(block.timestamp);
+            postings.request(id, answeredRoots[id][c.batch - 1]);
         } else {
             address agent = reserve.agentOf(id);
             uint64 d = _next(agent, owner, true);
@@ -539,12 +549,13 @@ contract ValidityDispute {
         emit Joined(id, digest, c.deadline);
     }
 
-    /// The principal, or its monitor, withdraws its challenge or its request
-    /// before the deadline, once what backs the settlement reached it another
-    /// way. Its own open challenge closes with the hold lifted, and what it
-    /// put in the proving pool waits there for the principal; a joined one goes back to being the other party's alone,
-    /// still open; an answered one's request is withdrawn, so no delivery is
-    /// due and no posting is refunded under it.
+    /// The principal, or its monitor, withdraws its challenge before its
+    /// deadline, or its request before the delivery falls due, once what
+    /// backs the settlement reached it another way. Its own open challenge
+    /// closes with the hold lifted, and what was set aside for it waits for
+    /// the principal; a joined one goes back to being the other party's
+    /// alone, still open; an answered one's request is withdrawn, so no
+    /// delivery is due and no posting is refunded under it.
     function cancel(uint256 id, uint64 digest) external {
         if (msg.sender != reserve.principalOf(id) && msg.sender != reserve.monitorOf(id)) revert NotPrincipal();
         _cancel(id, digest);
@@ -560,11 +571,11 @@ contract ValidityDispute {
     function _cancel(uint256 id, uint64 digest) private {
         Challenge storage c = challenges[key(id, digest)];
         if (!c.byPrincipal) revert NotCancellable();
-        if (block.timestamp > c.deadline) revert TooLate();
         bool joined = c.joined;
         c.byPrincipal = false;
         c.joined = false;
         if (c.status == Status.Open) {
+            if (block.timestamp > c.deadline) revert TooLate();
             reserve.release(id);
             if (!joined) {
                 c.status = Status.Cancelled;
@@ -580,14 +591,14 @@ contract ValidityDispute {
         emit Cancelled(id, digest);
     }
 
-    /// What is left of the proving pool goes back to the principal once none
-    /// of its challenges is open.
+    /// What is left of the gas pool, and what the reserve set aside for
+    /// proving, go back to the principal once none of its challenges is open.
     function returnProving(uint256 id) external {
         if (openByPrincipal[id] != 0) revert TooEarly();
-        uint256 left = provingPool[id];
-        if (left == 0) revert NothingToReturn();
-        provingPool[id] = 0;
+        uint256 left = gasPool[id];
+        gasPool[id] = 0;
         credit[reserve.principalOf(id)] += left;
+        if (reserve.releaseEarmark(id) == 0 && left == 0) revert NothingToReturn();
     }
 
     /// One of the principal's own challenges closed. Once none is open, the
@@ -709,15 +720,20 @@ contract ValidityDispute {
         if (GAS_PRICE_ORACLE.code.length != 0) fee += IGasPriceOracle(GAS_PRICE_ORACLE).getL1Fee(msg.data);
     }
 
-    /// Pays the delegation's answerer, or its agent, from the proving pool,
-    /// as far as the pool reaches.
+    /// Pays the delegation's answerer, or its agent, the answer's gas from
+    /// the gas pool, as far as the pool reaches.
     function _pay(uint256 id, uint256 amount) private {
-        uint256 pool = provingPool[id];
+        uint256 pool = gasPool[id];
         uint256 paid = amount > pool ? pool : amount;
         if (paid == 0) return;
-        provingPool[id] = pool - paid;
+        gasPool[id] = pool - paid;
+        credit[_payee(id)] += paid;
+    }
+
+    /// Whom an answer under the delegation pays: its answerer, or its agent.
+    function _payee(uint256 id) private view returns (address) {
         (address answerer, ) = reserve.answererOf(id);
-        credit[answerer != address(0) ? answerer : reserve.agentOf(id)] += paid;
+        return answerer != address(0) ? answerer : reserve.agentOf(id);
     }
 
     function _settleItem(Item calldata it, bytes32 root) private {
@@ -813,23 +829,23 @@ contract ValidityDispute {
         c.batch = place;
         openCount[id] -= 1;
         if (c.byPrincipal) {
-            c.deadline = uint64(block.timestamp) + deliveryWait;
-            postings.request(id, answeredRoots[id][place - 1], c.deadline);
+            c.deadline = uint64(block.timestamp);
+            postings.request(id, answeredRoots[id][place - 1]);
             reserve.release(id);
         }
         if (c.byPrincipal && !c.joined) {
             // The principal's own challenge: the price of proving the batch,
-            // once for the delegation, and the gas, which the caller pays.
+            // once for the delegation, from what the reserve set aside, and
+            // the gas, which the caller pays.
             _closePrincipal(id);
             bytes32 root = answeredRoots[id][place - 1];
             if (!provingPaid[id][root]) {
                 provingPaid[id][root] = true;
-                _pay(id, provingCost);
+                reserve.payProving(id, _payee(id), provingCost);
             }
             ownAnswered += 1;
         } else {
-            (address answerer, ) = reserve.answererOf(id);
-            credit[answerer != address(0) ? answerer : reserve.agentOf(id)] += c.bond;
+            credit[_payee(id)] += c.bond;
         }
         emit Answered(id, digest);
     }

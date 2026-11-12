@@ -20,11 +20,13 @@ import {Deployment} from "./Deployment.sol";
 /// floor) and execution with cold accounts and storage, as on chain. The
 /// settlement is payment 0 of the exported batch, shares included; the answer
 /// carries its leaf's path to the root the proof commits. The answer to the
-/// principal's challenge asks for what backs the settlement: its sealed
-/// opening, posted at its position in a tree of one 349-byte opening per
-/// payment of the batch, and the batch's STARK proof, posted in chunks under
-/// the hash the answerer's receipt names. This answerer posts on the domain,
-/// so its receipt names no blobs.
+/// principal's challenge asks for what backs the settlement, and is paid the
+/// proving cost in the reserve's token from what the challenge set aside,
+/// which the answerer withdraws. The principal then pays for the postings:
+/// the settlement's sealed opening, posted at its position in a tree of one
+/// 349-byte opening per payment of the batch, and the batch's STARK proof,
+/// posted in chunks under the hash the answerer's receipt names. This
+/// answerer posts on the domain, so its receipt names no blobs.
 ///
 /// The exported payments were signed from time 5000, so the node is started
 /// with its clock there: anvil --timestamp 5000.
@@ -67,6 +69,10 @@ contract ValidityDisputeOnChain is Script {
         vd.open{value: vd.principalPrice(id, 1, rec.time, rec.time)}(id, digest, rec);
         vd.answer(id, digest, rec, 0, Statement.path(d, 0), proof);
         console.log("dispute answered", uint256(vd.challengeOf(id, digest).status) == 2);
+        console.log("proving paid in tokens", acc.tokenCredit(vm.addr(pk)));
+        acc.withdrawToken();
+        pd.payPosting{value: pd.postingTopUp(id, Statement.ROOT)}(id, Statement.ROOT);
+        console.log("postings paid for", pd.batchOf(id, Statement.ROOT).until != 0);
         bytes memory stark = vm.readFileBinary(STARK);
         bytes32 ph = _proofHash(stark);
         _deliver(d, pk, ph);

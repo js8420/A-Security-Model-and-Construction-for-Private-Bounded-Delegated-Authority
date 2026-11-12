@@ -18,6 +18,7 @@ import {
   type WalletClient,
 } from "viem";
 import { reserveAbi } from "./abi.js";
+import { sameBuild, type GenuineReserve } from "./reserveCode.js";
 import { SCHEME, isBoundedPayload, type BoundedExtra, type BoundedPayload } from "./types.js";
 
 type Wallet = WalletClient<Transport, Chain, Account>;
@@ -27,12 +28,19 @@ type Wallet = WalletClient<Transport, Chain, Account>;
  * trust, after checking that the payload pays what the requirements ask and
  * that the reserve would admit it. The reserve itself refuses anything it
  * would not admit, so verification is a simulation of the very call that
- * settles.
+ * settles. A reserve is taken as genuine only if the code deployed at its
+ * address is the published build of Reserve.sol, immutables aside, and it
+ * pulls Permit2 payments through the canonical Permit2: a contract at a
+ * configured address that only looks like a reserve, answering the same
+ * calls, could report a settlement it never paid. The check runs once for
+ * each address, since deployed code does not change.
  */
 export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
   readonly scheme = SCHEME;
   readonly caipFamily = "eip155:*";
   private readonly reserves: Set<string>;
+  /** Each configured reserve's verdict, once its code has been read: empty if genuine, the reason if not. */
+  private readonly verdicts = new Map<string, string>();
   /** Sends from the one signer go out in order, so concurrent settlements do not share a nonce. */
   private sending: Promise<unknown> = Promise.resolve();
 
@@ -40,8 +48,25 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
     private readonly wallet: Wallet,
     private readonly chain: PublicClient,
     reserves: readonly `0x${string}`[],
+    private readonly genuine: GenuineReserve,
   ) {
     this.reserves = new Set(reserves.map((r) => getAddress(r)));
+  }
+
+  /** Why the reserve at this address is not the published build under the canonical Permit2, or "" if it is. */
+  async refusal(reserve: `0x${string}`): Promise<string> {
+    const at = getAddress(reserve);
+    const have = this.verdicts.get(at);
+    if (have !== undefined) return have;
+    const code = await this.chain.getCode({ address: at });
+    let why = "";
+    if (!code || !sameBuild(code, this.genuine.build)) why = "the code at the reserve's address is not the published build of Reserve.sol";
+    else {
+      const permit2 = await this.chain.readContract({ address: at, abi: reserveAbi, functionName: "permit2" });
+      if (getAddress(permit2) !== getAddress(this.genuine.permit2)) why = `the reserve pulls Permit2 payments through ${permit2}, not ${this.genuine.permit2}`;
+    }
+    this.verdicts.set(at, why);
+    return why;
   }
 
   getExtra(network: Network): Record<string, unknown> | undefined {
@@ -122,6 +147,8 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
     const reserve = getAddress((req.extra as BoundedExtra).reserve);
     if (p.reserve !== reserve) return bad("reserve_mismatch", "payload settles on another reserve");
     if (!this.reserves.has(reserve)) return bad("untrusted_reserve", `reserve ${reserve} is not one this facilitator settles through`);
+    const why = await this.refusal(reserve);
+    if (why) return bad("unverified_reserve", why);
     if (p.payee !== getAddress(req.payTo)) return bad("payee_mismatch", "payload pays another address");
     if (BigInt(p.amount) !== BigInt(req.amount)) return bad("amount_mismatch", "payload pays another amount");
     const token = await this.chain.readContract({ address: reserve, abi: reserveAbi, functionName: "token" });

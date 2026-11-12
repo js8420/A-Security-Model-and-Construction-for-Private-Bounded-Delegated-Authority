@@ -8,13 +8,15 @@ proving bond, is the price of proving one answer, which the Groth16 runs on
 Pete measured, times a currency margin, converted to ether at deployment; it
 is also the bounty a slash pays. Its variable part is what forcing the answer
 in through Ethereum costs at the Ethereum base fee the domain records then,
-read no lower than its floor, times the fee factor. The posting deposit is
-likewise set at the principal's challenge: the dearer of the two ways to post
-one batch, on the domain or as blobs on Ethereum, each fee read no lower than
-its floor and times its factor. The principal's challenges also fill a proving
-pool that pays each batch's answer at cost. The factors and floors are read
-from the deployment library. The answer window and the slot are checked
-against the slowest proving run.
+read no lower than its floor, times the fee factor. The principal's challenges
+carry no bond: an answer to them is paid the proving cost, fixed in the
+reserve's token at deployment, from the principal's funds the reserve sets
+aside, and the answer's gas from a gas pool each challenge tops up in ether.
+The posting deposit is paid when the principal pays for the postings after
+the answer: what posting one batch on the domain costs, the fee read no lower
+than its floor and times its factor; a posting as blobs is refunded no more
+than that. The factors and floors are read from the deployment library. The
+answer window and the slot are checked against the slowest proving run.
 
 Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR WorkingHistory/run_TAG_forced.txt
 where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run;
@@ -182,18 +184,20 @@ def dispute_constant(name):
 PROVING_BOND_ETH = deployed_bond()
 L1_FACTOR, L1_FLOOR = deployed("L1_FACTOR"), deployed("L1_FEE_FLOOR")
 L2_FACTOR, L2_FLOOR = deployed("L2_FACTOR"), deployed("L2_FEE_FLOOR")
-BLOB_FACTOR, BLOB_FLOOR = deployed("BLOB_FACTOR"), deployed("BLOB_FEE_FLOOR")
-BLOB_CALL_FACTOR = deployed("BLOB_CALL_FACTOR")
-BLOBS, BLOB_GAS = deployed("BLOBS"), deployed("BLOB_GAS")
+BLOBS = int(deployed("BLOBS"))
 POSTING_GAS = deployed("POSTING_GAS")
-PROVING_COST_ETH = deployed("PROVING_COST") / 1e18
+# The proving cost is in the reserve's token, USDC with six decimals.
+PROVING_COST_USD = deployed("PROVING_COST") / 1e6
 ANSWER_GAS, ITEM_GAS, ITEM_BYTES = dispute_constant("ANSWER_GAS"), dispute_constant("ITEM_GAS"), dispute_constant("ITEM_BYTES")
-GAS_PER_BLOB = 131_072
+BLOBS_PER_TX = 6
+BLOB_TXS = math.ceil(BLOBS / BLOBS_PER_TX)
 BOUNTY = PROVING_BOND_ETH * ETH_USD
 MARGIN_NOW = BOUNTY / PROVING
 NEEDED_ETH = math.ceil(CURRENCY_MARGIN * PROVING / ETH_USD * 1e6) / 1e6
 if MARGIN_NOW < 1:
     raise SystemExit(f"the deployed proving bond {PROVING_BOND_ETH} ETH no longer covers one answer at {ETH_USD} USD; set it to {NEEDED_ETH}")
+if PROVING_COST_USD < PROVING:
+    raise SystemExit(f"the deployed proving cost {PROVING_COST_USD} USDC is below the measured proving, {PROVING:.4f} USD")
 QUIET_POSTING = POSTING + BATCH * DELIVERING
 
 
@@ -205,8 +209,8 @@ def base_fee(path):
     raise SystemExit(f"no base fee in {path}")
 
 
-def data_eth(path):
-    """The L1 data fee of the proof's postings and of one delivery, in ETH."""
+def data_fees(path):
+    """The L1 data fee of the proof's postings, of one answer and of one delivery, in ETH."""
     out = {}
     label = None
     for line in open(path, encoding="utf8"):
@@ -218,34 +222,34 @@ def data_eth(path):
         if m and label:
             out[label] = float(m.group(1))
             label = None
-    return out["proof, all chunks"] + BATCH * out["one delivery"]
+    return out
 
 
 L2_FEE = base_fee(sys.argv[1])
-POSTING_DATA_ETH = data_eth(sys.argv[1])
+DATA = data_fees(sys.argv[1])
+POSTING_DATA_ETH = DATA["proof, all chunks"] + BATCH * DATA["one delivery"]
+# The oracle's upper bound grows with the size, so the proof's postings,
+# ten megabytes, give the data fee of a byte most precisely.
+DATA_PER_BYTE_ETH = DATA["proof, all chunks"] / POSTED_BYTES
 
 
 def domain_deposit(l2_wei):
-    """The domain way of the deposit, ETH: the measured gas at the floored fee, plus the data fee."""
+    """The posting deposit, ETH: the domain way's measured gas at the floored fee, plus the data fee, times the factor."""
     return L2_FACTOR * (POSTING_GAS * max(l2_wei, L2_FLOOR) * 1e-18 + POSTING_DATA_ETH)
 
 
-def blob_deposit(blob_wei, l1_wei):
-    """The blob way of the deposit, ETH: the blob gas and the calls' gas, each at its floored fee."""
-    return (BLOB_FACTOR * BLOBS * GAS_PER_BLOB * max(blob_wei, BLOB_FLOOR) + BLOB_CALL_FACTOR * BLOB_GAS * max(l1_wei, L1_FLOOR)) * 1e-18
+def gas_pool(l2_wei, count=BATCH):
+    """The ether `count` challenges of the principal in one batch add to the gas pool:
+    the answer's gas and each item's at the floored domain fee, plus their call data's
+    data fee, times the factor."""
+    gas = ANSWER_GAS + count * ITEM_GAS
+    return L2_FACTOR * (gas * max(l2_wei, L2_FLOOR) * 1e-18 + count * ITEM_BYTES * DATA_PER_BYTE_ETH)
 
 
-def proving_pool(l2_wei):
-    """What one batch's answer takes from the proving pool, ETH: the proving cost and
-    the answer's gas for a full batch at the floored domain fee."""
-    gas = ANSWER_GAS + BATCH * ITEM_GAS
-    return PROVING_COST_ETH + L2_FACTOR * gas * max(l2_wei, L2_FLOOR) * 1e-18
-
-
-DEPOSIT_ETH = max(domain_deposit(L2_FEE), blob_deposit(0, 0))
+DEPOSIT_ETH = domain_deposit(L2_FEE)
 DEPOSIT = DEPOSIT_ETH * ETH_USD
-POOL = proving_pool(L2_FEE) * ETH_USD
-FLOAT = DEPOSIT + POOL
+POOL = gas_pool(L2_FEE) * ETH_USD
+FLOAT = round(DEPOSIT, 2) + round(POOL, 2)
 
 
 def bond_at(l1_gwei):
@@ -327,17 +331,19 @@ def trade_off(k_w):
     print("HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD")
     print("FOR 30 DAYS, B = %.2f USD, DEPOSIT MODE" % B)
     print("=" * 78)
-    print(f"  {'declared expiry':<16} {'f':>6} {'bonds':>7} {'stake':>7} {'float':>8} {'funding fB':>11} {'total':>9} {'total/B':>8}")
+    print(f"  {'declared expiry':<16} {'f':>6} {'bonds':>7} {'stake':>7} {'gas pool':>9} {'deposit':>8} {'funding fB':>11} {'total':>9} {'total/B':>8}")
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
         R = f * B
         stake = bonds + BOUNTY
-        tot = R + bonds + stake + FLOAT
-        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {stake:>7.2f} {FLOAT:>8.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
+        tot = R + bonds + stake + round(POOL, 2) + round(DEPOSIT, 2)
+        print(f"  {f'{mult} x the task':<16} {f:>6.2f} {bonds:>7.2f} {stake:>7.2f} {POOL:>9.2f} {DEPOSIT:>8.2f} {R:>11.2f} {tot:>9.2f} {tot / B:>8.2f}")
     print(f"  The stake is the bond plus the bounty, {BOUNTY:.2f}; without an answerer the total")
-    print(f"  is less by the stake, {bonds + BOUNTY:.2f}. The float is what the principal holds in the dispute")
-    print(f"  contracts while a challenge of its own is open: one posting deposit, {DEPOSIT:.2f}, and one batch's")
-    print(f"  proving pool, {POOL:.2f}, at fees at or below the floors; both come back once nothing is due.")
+    print(f"  is less by the stake, {bonds + BOUNTY:.2f}. The gas pool and the deposit are the ether the principal")
+    print("  holds in the dispute contracts for one batch it challenged: the gas pool its challenges add, and")
+    print("  the posting deposit it pays after the answer, at fees at or below the floors; both come back once")
+    print(f"  nothing is due. The proving cost, {PROVING_COST_USD:.2f}, is set aside from the funding fB. The total")
+    print("  adds the two as printed, to the cent.")
     print(f"  Carrying the stake for the task costs {(bonds + BOUNTY) * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
     print("  point of annual interest on it.")
     print("  The same f reached by a short declared life instead needs bonds of")
@@ -423,6 +429,17 @@ def bribery():
     print("  A block built by anyone the bribe does not reach includes it at once,")
     print("  so every such block only shortens the delay.")
     print()
+    print(f"BRIBING BUILDERS TO EXCLUDE A BATCH POSTED AS BLOBS: {BLOBS} BLOBS IN {BLOB_TXS} TRANSACTIONS")
+    print("=" * 78)
+    print(f"  Keeping any one of the {BLOB_TXS} transactions out keeps the posting incomplete, so each")
+    print(f"  carries the tip T and the answerer pays {BLOB_TXS} T once they land. Posting with the same")
+    print(f"  {k} blocks to spare, each tip must exceed the gain over {k}.")
+    print(f"  {'adversary gains, USD':>22} {'tip on each, USD':>18} {f'all {BLOB_TXS} tips, USD':>18}")
+    for gain in (BOUNTY, 43.20, 432.00, 4320.00, 43200.00):
+        print(f"  {gain:>22,.2f} {gain / k:>18,.4f} {BLOB_TXS * gain / k:>18,.4f}")
+    print("  Excluding the postings slashes the answerer's stake, which burns but for the bounty,")
+    print(f"  {BOUNTY:.2f}: that bounty is all an adversary outside the agent's side gains.")
+    print()
 
 if __name__ == "__main__":
     print("THE GROTH16 RUNS, SECONDS")
@@ -444,6 +461,8 @@ if __name__ == "__main__":
     print(f"  proving bond as deployed {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD at {ETH_USD} USD an ether")
     print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
     print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")
+    print(f"  proving cost as deployed, paid for the principal's challenges in the reserve's token {PROVING_COST_USD:10.4f} USD")
+    print(f"  that is {PROVING_COST_USD / PROVING:.4f} x the proving, whatever ether's price")
     print(f"  sending the answer on Base, measured                                  {SENDING:10.4f} USD")
     print(f"  forcing it in through Ethereum: {FORCED_ANSWER_GAS:,} L1 gas, measured on a fork")
     print(f"  bond at a challenge, proving bond + {L1_FACTOR:.0f} x forcing at the Ethereum base fee then, read no lower than {L1_FLOOR / 1e9:g} gwei:")
@@ -451,26 +470,27 @@ if __name__ == "__main__":
         forced_usd = FORCED_ANSWER_GAS * g * 1e-9 * ETH_USD
         print(f"    at {g:>4} gwei: {bond_at(g):9.2f} USD; forcing at {g} gwei costs {forced_usd:8.2f}")
     print(f"  An answer pays whenever the Ethereum base fee when it lands is at most {L1_FACTOR:.0f} times the fee at")
-    print(f"  the challenge, read no lower than the floor, and ether has not fallen below the bound above.")
+    print("  the challenge, read no lower than the floor, and ether has not fallen below the bound above.")
     print()
-    print("THE POSTING DEPOSIT, SET AT THE PRINCIPAL'S CHALLENGE")
+    print("THE GAS POOL AT THE PRINCIPAL'S CHALLENGE, AND THE POSTING DEPOSIT AFTER THE ANSWER")
     print("=" * 78)
+    print(f"  gas pool for one batch's challenges, {L2_FACTOR:.0f} x ({ANSWER_GAS:,} + k x {ITEM_GAS:,} gas at the domain fee, read no lower")
+    print(f"  than {L2_FLOOR / 1e9:g} gwei, plus k x {ITEM_BYTES:,} bytes at the data fee):")
+    for count in (1, 8, 32, BATCH):
+        g = gas_pool(L2_FEE, count)
+        print(f"    k = {count:>3}: {g:.8f} ETH = {g * ETH_USD:.4f} USD")
     print(f"  posting the batch proof and {BATCH} sealed openings on Base, measured, USD {QUIET_POSTING:10.4f}")
     print(f"  the proof's postings: {CHUNKS} transactions, {POSTED_BYTES:,} bytes of call data")
-    print(f"  the domain way: {L2_FACTOR:.0f} x ({POSTING_GAS:,.0f} gas at the domain fee, read no lower than {L2_FLOOR / 1e9:g} gwei, plus the data fee)")
-    print(f"    at the measured fee, {L2_FEE / 1e9:g} gwei: {domain_deposit(L2_FEE):.6f} ETH = {domain_deposit(L2_FEE) * ETH_USD:.2f} USD")
-    print(f"  the blob way: {BLOB_FACTOR:.0f} x {BLOBS:.0f} blobs at the blob base fee, read no lower than {BLOB_FLOOR / 1e9:g} gwei,")
-    print(f"    plus {BLOB_CALL_FACTOR:.0f} x {BLOB_GAS:,.0f} Ethereum gas, measured on a fork, at the base fee, read no lower than {L1_FLOOR / 1e9:g} gwei")
-    print(f"  {'blob base fee, gwei':>20} {'L1 base fee, gwei':>18} {'blob way, ETH':>14} {'deposit, ETH':>13} {'deposit, USD':>13}")
-    for blob_g, l1_g in ((0, 0), (1, 2), (10, 10), (100, 50)):
-        bw = blob_deposit(blob_g * 1e9, l1_g * 1e9)
-        dep = max(domain_deposit(L2_FEE), bw)
-        print(f"  {blob_g:>20} {l1_g:>18} {bw:>14.6f} {dep:>13.6f} {dep * ETH_USD:>13.2f}")
-    print(f"  one batch's proving pool: {PROVING_COST_ETH:.6f} ETH proving cost and {L2_FACTOR:.0f} x {ANSWER_GAS + BATCH * ITEM_GAS:,} gas")
-    print(f"    at the floored domain fee: {proving_pool(L2_FEE):.6f} ETH = {POOL:.2f} USD")
-    print(f"  the principal's float while a challenge of its own is open, fees at or below the floors: {FLOAT:.2f} USD")
-    print("  Under censorship the answerer posts as blobs on Ethereum and is refunded what they cost;")
-    print("  forcing the domain way in instead would cost it, beyond the call data:")
+    print(f"  the deposit, the domain way: {L2_FACTOR:.0f} x ({POSTING_GAS:,.0f} gas at the domain fee, read no lower than {L2_FLOOR / 1e9:g} gwei, plus the data fee)")
+    print(f"    at the measured fee, {L2_FEE / 1e9:g} gwei: {DEPOSIT_ETH:.6f} ETH = {DEPOSIT:.2f} USD")
+    for g in (0.1, 1.0):
+        d = domain_deposit(g * 1e9)
+        print(f"    at {g:g} gwei: {d:.6f} ETH = {d * ETH_USD:.2f} USD")
+    print(f"  the principal's float for one batch, gas pool and deposit, fees at or below the floors: {FLOAT:.2f} USD")
+    print("  A posting as blobs is refunded no more than the domain way costs when its report arrives;")
+    print("  fee_ratio.py blobs gives how often, and by how much, the blob way costs more.")
+    print("  Under censorship the answerer posts as blobs on Ethereum; forcing the domain way in")
+    print("  instead would cost it, beyond the call data:")
     print(f"  portal's L1 gas beyond call data, measured: one chunk {PORTAL_CHUNK:,}, one answer {PORTAL_ANSWER:,}, one delivery {PORTAL_DELIVERY:,}")
     print(f"  forcing every chunk and {BATCH} deliveries in, L1 gas      {FORCED_L1_GAS:>14,}")
     for gwei in (1.0, 10.0):

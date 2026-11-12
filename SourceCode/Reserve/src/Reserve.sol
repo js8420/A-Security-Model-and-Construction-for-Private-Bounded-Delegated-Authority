@@ -6,12 +6,18 @@ import {Settlement, SettlementHash} from "./Settlement.sol";
 interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address who) external view returns (uint256);
 }
 
 interface IDisputeCount {
     function openCount(uint256 id) external view returns (uint256);
     function acceptWindow() external view returns (uint64);
     function deliveryWait() external view returns (uint64);
+    function postings() external view returns (address);
+}
+
+interface IPostingsWait {
+    function inclusionWait() external view returns (uint64);
 }
 
 /// The circuit's own permutation, which a claim needs to open H(s).
@@ -22,6 +28,10 @@ interface IPoseidon2 {
 /// Uniswap Permit2, allowance mode. Only the call the reserve makes.
 interface IAllowanceTransfer {
     function transferFrom(address from, address to, uint160 amount, address token) external;
+    function allowance(address user, address token, address spender)
+        external
+        view
+        returns (uint160 amount, uint48 expiration, uint48 nonce);
 }
 
 /// The reserve of Section V on one settlement domain.
@@ -98,8 +108,15 @@ contract Reserve {
     /// owner, never pushed, so no recipient can block a forfeit or a close.
     mapping(address => uint256) public credit;
     /// When each delegation closed; the answerer's stake waits a further
-    /// close delay and delivery wait so that every slash can still land.
+    /// close delay, two delivery waits and the inclusion wait, so that every
+    /// slash can still land.
     mapping(uint256 => uint64) private closedAt;
+    /// The principal's funds set aside for proving answers to its challenges,
+    /// out of the agent's reach, by delegation.
+    mapping(uint256 => uint256) public earmarked;
+    /// Tokens owed to an address: a proving payment, or what was set aside
+    /// once the delegation closed. Withdrawn, never pushed.
+    mapping(address => uint256) public tokenCredit;
 
     struct Window {
         uint64 start;
@@ -526,14 +543,21 @@ contract Reserve {
     }
 
     /// Pulled rather than paid at close, so an answerer cannot block a close,
-    /// and only once a close delay and a delivery wait have passed since the
-    /// close: a challenge that expired, or a delivery that fell due, before the
-    /// close can still slash the stake for that long after it.
+    /// and only once a close delay, two delivery waits and the inclusion wait
+    /// have passed since the close. A request filed before the close may be
+    /// paid for up to a delivery wait later, the delivery then falls due a
+    /// delivery wait after that, and a withholding is slashed only once the
+    /// inclusion wait has passed too.
     function unstakeAnswerer(uint256 id) external {
         Delegation storage d = delegations[id];
         if (msg.sender != d.answerer) revert NotAnswerer();
         if (!d.closed) revert NotClosed();
-        uint256 wait = dispute == address(0) ? 0 : IDisputeCount(dispute).deliveryWait();
+        uint256 wait;
+        if (dispute != address(0)) {
+            address p = IDisputeCount(dispute).postings();
+            wait = 2 * uint256(IDisputeCount(dispute).deliveryWait());
+            if (p != address(0)) wait += IPostingsWait(p).inclusionWait();
+        }
         if (block.timestamp <= uint256(closedAt[id]) + closeDelay + wait) revert NotClosed();
         uint256 amount = d.answererStake;
         d.answererStake = 0;
@@ -541,6 +565,66 @@ contract Reserve {
             (bool ok, ) = payable(msg.sender).call{value: amount}("");
             require(ok, "stake");
         }
+    }
+
+    /// Sets the principal's own funds aside for proving answers to its
+    /// challenges, up to `target` in all: from the deposit, or through the
+    /// Permit2 allowance, as far as either reaches. A shortfall stops
+    /// nothing: the challenge holds settlement whatever the principal has.
+    function earmark(uint256 id, uint256 target) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        uint256 have = earmarked[id];
+        if (have >= target) return;
+        uint256 want = target - have;
+        Delegation storage d = delegations[id];
+        if (d.funding == Funding.Deposit) {
+            if (want > d.deposit) want = d.deposit;
+            d.deposit -= want;
+        } else {
+            (uint160 allowed, uint48 expiration, ) = permit2.allowance(d.principal, address(token), address(this));
+            if (expiration < block.timestamp) allowed = 0;
+            uint256 held = token.balanceOf(d.principal);
+            if (want > allowed) want = allowed;
+            if (want > held) want = held;
+            if (want != 0) {
+                // casting to 'uint160' is safe because want is at most the allowance.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                try permit2.transferFrom(d.principal, address(this), uint160(want), address(token)) {}
+                catch {
+                    want = 0;
+                }
+            }
+        }
+        earmarked[id] = have + want;
+    }
+
+    /// Pays an answer to the principal's challenges the price of proving,
+    /// from what was set aside, as far as it reaches.
+    function payProving(uint256 id, address to, uint256 amount) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        uint256 have = earmarked[id];
+        if (amount > have) amount = have;
+        earmarked[id] = have - amount;
+        tokenCredit[to] += amount;
+    }
+
+    /// What is still set aside goes back: to the deposit while the
+    /// delegation is open and funded by deposit, to the principal otherwise.
+    function releaseEarmark(uint256 id) external returns (uint256 left) {
+        if (msg.sender != dispute) revert NotArbiter();
+        left = earmarked[id];
+        earmarked[id] = 0;
+        Delegation storage d = delegations[id];
+        if (d.funding == Funding.Deposit && !d.closed) d.deposit += left;
+        else tokenCredit[d.principal] += left;
+    }
+
+    /// Pays out the caller's tokens owed.
+    function withdrawToken() external {
+        uint256 amount = tokenCredit[msg.sender];
+        if (amount == 0) revert NothingToWithdraw();
+        tokenCredit[msg.sender] = 0;
+        require(token.transfer(msg.sender, amount), "transfer");
     }
 
     /// The principal's challenge holds settlement until it is answered.

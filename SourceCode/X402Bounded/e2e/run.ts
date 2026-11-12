@@ -21,7 +21,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import { BoundedEvmClient, BoundedEvmFacilitator, BoundedEvmServer, commitOpening, unitsOf, type Opening, type PaymentSource } from "../src/index.js";
+import { BoundedEvmClient, BoundedEvmFacilitator, BoundedEvmServer, commitOpening, publishedBuild, unitsOf, type Opening, type PaymentSource } from "../src/index.js";
 
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
 const OUT = fileURLToPath(new URL("../../Reserve/out/", import.meta.url));
@@ -66,6 +66,7 @@ async function send(hash: Hex) {
 }
 
 const DOMAIN = 8453n;
+const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 
 /**
  * Stands in for the agent's payment engine: one fresh digest, 3 values a unit,
@@ -126,8 +127,17 @@ async function main() {
   await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms] }));
   await send(await agentWallet.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id], value: parseEther("0.1") }));
 
+  // The published build of Reserve.sol, as the facilitator holds it, and
+  // two contracts at addresses the facilitator is told to settle through:
+  // one that answers every call as a reserve does but is other code, and
+  // the published build pulling Permit2 payments through another contract.
+  // On this chain the genuine reserve takes no Permit2 payments, so its
+  // Permit2 is the zero address; on Base it is the canonical one.
+  const build = publishedBuild(JSON.parse(readFileSync(`${OUT}Reserve.sol/Reserve.json`, "utf8")));
+  const lookAlike = await deploy("LookAlikeReserve.sol", "LookAlikeReserve", [DOMAIN, token, ZERO, poseidon, 3600n, 2n * 86400n]);
+  const otherPermit2 = await deploy("Reserve.sol", "Reserve", [DOMAIN, token, "0x000000000000000000000000000000000000dea0", poseidon, 3600n, 2n * 86400n]);
   const verdicts: VerifyResponse[] = [];
-  const facScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve]);
+  const facScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve, lookAlike, otherPermit2], { build, permit2: ZERO });
   const verify = facScheme.verify.bind(facScheme);
   facScheme.verify = async (p: PaymentPayload, r: PaymentRequirements) => {
     const v = await verify(p, r);
@@ -213,6 +223,18 @@ async function main() {
   const twice = await fetch(url, { headers: { "PAYMENT-SIGNATURE": header } });
   await twice.text();
   check("the same signed payment, sent twice, settles once", once.status === 200 && twice.status === 402 && (await balance(payee)) === b1, lastReason());
+
+  const elsewhere = (at: Hex) => {
+    const accepted = { ...payment.accepted, extra: { ...(payment.accepted.extra as object), reserve: at } } as PaymentRequirements;
+    return { req: accepted, pay: { ...payment, accepted, payload: { ...(payment.payload as object), reserve: at } } as PaymentPayload };
+  };
+  const look = elsewhere(lookAlike);
+  const vLook = await facScheme.verify(look.pay, look.req);
+  check("a contract the facilitator was told to trust that answers as a reserve does, but is not the published build, is refused",
+    !vLook.isValid && vLook.invalidReason === "unverified_reserve" && (await facScheme.refusal(reserve)) === "", vLook.invalidMessage ?? "");
+  const other = elsewhere(otherPermit2);
+  const vOther = await facScheme.verify(other.pay, other.req);
+  check("the published build pulling Permit2 payments through another contract is refused", !vOther.isValid && vOther.invalidReason === "unverified_reserve", vOther.invalidMessage ?? "");
 
   const forged = new x402Client()
     .register("eip155:*", new BoundedEvmClient(privateKeyToAccount(KEYS.stranger), chain, delegations, source))

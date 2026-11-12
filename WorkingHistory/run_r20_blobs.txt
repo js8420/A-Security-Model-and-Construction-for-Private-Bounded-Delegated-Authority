@@ -1,0 +1,9 @@
+BLOBS ON ETHEREUM AGAINST POSTINGS ON BASE: ONE BATCH, IN POSTING WAITS OF 30 H THAT DO NOT OVERLAP
+==============================================================================
+  83 blobs in 14 transactions and 1,032,754 Ethereum gas, against 476,240,418 Base gas; 773 waits
+  blob way, ETH:   p50 0.000284  p90 0.00631  p99 0.0238  max 0.194
+  domain way, ETH: p50 0.000952  p90 0.00258  p99 0.0198  max 0.134
+  waits in which the blob way costs more: 323 of 773, 0.41785 (95% CI 0.38281 to 0.45353)
+  the excess when it does, ETH: p50 0.000723  p90 0.00824  max 0.194
+  the largest excess is 10.178 posting deposits at the floor (0.019050 ETH, without the data fee)
+

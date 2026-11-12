@@ -1,0 +1,30 @@
+THE DEPLOYED FEE FACTORS OUT OF SAMPLE: FITTED BEFORE 1 JULY 2025, TESTED AFTER, WINDOWS THAT DO NOT OVERLAP
+==============================================================================
+  bond: the answer forced in through Ethereum, landing by 7.50 h, from 2.69 h; floor 2 gwei, deployed factor 10
+    windows of 2,251 blocks: 1,506 before the split, 1,566 after; fee at or below the floor in 0.6494 of all
+    fit, before: largest ratio 9.077, the factor the fit needs
+    test, after: largest ratio 2.048; above the fitted factor: 0 of 1,566, 0.00000 (95% CI 0.00000 to 0.00235)
+                 above the deployed factor: 0 of 1,566, 0.00000 (95% CI 0.00000 to 0.00235)
+    all windows: largest ratio 9.077; above the deployed factor: 0 of 3,072, 0.00000 (95% CI 0.00000 to 0.00120)
+
+  bond, the recorded fee up to 150 blocks stale, landing by 7.50 h, from 2.69 h; floor 2 gwei, deployed factor 10
+    windows of 2,251 blocks: 1,506 before the split, 1,566 after; fee at or below the floor in 0.6852 of all
+    fit, before: largest ratio 9.077, the factor the fit needs
+    test, after: largest ratio 1.800; above the fitted factor: 0 of 1,566, 0.00000 (95% CI 0.00000 to 0.00235)
+                 above the deployed factor: 0 of 1,566, 0.00000 (95% CI 0.00000 to 0.00235)
+    all windows: largest ratio 9.077; above the deployed factor: 0 of 3,072, 0.00000 (95% CI 0.00000 to 0.00120)
+
+  gas pool: the answer sent on Base by 32.00 h, from 2.69 h; floor 0.01 gwei, deployed factor 4
+    windows of 57,601 blocks: 355 before the split, 368 after; fee at or below the floor in 0.7856 of all
+    fit, before: largest ratio 1.662, the factor the fit needs
+    test, after: largest ratio 0.500; above the fitted factor: 0 of 368, 0.00000 (95% CI 0.00000 to 0.00997)
+                 above the deployed factor: 0 of 368, 0.00000 (95% CI 0.00000 to 0.00997)
+    all windows: largest ratio 1.662; above the deployed factor: 0 of 723, 0.00000 (95% CI 0.00000 to 0.00509)
+
+  posting deposit: from the payment, its 106 chunks in the 106 cheapest Base blocks by 30.00 h, from 0.00 h; floor 0.01 gwei, deployed factor 4
+    windows of 54,001 blocks: 379 before the split, 393 after; fee at or below the floor in 0.8174 of all
+    fit, before: largest ratio 1.011, the factor the fit needs
+    test, after: largest ratio 0.500; above the fitted factor: 0 of 393, 0.00000 (95% CI 0.00000 to 0.00934)
+                 above the deployed factor: 0 of 393, 0.00000 (95% CI 0.00000 to 0.00934)
+    all windows: largest ratio 1.011; above the deployed factor: 0 of 772, 0.00000 (95% CI 0.00000 to 0.00477)
+
