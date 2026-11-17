@@ -639,17 +639,26 @@ def london(data):
         name = "the fee at the challenge" if lag == 0 else f"the fee read as the lowest of the {LAG_ETH} blocks before"
         print(f"  {name}:")
         for fl in (0, floor):
-            n, top, top_i, over = 0, 0.0, 0, 0
+            n, top, top_i, over = 0, 0.0, 0, []
+            ratios = array("d")
             for r, i in every(fee, a, b, lag, fl):
                 n += 1
+                ratios.append(r)
                 if r > factor:
-                    over += 1
+                    over.append(i)
                 if r > top:
                     top, top_i = r, i
-            print(f"    floor {fl / 1e9:g} gwei, every window: {n:,} windows, above the factor {over:,} ({over / n:.7f}), largest {top:.3f} from block {meta['first'] + top_i:,}")
+            print(f"    floor {fl / 1e9:g} gwei, every window: {n:,} windows, above the factor {len(over):,} ({len(over) / n:.7f}), largest {top:.3f} from block {meta['first'] + top_i:,}")
+            if over:
+                ref = lagged(fee, lag)
+                rest = max(r for j, r in enumerate(ratios) if not over[0] - lag <= j <= over[-1] - lag)
+                print(f"      those start from block {meta['first'] + over[0]:,} to {meta['first'] + over[-1]:,}, fee read there {ref[over[0]] / 1e9:.3f} to {ref[over[-1]] / 1e9:.3f} gwei; every window starting outside that span at most {rest:.3f}")
             rows = disjoint(fee, bs, a, b, lag, 1, fl)
             kw, nw = weeks(rows, bs, factor)
             print(f"      windows that do not overlap: above the factor {share(sum(r > factor for _, r, _ in rows), len(rows))}")
+            for i, r, _ in rows:
+                if r > factor:
+                    print(f"        from block {meta['first'] + i:,}, ratio {r:.3f}")
             print(f"      weeks with a window above the factor: {share(kw, nw)}")
     print()
 

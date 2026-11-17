@@ -4,16 +4,24 @@ THE BOND'S FACTOR FROM LONDON TO DENCUN: ETHEREUM, AUGUST 2021 TO MARCH 2024
   fee at or below 2 gwei in 0.000108 of blocks
   the fee at the challenge:
     floor 0 gwei, every window: 6,462,306 windows, above the factor 11 (0.0000017), largest 32.643 from block 12,965,000
+      those start from block 12,965,000 to 12,965,010, fee read there 1.000 to 3.245 gwei; every window starting outside that span at most 8.944
       windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+        from block 12,965,000, ratio 32.643
       weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
     floor 2 gwei, every window: 6,462,306 windows, above the factor 11 (0.0000017), largest 16.322 from block 12,965,000
+      those start from block 12,965,000 to 12,965,010, fee read there 1.000 to 3.245 gwei; every window starting outside that span at most 8.944
       windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+        from block 12,965,000, ratio 16.322
       weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
   the fee read as the lowest of the 150 blocks before:
     floor 0 gwei, every window: 6,462,156 windows, above the factor 11 (0.0000017), largest 32.643 from block 12,965,150
+      those start from block 12,965,150 to 12,965,160, fee read there 1.000 to 3.245 gwei; every window starting outside that span at most 8.944
       windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+        from block 12,965,150, ratio 32.643
       weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
     floor 2 gwei, every window: 6,462,156 windows, above the factor 11 (0.0000017), largest 16.322 from block 12,965,150
+      those start from block 12,965,150 to 12,965,160, fee read there 1.000 to 3.245 gwei; every window starting outside that span at most 8.944
       windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+        from block 12,965,150, ratio 16.322
       weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
 
