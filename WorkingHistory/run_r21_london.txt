@@ -1,0 +1,19 @@
+THE BOND'S FACTOR FROM LONDON TO DENCUN: ETHEREUM, AUGUST 2021 TO MARCH 2024
+==============================================================================
+  blocks 12,965,000 to 19,429,555; the answer forced in, landing by 7.50 h, ready at 2.69 h; deployed factor 10
+  fee at or below 2 gwei in 0.000108 of blocks
+  the fee at the challenge:
+    floor 0 gwei, every window: 6,462,306 windows, above the factor 11 (0.0000017), largest 32.643 from block 12,965,000
+      windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+      weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
+    floor 2 gwei, every window: 6,462,306 windows, above the factor 11 (0.0000017), largest 16.322 from block 12,965,000
+      windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+      weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
+  the fee read as the lowest of the 150 blocks before:
+    floor 0 gwei, every window: 6,462,156 windows, above the factor 11 (0.0000017), largest 32.643 from block 12,965,150
+      windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+      weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
+    floor 2 gwei, every window: 6,462,156 windows, above the factor 11 (0.0000017), largest 16.322 from block 12,965,150
+      windows that do not overlap: above the factor 1 of 2,871, 0.00035 (95% CI 0.00001 to 0.00194)
+      weeks with a window above the factor: 1 of 129, 0.00775 (95% CI 0.00020 to 0.04243)
+

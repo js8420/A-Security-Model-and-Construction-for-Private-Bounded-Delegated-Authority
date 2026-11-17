@@ -136,8 +136,9 @@ async function main() {
   const build = publishedBuild(JSON.parse(readFileSync(`${OUT}Reserve.sol/Reserve.json`, "utf8")));
   const lookAlike = await deploy("LookAlikeReserve.sol", "LookAlikeReserve", [DOMAIN, token, ZERO, poseidon, 3600n, 2n * 86400n]);
   const otherPermit2 = await deploy("Reserve.sol", "Reserve", [DOMAIN, token, "0x000000000000000000000000000000000000dea0", poseidon, 3600n, 2n * 86400n]);
+  const otherToken = await deploy("Reserve.sol", "Reserve", [DOMAIN, await deploy("MockToken.sol", "MockToken"), ZERO, poseidon, 3600n, 2n * 86400n]);
   const verdicts: VerifyResponse[] = [];
-  const facScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve, lookAlike, otherPermit2], { build, permit2: ZERO });
+  const facScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve, lookAlike, otherPermit2, otherToken], { build, permit2: ZERO });
   const verify = facScheme.verify.bind(facScheme);
   facScheme.verify = async (p: PaymentPayload, r: PaymentRequirements) => {
     const v = await verify(p, r);
@@ -235,6 +236,9 @@ async function main() {
   const other = elsewhere(otherPermit2);
   const vOther = await facScheme.verify(other.pay, other.req);
   check("the published build pulling Permit2 payments through another contract is refused", !vOther.isValid && vOther.invalidReason === "unverified_reserve", vOther.invalidMessage ?? "");
+  const fake = elsewhere(otherToken);
+  const vFake = await facScheme.verify(fake.pay, fake.req);
+  check("the published build paying in a token other than the asset the payment asks for is refused", !vFake.isValid && vFake.invalidReason === "asset_mismatch", vFake.invalidMessage ?? "");
 
   const forged = new x402Client()
     .register("eip155:*", new BoundedEvmClient(privateKeyToAccount(KEYS.stranger), chain, delegations, source))

@@ -10,8 +10,12 @@ blob base fee in the posting window. The fee factors are chosen from these.
   python3 fee_ratio.py oos DATA_DIR        the deployed factors tested out of sample: fitted
                                            on the windows that start before July 2025 and
                                            tested on those after, in windows that do not overlap
-  python3 fee_ratio.py blobs DATA_DIR      how often, and by how much, posting a batch as blobs
-                                           on Ethereum costs more than posting it on Base
+  python3 fee_ratio.py blobs DATA_DIR [ETH_USD STAKE_USD BOUNTY_USD]
+                                           how often, and by how much, posting a batch as blobs
+                                           on Ethereum costs more than posting it on Base, and
+                                           how often the excess is above the stake less the bounty
+  python3 fee_ratio.py london DATA_DIR     the bond's factor on Ethereum from London to Dencun,
+                                           August 2021 to March 2024, which fetch also downloads
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
@@ -25,6 +29,7 @@ import math
 import os
 import re
 import sys
+import threading
 import time
 import urllib.request
 from array import array
@@ -43,6 +48,15 @@ CHAINS = {
         "rpcs": ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org", "https://1rpc.io/base"],
         "block_seconds": 2,
         "blob": False,
+    },
+    # Ethereum from the London upgrade, the first block with a base fee, to
+    # the block before the Dencun-era data above begins.
+    "ethereum_london": {
+        "rpcs": ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org", "https://eth.llamarpc.com", "https://1rpc.io/eth"],
+        "block_seconds": 12,
+        "blob": False,
+        "first": 12_965_000,
+        "until": "ethereum",
     },
 }
 # Windows from the deployment: the answer window w_a for the bond, and the
@@ -84,21 +98,36 @@ SPLIT_TIME = 1751328000
 TIME_STEP = 7200
 
 
+# A node that fails sits out for a while, so the threads keep to the nodes
+# that answer instead of waiting on the ones that refuse.
+_bench = {}
+_bench_lock = threading.Lock()
+
+
 def rpc(urls, method, params, start=0):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
     last = None
-    for attempt in range(12):
-        url = urls[(start + attempt) % len(urls)]
-        try:
-            req = urllib.request.Request(url, body, {"content-type": "application/json", "user-agent": "fee-ratio/1"})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                out = json.loads(r.read())
-            if "result" in out and out["result"] is not None:
-                return out["result"]
-            last = out.get("error")
-        except Exception as e:
-            last = e
-        time.sleep(min(30, 2 ** attempt * 0.5))
+    order = [urls[(start + k) % len(urls)] for k in range(len(urls))]
+    for round_ in range(12):
+        now = time.time()
+        with _bench_lock:
+            ready = [u for u in order if _bench.get(u, (0, 0))[0] <= now]
+        for url in ready or order:
+            try:
+                req = urllib.request.Request(url, body, {"content-type": "application/json", "user-agent": "fee-ratio/1"})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    out = json.loads(r.read())
+                if "result" in out and out["result"] is not None:
+                    with _bench_lock:
+                        _bench.pop(url, None)
+                    return out["result"]
+                last = f"{url}: {out.get('error')}"
+            except Exception as e:
+                last = f"{url}: {e}"
+            with _bench_lock:
+                strikes = _bench.get(url, (0, 0))[1] + 1
+                _bench[url] = (time.time() + min(600, 15 * 2 ** strikes), strikes)
+        time.sleep(min(30, 2 ** round_ * 0.5))
     raise RuntimeError(f"{method} {params} failed on every endpoint: {last}")
 
 
@@ -128,8 +157,12 @@ def fetch(data):
         if os.path.exists(meta_path):
             meta = json.load(open(meta_path))
         else:
-            first = block_at(c["rpcs"], START_TIME)
-            last = int(rpc(c["rpcs"], "eth_blockNumber", []), 16)
+            if "first" in c:
+                first = c["first"]
+                last = json.load(open(paths(data, c["until"])[1]))["first"] - 1
+            else:
+                first = block_at(c["rpcs"], START_TIME)
+                last = int(rpc(c["rpcs"], "eth_blockNumber", []), 16)
             meta = {"first": first, "last": last, "fixed_at": int(time.time())}
             json.dump(meta, open(meta_path, "w"))
         first, last = meta["first"], meta["last"]
@@ -296,7 +329,8 @@ def smallest_factor(hist, n, share, top=float("inf")):
 def analyze(data):
     print("HOW FAR THE BASE FEE RISES AFTER A CHALLENGE, SINCE DENCUN")
     print("=" * 78)
-    for chain, c in CHAINS.items():
+    for chain in ("ethereum", "base"):
+        c = CHAINS[chain]
         meta, fee, blob = load(data, chain)
         print(f"  {chain}: blocks {meta['first']:,} to {meta['last']:,}, {len(fee):,} blocks, fixed at {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(meta['fixed_at']))}")
         windows = [("answer window w_a", W_A_HOURS), ("answer window plus posting wait", W_POST_HOURS)]
@@ -494,12 +528,53 @@ def share(k, n):
     return f"{k} of {n:,}, {k / n:.5f} (95% CI {lo:.5f} to {hi:.5f})"
 
 
+WEEK = 7 * 86400
+
+
+def disjoint(fee, bs, a, b, lag, k, floor):
+    """Windows that do not overlap, each b + 1 blocks from its start i: the
+    cost the payer can land at from block i + a on, over the fee at i, read
+    as the lowest of the lag blocks before and no lower than the floor.
+    Returns (i, ratio, floored) for each."""
+    out = []
+    for i in range(lag, len(fee) - b, b + 1):
+        ref = min(fee[i - lag:i + 1])
+        seg = fee[i + a:i + b + 1]
+        cost = min(seg) if k == 1 else sum(heapq.nsmallest(k, seg)) / k
+        out.append((i, cost / max(ref, floor), ref <= floor))
+    return out
+
+
+def every(fee, a, b, lag, floor):
+    """Every window, overlapping: (ratio, start) of the lowest fee from a to b
+    blocks after each block over the fee there, read as above."""
+    m = window_min_ahead(fee, a, b)
+    ref = lagged(fee, lag)
+    for i in range(lag, len(m)):
+        f = ref[i] if ref[i] > floor else floor
+        yield m[i] / f, i
+
+
+def weeks(rows, bs, factor):
+    """The windows grouped by the week they start in: how many weeks, and in
+    how many some window exceeded the factor. Fees move in regimes that last
+    days, so a week of windows is nearer one independent trial than a window."""
+    seen = {}
+    for i, r, _ in rows:
+        w = i * bs // WEEK
+        seen[w] = seen.get(w, False) or r > factor
+    return sum(seen.values()), len(seen)
+
+
 def oos(data):
     """Each payment sized at one moment and spent later, in windows that do
     not overlap: the cost the payer can land at, over the fee at the moment
     read no lower than the deployed floor. The factor the windows before the
     split need is fitted on them alone; the windows after the split test it
-    and the deployed factor. A window that spans the split is in neither."""
+    and the deployed factor. A window that spans the split is in neither. The
+    bound on how often the factor is exceeded is given over windows and over
+    weeks of windows; and, for the payments priced at one block, the largest
+    ratio of every window, overlapping, before and after the split."""
     l1_floor, l1_factor = deployed("L1_FEE_FLOOR"), deployed("L1_FACTOR")
     l2_floor, l2_factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
     land = W_A_HOURS - SEQ_HOURS - CHI_HOURS
@@ -520,31 +595,66 @@ def oos(data):
         bs = CHAINS[chain]["block_seconds"]
         a = math.ceil(start_h * 3600 / bs)
         b = math.ceil(until_h * 3600 / bs)
-        fit, test, below = [], [], 0
-        for i in range(lag, len(fee) - b, b + 1):
-            ref = min(fee[i - lag:i + 1])
-            if ref <= floor:
-                below += 1
-            ref = max(ref, floor)
-            seg = fee[i + a:i + b + 1]
-            cost = min(seg) if k == 1 else sum(heapq.nsmallest(k, seg)) / k
-            r = cost / ref
-            if i + b < s:
-                fit.append(r)
-            elif i >= s:
-                test.append(r)
-        both = fit + test
-        f_fit = max(fit)
+        rows = disjoint(fee, bs, a, b, lag, k, floor)
+        fit = [x for x in rows if x[0] + b < s]
+        test = [x for x in rows if x[0] >= s]
+        f_fit = max(r for _, r, _ in fit)
+        below = sum(f for _, _, f in rows)
         print(f"  {label} {until_h:.2f} h, from {start_h:.2f} h; floor {floor / 1e9:g} gwei, deployed factor {factor}")
-        print(f"    windows of {b + 1:,} blocks: {len(fit):,} before the split, {len(test):,} after; fee at or below the floor in {below / (len(both) or 1):.4f} of all")
+        print(f"    windows of {b + 1:,} blocks: {len(fit):,} before the split, {len(test):,} after; fee at or below the floor in {below / (len(rows) or 1):.4f} of all")
         print(f"    fit, before: largest ratio {f_fit:.3f}, the factor the fit needs")
-        print(f"    test, after: largest ratio {max(test):.3f}; above the fitted factor: {share(sum(r > f_fit for r in test), len(test))}")
-        print(f"                 above the deployed factor: {share(sum(r > factor for r in test), len(test))}")
-        print(f"    all windows: largest ratio {max(both):.3f}; above the deployed factor: {share(sum(r > factor for r in both), len(both))}")
+        print(f"    test, after: largest ratio {max(r for _, r, _ in test):.3f}; above the fitted factor: {share(sum(r > f_fit for _, r, _ in test), len(test))}")
+        print(f"                 above the deployed factor: {share(sum(r > factor for _, r, _ in test), len(test))}")
+        kw, nw = weeks(test, bs, factor)
+        print(f"                 weeks with a window above the deployed factor: {share(kw, nw)}")
+        print(f"    all windows: largest ratio {max(r for _, r, _ in rows):.3f}; above the deployed factor: {share(sum(r > factor for _, r, _ in rows), len(rows))}")
+        kw, nw = weeks(rows, bs, factor)
+        print(f"                 weeks with a window above the deployed factor: {share(kw, nw)}")
+        if k == 1:
+            top = {"before": (0.0, 0), "after": (0.0, 0)}
+            for r, i in every(fee, a, b, lag, floor):
+                key = "before" if i + b < s else "after" if i >= s else None
+                if key and r > top[key][0]:
+                    top[key] = (r, i)
+            for key, (r, i) in top.items():
+                print(f"    every window, overlapping, {key} the split: largest ratio {r:.3f}, from block {meta['first'] + i:,}")
         print()
 
 
-def blobs(data):
+def london(data):
+    """The bond's factor on Ethereum before the Dencun-era data: every block
+    from London, which introduced the base fee, to the block before it. The
+    same measure as floors and oos, at the deployed floor and without it."""
+    floor, factor = deployed("L1_FEE_FLOOR"), deployed("L1_FACTOR")
+    meta, fee, _ = load(data, "ethereum_london")
+    bs = CHAINS["ethereum_london"]["block_seconds"]
+    land = W_A_HOURS - SEQ_HOURS - CHI_HOURS
+    a = math.ceil(T_ANS_HOURS * 3600 / bs)
+    b = math.ceil(land * 3600 / bs)
+    print("THE BOND'S FACTOR FROM LONDON TO DENCUN: ETHEREUM, AUGUST 2021 TO MARCH 2024")
+    print("=" * 78)
+    print(f"  blocks {meta['first']:,} to {meta['last']:,}; the answer forced in, landing by {land:.2f} h, ready at {T_ANS_HOURS:.2f} h; deployed factor {factor}")
+    print(f"  fee at or below {floor / 1e9:g} gwei in {share_at_or_below(fee, floor):.6f} of blocks")
+    for lag in (0, LAG_ETH):
+        name = "the fee at the challenge" if lag == 0 else f"the fee read as the lowest of the {LAG_ETH} blocks before"
+        print(f"  {name}:")
+        for fl in (0, floor):
+            n, top, top_i, over = 0, 0.0, 0, 0
+            for r, i in every(fee, a, b, lag, fl):
+                n += 1
+                if r > factor:
+                    over += 1
+                if r > top:
+                    top, top_i = r, i
+            print(f"    floor {fl / 1e9:g} gwei, every window: {n:,} windows, above the factor {over:,} ({over / n:.7f}), largest {top:.3f} from block {meta['first'] + top_i:,}")
+            rows = disjoint(fee, bs, a, b, lag, 1, fl)
+            kw, nw = weeks(rows, bs, factor)
+            print(f"      windows that do not overlap: above the factor {share(sum(r > factor for _, r, _ in rows), len(rows))}")
+            print(f"      weeks with a window above the factor: {share(kw, nw)}")
+    print()
+
+
+def blobs(data, eth_usd=None, stake_usd=None, bounty_usd=None):
     """Under censorship of its domain postings, the answerer posts a batch as
     blobs, and is refunded no more than posting it on the domain costs when
     the report arrives. In posting waits that do not overlap, the cheapest the
@@ -589,11 +699,19 @@ def blobs(data):
     if over:
         print("  the excess when it does, ETH: " + "  ".join(f"p{p:g} {q(over, p) / 1e18:.3g}" for p in (50, 90)) + f"  max {over[-1] / 1e18:.3g}")
         print(f"  the largest excess is {over[-1] / deposit:.3f} posting deposits at the floor ({deposit / 1e18:.6f} ETH, without the data fee)")
+    if eth_usd is not None:
+        price, stake, bounty = float(eth_usd), float(stake_usd), float(bounty_usd)
+        # A censored answerer that does not post loses its stake and, bringing
+        # its own receipt, recovers the bounty: posting is rational while the
+        # excess is below the stake less the bounty.
+        for name, usd in (("the stake less the bounty", stake - bounty), ("the stake", stake)):
+            wei = usd / price * 1e18
+            print(f"  waits whose excess is above {name}, {usd:.2f} USD = {wei / 1e18:.6f} ETH at {price:.2f} USD: {share(sum(x > wei for x in excess), n)}")
     print()
 
 
 if __name__ == "__main__":
-    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs}
-    if len(sys.argv) != 3 or sys.argv[1] not in modes:
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london}
+    if len(sys.argv) < 3 or sys.argv[1] not in modes or (len(sys.argv) != 3 and sys.argv[1] != "blobs") or len(sys.argv) not in (3, 6):
         raise SystemExit(__doc__)
-    modes[sys.argv[1]](sys.argv[2])
+    modes[sys.argv[1]](*sys.argv[2:])

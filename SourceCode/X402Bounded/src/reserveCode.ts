@@ -41,3 +41,56 @@ export function sameBuild(deployed: Hex, build: PublishedBuild): boolean {
   if (deployed.length !== build.object.length) return false;
   return masked(deployed, build.immutableReferences) === masked(build.object, build.immutableReferences);
 }
+
+/**
+ * What a principal checks before it opens a delegation: that the reserve,
+ * its dispute contract, the posting contract and the Poseidon2 contract are
+ * the published builds, wired to each other, and that every value the
+ * deployment fixed is the one it publishes: for the reserve the domain, the
+ * token, the Permit2 contract, the age bound and the close delay; for the
+ * dispute contract the verifier, the program key, the windows, the slot, the
+ * proving bond and cost, the forcing gas and the fee factors and floors; for
+ * the posting contract the posting gas and bytes, its factor and floor, the
+ * messenger, the inclusion wait and the BlobPosting address. A facilitator
+ * needs less, because a payee is protected by the money moving: the build,
+ * the token and the Permit2 contract.
+ */
+export interface Deployment {
+  builds: { reserve: PublishedBuild; dispute: PublishedBuild; postings: PublishedBuild; poseidon: PublishedBuild };
+  reserve: Record<string, bigint | Hex>;
+  dispute: Record<string, bigint | Hex>;
+  postings: Record<string, bigint | Hex>;
+}
+
+interface Reader {
+  getCode(a: { address: Address }): Promise<Hex | undefined>;
+  readContract(a: { address: Address; abi: readonly unknown[]; functionName: string }): Promise<unknown>;
+}
+
+const word = (name: string) => [{ type: "function", name, stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const;
+
+/** Why the deployment behind a reserve is not the one published, or "" if it is. */
+export async function deploymentRefusal(chain: Reader, reserve: Address, d: Deployment): Promise<string> {
+  const read = async (address: Address, name: string) => (await chain.readContract({ address, abi: word(name), functionName: name })) as bigint;
+  const addr = (v: bigint) => `0x${v.toString(16).padStart(40, "0")}` as Address;
+  const check = async (what: string, at: Address, build: PublishedBuild, values: Record<string, bigint | Hex>): Promise<string> => {
+    const code = await chain.getCode({ address: at });
+    if (!code || !sameBuild(code, build)) return `the ${what} at ${at} is not the published build`;
+    for (const [name, want] of Object.entries(values)) {
+      const have = await read(at, name);
+      if (have !== BigInt(want)) return `the ${what}'s ${name} is ${have}, not ${BigInt(want)}`;
+    }
+    return "";
+  };
+  let why = await check("reserve", reserve, d.builds.reserve, d.reserve);
+  if (why) return why;
+  const dispute = addr(await read(reserve, "dispute"));
+  why = await check("dispute contract", dispute, d.builds.dispute, d.dispute);
+  if (why) return why;
+  if ((await read(dispute, "reserve")) !== BigInt(reserve)) return "the dispute contract answers for another reserve";
+  const postings = addr(await read(dispute, "postings"));
+  why = await check("posting contract", postings, d.builds.postings, d.postings);
+  if (why) return why;
+  if ((await read(postings, "dispute")) !== BigInt(dispute) || (await read(postings, "reserve")) !== BigInt(reserve)) return "the posting contract is wired to other contracts";
+  return check("Poseidon2 contract", addr(await read(reserve, "poseidon")), d.builds.poseidon, {});
+}

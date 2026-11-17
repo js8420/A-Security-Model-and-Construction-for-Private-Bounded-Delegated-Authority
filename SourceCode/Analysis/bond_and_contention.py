@@ -462,7 +462,7 @@ if __name__ == "__main__":
     print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
     print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")
     print(f"  proving cost as deployed, paid for the principal's challenges in the reserve's token {PROVING_COST_USD:10.4f} USD")
-    print(f"  that is {PROVING_COST_USD / PROVING:.4f} x the proving, whatever ether's price")
+    print(f"  that is {PROVING_COST_USD / PROVING:.4f} x the proving, whatever ether's price; a late agent gains at most {PROVING_COST_USD - PROVING:.4f} USD a batch")
     print(f"  sending the answer on Base, measured                                  {SENDING:10.4f} USD")
     print(f"  forcing it in through Ethereum: {FORCED_ANSWER_GAS:,} L1 gas, measured on a fork")
     print(f"  bond at a challenge, proving bond + {L1_FACTOR:.0f} x forcing at the Ethereum base fee then, read no lower than {L1_FLOOR / 1e9:g} gwei:")

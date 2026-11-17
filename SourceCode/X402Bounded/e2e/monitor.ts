@@ -18,7 +18,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, anvilBlobs, ethereumBlobs, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
   loadKzg, postBlobs, postingsAbi, proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
-  type Check, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
+  deploymentRefusal, publishedBuild,
+  type Check, type Deployment, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
 import { offsets } from "./stark_kit.js";
@@ -67,8 +68,8 @@ const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
 const BOND = parseEther("0.01");
-/** What an answer to the principal's challenges is paid for each batch, in the reserve's token: 6.03 at six decimals. */
-const PROVING_COST = 6_030_000n;
+/** What an answer to the principal's challenges is paid for each batch, in the reserve's token: 7.54 at six decimals. */
+const PROVING_COST = 7_540_000n;
 /**
  * The deposit inclusion wait the posting contract allows a report of blobs
  * from Ethereum: Base's is 12 hours, and a local chain includes at once, so
@@ -121,6 +122,18 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const pd = await deploy("Postings.sol", "Postings", [reserve, vd, postingParams]);
   await done(await principal.writeContract({ address: vd, abi: artifact("ValidityDispute.sol", "ValidityDispute").abi, functionName: "setPostings", args: [pd] }));
   await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "setDispute", args: [vd] }));
+  // The deployment as it is published, which the principal checks before it
+  // opens a delegation.
+  const build = (file: string, cname: string) => publishedBuild(JSON.parse(readFileSync(`${OUT}${file}/${cname}.json`, "utf8")));
+  const deployment: Deployment = {
+    builds: {
+      reserve: build("Reserve.sol", "Reserve"), dispute: build("ValidityDispute.sol", "ValidityDispute"),
+      postings: build("Postings.sol", "Postings"), poseidon: build("Poseidon2Goldilocks.sol", "Poseidon2Goldilocks"),
+    },
+    reserve: { domain: domainId, token, permit2: ZERO, maxAge: 3600n, closeDelay: 2n * 86400n },
+    dispute: { verifier: echo, programVKey: vkey, ...params },
+    postings: { ...postingParams },
+  };
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, 2n ** 256n - 1n] }));
@@ -275,7 +288,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     await done(await answering.writeContract({ address: pd, abi: postingsAbi, functionName: "bindPosting", args: [d.delegation, r.digest, recordOf(r), 0n, [], rc] }));
   };
   return {
-    deploy, rootOf, bind, code: async (a: Address) => (await pub.getCode({ address: a })) as Hex,
+    deploy, rootOf, bind, code: async (a: Address) => (await pub.getCode({ address: a })) as Hex, pub, reserve, deployment,
     delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf,
     principalCredit, disputeCredit, principalAddress, gasPool, earmarked, tokenCredit, postingCredit, trustBlobPoster, relay, postings: pd, answering,
   };
@@ -869,6 +882,16 @@ async function main() {
     check("the monitor recovers the secret from the two shares at once, before any decision time, and claims the bond on both domains, which freezes both", sent.every((x) => x === "settled") && r.froze && paid && frozen && r.challenged.length === 0, r.reasons.join("; "));
     const wrong = extractSecret([{ digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }, { digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }]);
     check("Extract skips two entries at one index: one settlement read twice gives no line", wrong.length === 0);
+  }
+
+  section("what the principal checks before it opens a delegation");
+  {
+    const fine = await deploymentRefusal(A.pub, A.reserve, A.deployment);
+    const window = await deploymentRefusal(A.pub, A.reserve, { ...A.deployment, dispute: { ...A.deployment.dispute, answerWindow: BigInt(A.deployment.dispute.answerWindow) + 1n } });
+    const token = await deploymentRefusal(A.pub, A.reserve, { ...A.deployment, reserve: { ...A.deployment.reserve, token: "0x000000000000000000000000000000000000dea1" } });
+    const elsewhere = await deploymentRefusal(A.pub, A.postings, A.deployment);
+    check("the published deployment passes the principal's check; one whose dispute contract has another answer window, whose reserve pays in another token, or whose reserve is some other contract is refused",
+      fine === "" && window.includes("answerWindow") && token.includes("token") && elsewhere !== "", `${window}; ${token}; ${elsewhere}`);
   }
 
   section("a node that keeps logs for a time only: the monitor's own copy");

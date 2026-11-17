@@ -10,6 +10,9 @@ account is USDC, the token x402 settles. Both can be overridden.
 
 Public endpoints differ in which calls they serve, eth_getProof above all,
 so each chain's endpoints are tried in turn until one serves every call.
+A load-balanced endpoint can answer the block number from one node and the
+proof from another that is a few blocks behind, so each endpoint is tried at
+several depths below its head, twice each.
 
 Run: python3 fetch_state_proofs.py OUT_DIR
 Env: L1_RPC, L2_RPC (one endpoint each, tried first), L1_ACCOUNT, L2_ACCOUNT.
@@ -18,6 +21,9 @@ import json
 import os
 import subprocess
 import sys
+import time
+
+DEPTHS = (2, 8, 32)
 
 L1_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org", "https://eth.llamarpc.com", "https://1rpc.io/eth"]
 L2_RPCS = ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org", "https://base.llamarpc.com", "https://1rpc.io/base"]
@@ -84,8 +90,8 @@ def proof(url, account, block):
             "storageProof": p["storageProof"][0]["proof"], "value": v}, p
 
 
-def ethereum(url, account):
-    n = int(cast("block-number", "--rpc-url", url)) - 2
+def ethereum(url, account, depth):
+    n = int(cast("block-number", "--rpc-url", url)) - depth
     b = rpc(url, "eth_getBlockByNumber", hex(n), False)
     header = rlp([field(k, b[k]) for k in HEADER if k in b])
     d, _ = proof(url, account, hex(n))
@@ -93,8 +99,8 @@ def ethereum(url, account):
     return d
 
 
-def base(url, account):
-    n = int(cast("block-number", "--rpc-url", url)) - 2
+def base(url, account, depth):
+    n = int(cast("block-number", "--rpc-url", url)) - depth
     b = rpc(url, "eth_getBlockByNumber", hex(n), False)
     d, _ = proof(url, account, hex(n))
     mp = rpc(url, "eth_getProof", MESSAGE_PASSER, [], hex(n))
@@ -104,12 +110,15 @@ def base(url, account):
 
 def first(name, urls, fetch):
     for url in urls:
-        try:
-            d = fetch(url)
-            d["rpc"] = url
-            return d
-        except (Refused, subprocess.TimeoutExpired, KeyError, ValueError) as e:
-            print(f"  {name}: {url} refused: {e}")
+        for depth in DEPTHS:
+            for attempt in range(2):
+                try:
+                    d = fetch(url, depth)
+                    d["rpc"] = url
+                    return d
+                except (Refused, subprocess.TimeoutExpired, KeyError, ValueError) as e:
+                    print(f"  {name}: {url}, {depth} blocks below its head, refused: {e}")
+                    time.sleep(3)
     raise SystemExit(f"no {name} endpoint served every call")
 
 
@@ -119,10 +128,10 @@ def main(out):
     l2_urls = [u for u in [os.environ.get("L2_RPC")] if u] + L2_RPCS
     l1_account = os.environ.get("L1_ACCOUNT")
     if not l1_account:
-        l1_account = first("Ethereum", l1_urls, lambda u: {"a": cast("call", "--rpc-url", u, PORTAL, "disputeGameFactory()(address)")})["a"]
+        l1_account = first("Ethereum", l1_urls, lambda u, _: {"a": cast("call", "--rpc-url", u, PORTAL, "disputeGameFactory()(address)")})["a"]
     l2_account = os.environ.get("L2_ACCOUNT", USDC)
-    l1 = first("Ethereum", l1_urls, lambda u: ethereum(u, l1_account))
-    l2 = first("Base", l2_urls, lambda u: base(u, l2_account))
+    l1 = first("Ethereum", l1_urls, lambda u, k: ethereum(u, l1_account, k))
+    l2 = first("Base", l2_urls, lambda u, k: base(u, l2_account, k))
     for name, d in (("l1", l1), ("l2", l2)):
         json.dump(d, open(f"{out}/{name}.json", "w"), indent=1)
     print(f"Ethereum block {l1['block']} from {l1['rpc']}, account {l1_account}, slot {l1['slot']}: {len(l1['accountProof'])} account and {len(l1['storageProof'])} storage nodes")
