@@ -18,9 +18,10 @@ than its floor and times its factor; a posting as blobs is refunded no more
 than that. The factors and floors are read from the deployment library. The
 answer window and the slot are checked against the slowest proving run.
 
-Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR WorkingHistory/run_TAG_forced.txt
-where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run;
-folders whose name holds "low" are runs at the low-memory setting.
+Run: python3 bond_and_contention.py WorkingHistory/run_TAG_posting.txt GROTH16_DIR WorkingHistory/run_TAG_forced.txt [SMALL_DIR]
+where GROTH16_DIR holds one out_* folder with an onchain.txt per Groth16 run on
+a whole node; folders whose name holds "low" are runs at the low-memory
+setting. SMALL_DIR, if given, holds runs held to a smaller machine's cores.
 """
 import math
 import os
@@ -56,19 +57,17 @@ W_RATE = DAY
 # margin, so it still covers an answer if ether falls to 1 / MARGIN of its
 # price at deployment.
 VCPU_HOUR_64 = 3.616
-# The low-memory setting needs 64 GB. The m5d with 64 GiB, m5d.4xlarge, has
-# 8 physical cores, fewer than the 20 that setting kept busy, so its time
-# there is not known; the smallest m5d with both, m5d.12xlarge, has 24
-# cores and 192 GiB. On-demand, US East, Amazon's price list.
-HOUR_4X = 0.904
-HOUR_12X = 2.712
+# Smaller machines, measured on Pete with Slurm holding each run to the
+# machine's cores and memory: the folder prefix names the m5d it stands for,
+# its physical cores and its on-demand price an hour, US East.
+SMALL = {"out_s9m12_": ("m5d.12xlarge", 24, 192, 2.712), "out_s9m4_": ("m5d.4xlarge", 8, 64, 0.904)}
 CURRENCY_MARGIN = 2.0
 # The most settlements of one batch, so the most deliveries one batch's
 # deposit refunds.
 BATCH = 256
 
 
-def runs(folder, proofs=1):
+def runs(folder, proofs=1, need_default=True):
     """Every Groth16 run in the folder answering for this many batch proofs:
     name, setup and proving seconds, low-memory or not."""
     out = []
@@ -86,7 +85,7 @@ def runs(folder, proofs=1):
         if int(f.get("stark_proofs", 1)) != proofs:
             continue
         out.append((name, float(f.get("setup_seconds", 0)), float(f["prove_seconds"]), "low" in name))
-    if proofs == 1 and not any(not low for *_, low in out):
+    if need_default and proofs == 1 and not any(not low for *_, low in out):
         raise SystemExit(f"no run at the default setting in {folder}")
     return out
 
@@ -154,7 +153,6 @@ RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
-LOW_SECONDS = max(p for _, _, p, low in RUNS if low)
 # The proving bond the contract is deployed with, in ether, read from the
 # deployment library so the paper and the contract cannot differ. Ether's price
 # moves, so the run reports the margin the deployed bond gives at today's price
@@ -465,8 +463,16 @@ if __name__ == "__main__":
     print("THE CHALLENGER'S BOND AND THE BOUNTY")
     print("=" * 78)
     print(f"  proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour {PROVING:10.4f} USD")
-    print(f"  the low-memory setting, {LOW_SECONDS:.1f} s, on m5d.12xlarge at {HOUR_12X} USD an hour {HOUR_12X * LOW_SECONDS / 3600:10.4f} USD")
-    print(f"  the m5d with 64 GiB, m5d.4xlarge, at {HOUR_4X} USD an hour: {HOUR_4X * LOW_SECONDS / 3600:.4f} USD for the same time, which its 8 cores would not keep")
+    if len(sys.argv) > 4:
+        for prefix, (kind, cores, gib, hour) in SMALL.items():
+            rs = [r for r in runs(sys.argv[4], need_default=False) if r[0].startswith(prefix)]
+            if not rs:
+                continue
+            slow = max(st + p for _, st, p, _ in rs) / 3600
+            prove = max(p for _, _, p, _ in rs)
+            fits = "fits" if SLOT >= slow and W_A >= slow + DELTA_F + SIGMA_X else "does not fit"
+            print(f"  low-memory on {cores} cores and {gib} GiB, as {kind}: {len(rs)} runs, proving {min(p for _, _, p, _ in rs):.1f} to {prove:.1f} s,"
+                  f" slowest with setup {slow:.2f} h; at {hour} USD an hour {hour * prove / 3600:.4f} USD; {fits} the slot {SLOT:.0f} h and w_a {W_A:.0f} h")
     print(f"  proving bond as deployed {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD at {ETH_USD} USD an ether")
     print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
     print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")

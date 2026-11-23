@@ -85,4 +85,4 @@ for s in ("ValidityDisputeOnChain", "ValidityDisputeBatchOnChain", "RevealDisput
 PY
 
 python3 ../Analysis/posting_cost.py "$hist/receipts_${tag}_ValidityDisputeOnChain.json" | tee "$hist/run_${tag}_posting.txt"
-python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s9" "$hist/run_${tag}_forced.txt" | tee "$hist/run_${tag}_bond.txt"
+python3 ../Analysis/bond_and_contention.py "$hist/run_${tag}_posting.txt" "$hist/groth16_s9" "$hist/run_${tag}_forced.txt" "$hist/groth16_s9_small" | tee "$hist/run_${tag}_bond.txt"

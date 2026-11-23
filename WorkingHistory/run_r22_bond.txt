@@ -4,21 +4,24 @@ THE GROTH16 RUNS, SECONDS
   out_s9_batch_b               default      setup    23.3  prove    5990.1
   out_s9_batch_low_a           low memory   setup    23.1  prove    9674.6
   out_s9_batch_low_b           low memory   setup    23.1  prove    9667.3
+  out_s9m16_a                  default      setup    26.0  prove    5982.3
+  out_s9m16_b                  default      setup    26.0  prove    6012.8
+  out_s9m16_c                  default      setup    26.0  prove    5999.7
   one answer for two batch proofs:
   out_s9_agg_a                 default      setup    22.6  prove   11319.4
   out_s9_agg_b                 default      setup    22.3  prove   11345.9
-  the second batch adds 5345.9 s to the slower default run, 89.1% of one answer
+  the second batch adds 5333.1 s to the slower default run, 88.7% of one answer
 
 THE CHALLENGER'S BOND AND THE BOUNTY
 ==============================================================================
-  proving one answer, the slower default run, 6000.0 s at 3.616 USD an hour     6.0267 USD
-  the low-memory setting, 9674.6 s, on m5d.12xlarge at 2.712 USD an hour     7.2882 USD
-  the m5d with 64 GiB, m5d.4xlarge, at 0.904 USD an hour: 2.4294 USD for the same time, which its 8 cores would not keep
+  proving one answer, the slower default run, 6012.8 s at 3.616 USD an hour     6.0395 USD
+  low-memory on 24 cores and 192 GiB, as m5d.12xlarge: 3 runs, proving 10959.1 to 11004.0 s, slowest with setup 3.06 h; at 2.712 USD an hour 8.2897 USD; fits the slot 4 h and w_a 32 h
+  low-memory on 8 cores and 64 GiB, as m5d.4xlarge: 2 runs, proving 23574.6 to 23574.8 s, slowest with setup 6.56 h; at 0.904 USD an hour 5.9199 USD; does not fit the slot 4 h and w_a 32 h
   proving bond as deployed 0.005153 ETH = 9.3232 USD at 1809.28 USD an ether
-  that is 1.55 x the proving; 2 x at today's price would be 0.006662 ETH
-  it covers the proving while ether stays above 1169.55 USD
+  that is 1.54 x the proving; 2 x at today's price would be 0.006677 ETH
+  it covers the proving while ether stays above 1172.04 USD
   proving cost as deployed, paid for the principal's challenges in the reserve's token     7.5400 USD
-  that is 1.2511 x the proving, whatever ether's price; a late agent gains at most 1.5133 USD a batch
+  that is 1.2484 x the proving, whatever ether's price; a late agent gains at most 1.5005 USD a batch
   sending the answer on Base, measured                                      0.0045 USD
   forcing it in through Ethereum: 572,345 L1 gas, measured on a fork
   bond at a challenge, proving bond + 10 x forcing at the Ethereum base fee then, read no lower than 2 gwei:
