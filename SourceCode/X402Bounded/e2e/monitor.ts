@@ -18,7 +18,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, anvilBlobs, ethereumBlobs, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
   loadKzg, postBlobs, postingsAbi, proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
-  deploymentRefusal, publishedBuild,
+  deploymentRefusal, publishedBuild, forkRefusal,
   type Check, type Deployment, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
@@ -945,6 +945,57 @@ async function main() {
     const paid = after[0] - before[0] === parseEther("0.1") && after[1] - before[1] === parseEther("0.1");
     check("the monitor restored from its own copy sets the later settlement against the earlier one, recovers the secret and claims the bond on both domains, which freezes both",
       kept.all().length === 2 && rKept.froze && paid && (await A.state(dA)).frozen && (await B.state(dB)).frozen, rKept.reasons.join("; "));
+  }
+
+  section("blocks the sequencer replaces before their data reaches Ethereum");
+  {
+    const dA = await A.delegate(plain);
+    const m = new Monitor([dA], policy(1_000_000n), proving(null));
+    const pay = engine(ids, UNIT);
+    const reorg = (depth: bigint) => dA.chain.request({ method: "anvil_reorg" as never, params: [Number(depth), []] as never });
+    const tip = () => dA.chain.getBlockNumber({ cacheTime: 0 });
+    const held = async () => (await A.state(dA)).holds;
+
+    const p1 = pay(dA, await A.now(), UNIT).s;
+    const s1 = await A.settle(dA, p1);
+    const at1 = await tip();
+    await A.advance(Number(DECIDE) + 10);
+    const r1 = await m.poll();
+    const held1 = await held();
+    await reorg((await tip()) - at1 + 1n);
+    const r2 = await m.poll();
+    check("a settlement whose block the sequencer replaced, with the monitor's challenge of it, leaves the monitor's records and is not challenged again",
+      s1 === "settled" && r1.challenged.length === 1 && held1 === 1 && m.all().length === 0 && r2.challenged.length === 0 && !r2.froze && (await held()) === 0,
+      `${m.all().length} records, ${await held()} held`);
+
+    const p2 = pay(dA, await A.now(), UNIT).s;
+    const s2 = await A.settle(dA, p2);
+    await A.advance(Number(DECIDE) + 10);
+    const r3 = await m.poll();
+    const held3 = await held();
+    await reorg(1n);
+    const gone = (await held()) === 0;
+    const r4 = await m.poll();
+    check("a challenge whose block the sequencer replaced, the settlement standing, is sent again, and holds the domain",
+      s2 === "settled" && r3.challenged.length === 1 && held3 === 1 && gone && m.all().length === 1 && (await held()) === 1 && !r4.froze,
+      `${r4.reasons.join("; ")}`);
+  }
+
+  section("an announced Ethereum fork that changes fee rules");
+  {
+    const dA = await A.delegate(plain);
+    const now = await A.now();
+    const fork = now + 7n * 86400n;
+    const lead = 3n * 86400n;
+    const m = new Monitor([dA], policy(1_000_000n), { ...proving(null), feeForks: [fork], forkLead: lead });
+    const r0 = await m.poll();
+    const longRun = forkRefusal(now, now + 30n * 86400n, [fork], lead);
+    const shortRun = forkRefusal(now, now + 3n * 86400n, [fork], lead);
+    await A.advance(Number(4n * 86400n) + 10);
+    const r1 = await m.poll();
+    check("the principal's check refuses a delegation that runs into the fork's lead, and passes one that ends before it", longRun !== "" && shortRun === "", longRun);
+    check("the monitor freezes the delegation once the fork is within its lead, and not before",
+      !r0.froze && r1.froze && (await A.state(dA)).frozen, r1.reasons.join("; "));
   }
 
   section("the chain shows the same whatever the cause: an adversary with the agent's key and no proof");

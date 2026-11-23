@@ -52,6 +52,52 @@ export interface Settings {
   decideAfter: bigint;
   /** The key openings are sealed to, when the agent hands them to an answerer. */
   sealKey?: Hex;
+  /**
+   * The head the monitor takes as settled, "safe" on an OP Stack chain: the
+   * blocks whose data is on Ethereum, which the sequencer can no longer
+   * replace. The monitor reads and acts on the newest blocks as well, but
+   * what it read above the settled head it reads again on every poll, and a
+   * transaction of its own that left the chain it sends again. "latest"
+   * takes every block as settled at once.
+   */
+  settled?: "latest" | "safe" | "finalized";
+  /**
+   * The times of announced Ethereum forks that change its fee rules, and how
+   * long before each the monitor freezes the delegation, so that every
+   * dispute it could still open ends before the fee factors meet rules they
+   * were not tested on.
+   */
+  feeForks?: readonly bigint[];
+  forkLead?: bigint;
+}
+
+/** One entry the monitor read above the settled head: the table, the key, and what the table held there before. */
+interface Undo {
+  t: "records" | "answered" | "requested" | "expired" | "bound";
+  k: string;
+  had: boolean;
+  old?: unknown;
+  /** The domain and the block the entry was read from, by number and hash. */
+  d: string;
+  block: bigint;
+  hash: Hex;
+}
+
+/** Where an event was read: the domain, and its block by number and hash. */
+interface Where {
+  d: string;
+  block: bigint;
+  hash: Hex;
+}
+
+/** A transaction of the monitor's above the settled head, and what it recorded on sending it. */
+interface Pending {
+  domain: string;
+  hash: Hex;
+  blockHash: Hex;
+  block: bigint;
+  kind: "challenged" | "expired" | "cancelled" | "paid" | "claimed" | "frozen";
+  keys: string[];
 }
 
 /** A settlement as the reserve recorded it. */
@@ -168,6 +214,21 @@ export function extractSecret(settled: readonly { digest: bigint; domain: bigint
  * wait after the request has passed. An answer to the monitor's own
  * challenge is such a request, dated when the answer landed.
  */
+/**
+ * Why a delegation must not be opened to run this long: the first announced
+ * Ethereum fork that changes fee rules and comes before its end, plus the
+ * lead the monitor freezes it by, or "" if there is none. The fee factors
+ * were tested on the rules in force; a delegation stops before new ones.
+ */
+function at(d: Domain, l: { blockNumber: bigint; blockHash: Hex }): Where {
+  return { d: d.name, block: l.blockNumber, hash: l.blockHash };
+}
+
+export function forkRefusal(start: bigint, end: bigint, forks: readonly bigint[], lead: bigint): string {
+  const f = [...forks].sort((a, b) => (a < b ? -1 : 1)).find((x) => x > start && end + lead >= x);
+  return f === undefined ? "" : `the delegation runs to ${end}, within ${lead} s of the fee fork at ${f}`;
+}
+
 export class Monitor {
   private readonly from = new Map<string, bigint>();
   private readonly records = new Map<string, Record>();
@@ -190,6 +251,12 @@ export class Monitor {
   private readonly answerRoots = new Map<string, Hex>();
   private claimed = false;
   private frozen = false;
+  /** What froze the delegation, so an undone claim or freeze lifts only its own. */
+  private frozeBy: "claim" | "freeze" | null = null;
+  /** How to undo what was read above the settled head, newest last: the table, the key, and what it held before. */
+  private tentative: Undo[] = [];
+  private journal: Undo[] | null = null;
+  private pending: Pending[] = [];
   readonly reasons: string[] = [];
 
   constructor(
@@ -253,6 +320,123 @@ export class Monitor {
   /** The records challenged so far. */
   challenges(): string[] {
     return [...this.challenged.keys()];
+  }
+
+  private table(t: Undo["t"]): Map<string, unknown> | Set<string> {
+    return { records: this.records, answered: this.answered, requested: this.requested, expired: this.expired, bound: this.bound }[t] as Map<string, unknown> | Set<string>;
+  }
+
+  /** Notes what an entry read above the settled head replaces, once a key, so it can be undone if its block leaves the chain. */
+  private note(t: Undo["t"], k: string, at: Where): void {
+    if (!this.journal || this.journal.some((u) => u.t === t && u.k === k)) return;
+    const m = this.table(t);
+    const had = m.has(k);
+    this.journal.push({ t, k, had, old: m instanceof Map ? m.get(k) : undefined, d: at.d, block: at.block, hash: at.hash });
+  }
+
+  private put(t: "records" | "answered" | "requested" | "bound", k: string, v: unknown, at: Where): void {
+    this.note(t, k, at);
+    (this.table(t) as Map<string, unknown>).set(k, v);
+  }
+
+  private add(t: "expired", k: string, at: Where): void {
+    this.note(t, k, at);
+    (this.table(t) as Set<string>).add(k);
+  }
+
+  private drop(t: "bound", k: string, at: Where): void {
+    this.note(t, k, at);
+    (this.table(t) as Map<string, unknown>).delete(k);
+  }
+
+  /**
+   * Undoes what was read from a block that is no longer on the chain, and
+   * keeps as final what was read from one now at or below the settled head.
+   * Only block headers are read for this, which every node keeps.
+   */
+  private async rollback(): Promise<void> {
+    const canonical = new Map<string, boolean>();
+    const settled = new Map<string, bigint>();
+    const keep: Undo[] = [];
+    for (const u of [...this.tentative].reverse()) {
+      const d = this.domains.find((x) => x.name === u.d) as Domain;
+      const at = `${u.d}/${u.block}`;
+      let ok = canonical.get(at);
+      if (ok === undefined) {
+        const b = await d.chain.getBlock({ blockNumber: u.block }).catch(() => undefined);
+        ok = b !== undefined && b.hash === u.hash;
+        canonical.set(at, ok);
+      }
+      if (!ok) {
+        const m = this.table(u.t);
+        if (m instanceof Set) {
+          if (!u.had) m.delete(u.k);
+        } else if (u.had) m.set(u.k, u.old);
+        else m.delete(u.k);
+        continue;
+      }
+      if (!settled.has(u.d)) settled.set(u.d, await this.settledHead(d));
+      if (u.block > (settled.get(u.d) as bigint)) keep.unshift(u);
+    }
+    this.tentative = keep;
+  }
+
+  private async settledHead(d: Domain): Promise<bigint> {
+    const latest = await d.chain.getBlockNumber({ cacheTime: 0 });
+    const tag = this.settings.settled ?? "safe";
+    if (tag === "latest") return latest;
+    const n = (await d.chain.getBlock({ blockTag: tag })).number as bigint;
+    return n < latest ? n : latest;
+  }
+
+  /** Records a transaction of the monitor's, to undo what it recorded if the transaction leaves the chain before it settles. */
+  private track(d: Domain, receipt: { transactionHash: Hex; blockHash: Hex; blockNumber: bigint }, kind: Pending["kind"], keys: string[] = []): void {
+    if ((this.settings.settled ?? "safe") === "latest") return;
+    this.pending.push({ domain: d.name, hash: receipt.transactionHash, blockHash: receipt.blockHash, block: receipt.blockNumber, kind, keys });
+  }
+
+  private undo(p: Pending): void {
+    for (const k of p.keys) {
+      if (p.kind === "challenged") {
+        this.challenged.delete(k);
+        if (this.joinedAnswered.delete(k)) {
+          this.answered.delete(k);
+          this.requested.delete(k);
+        }
+      } else if (p.kind === "expired") this.expired.delete(k);
+      else if (p.kind === "cancelled") this.cancelled.delete(k);
+      else if (p.kind === "paid") this.paid.delete(k);
+    }
+    if (p.kind === "claimed") {
+      this.claimed = false;
+      if (this.frozeBy === "claim") {
+        this.frozen = false;
+        this.frozeBy = null;
+      }
+    }
+    if (p.kind === "frozen" && this.frozeBy === "freeze") {
+      this.frozen = false;
+      this.frozeBy = null;
+    }
+  }
+
+  /**
+   * Checks each of the monitor's transactions above the settled head: one
+   * that left the chain, or came back reverted, is undone, so the step that
+   * sent it sends it again; one now at or below the settled head is final.
+   */
+  private async recheck(): Promise<void> {
+    const keep: Pending[] = [];
+    for (const p of this.pending) {
+      const d = this.domains.find((x) => x.name === p.domain) as Domain;
+      const r = await d.chain.getTransactionReceipt({ hash: p.hash }).catch(() => undefined);
+      if (!r || r.status !== "success") {
+        this.undo(p);
+        continue;
+      }
+      if (r.blockNumber > (await this.settledHead(d))) keep.push({ ...p, block: r.blockNumber, blockHash: r.blockHash });
+    }
+    this.pending = keep;
   }
 
   private domainOf(r: Record): Domain {
@@ -393,11 +577,28 @@ export class Monitor {
   }
 
   private async read(): Promise<void> {
+    await this.rollback();
     for (const d of this.domains) {
-      const head = await d.chain.getBlockNumber({ cacheTime: 0 });
+      const latest = await d.chain.getBlockNumber({ cacheTime: 0 });
+      const safe = await this.settledHead(d);
       const fromBlock = this.from.get(d.name) ?? 0n;
-      if (fromBlock > head) continue;
-      const range = { fromBlock, toBlock: head };
+      if (fromBlock <= safe) await this.readRange(d, fromBlock, safe);
+      if (safe + 1n > fromBlock) this.from.set(d.name, safe + 1n);
+      const above = this.from.get(d.name) ?? 0n;
+      if (above <= latest) {
+        this.journal = this.tentative;
+        try {
+          await this.readRange(d, above, latest);
+        } finally {
+          this.journal = null;
+        }
+      }
+    }
+  }
+
+  private async readRange(d: Domain, fromBlock: bigint, toBlock: bigint): Promise<void> {
+    {
+      const range = { fromBlock, toBlock };
       const settled = await d.chain.getContractEvents({ address: d.reserve, abi: reserveAbi, eventName: "Settled", args: { id: d.delegation }, ...range });
       const transcripts = await d.chain.getContractEvents({ address: d.reserve, abi: reserveAbi, eventName: "Transcript", args: { id: d.delegation }, ...range });
       for (const l of settled) {
@@ -408,7 +609,7 @@ export class Monitor {
           domain: d.name, digest: a.digest, amount: a.amount, payee: getAddress(a.payee), time: a.time, opening: a.opening,
           elems: t ? [...((t.args as { elems: readonly bigint[] }).elems)] : [], epoch,
         };
-        this.records.set(key(r), r);
+        this.put("records", key(r), r, at(d, l));
       }
       if (d.dispute) {
         const answers = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Answered", args: { id: d.delegation }, ...range });
@@ -416,11 +617,11 @@ export class Monitor {
           const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
           const k = key({ domain: d.name, digest: (l.args as { digest: bigint }).digest });
           if (this.joinedAnswered.has(k)) continue;
-          this.answered.set(k, b.timestamp);
-          if (this.challenged.has(k) && !this.requested.has(k)) this.requested.set(k, b.timestamp);
+          this.put("answered", k, b.timestamp, at(d, l));
+          if (this.challenged.has(k) && !this.requested.has(k)) this.put("requested", k, b.timestamp, at(d, l));
         }
         const expiries = await d.chain.getContractEvents({ address: d.dispute, abi: disputeAbi, eventName: "Expired", args: { id: d.delegation }, ...range });
-        for (const l of expiries) this.expired.add(key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }));
+        for (const l of expiries) this.add("expired", key({ domain: d.name, digest: (l.args as { digest: bigint }).digest }), at(d, l));
         const pd = await this.postings(d);
         const posted = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "SealedDelivered", args: { id: d.delegation }, ...range });
         const c = await this.context(d);
@@ -432,12 +633,12 @@ export class Monitor {
         for (const l of bindings) {
           const a = l.args as { root: Hex; proofHash: Hex };
           const b = await d.chain.getBlock({ blockNumber: l.blockNumber });
-          this.bound.set(`${d.name}/${a.root}`, { domain: d.name, proofHash: a.proofHash, at: b.timestamp });
+          this.put("bound", `${d.name}/${a.root}`, { domain: d.name, proofHash: a.proofHash, at: b.timestamp }, at(d, l));
         }
         const proofs = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "ProofPosted", args: { id: d.delegation }, ...range });
         for (const l of proofs) {
           const posted = (l.args as { proofHash: Hex }).proofHash.toLowerCase();
-          for (const [k, v] of this.bound) if (v.domain === d.name && v.proofHash.toLowerCase() === posted) this.bound.delete(k);
+          for (const [k, v] of [...this.bound]) if (v.domain === d.name && v.proofHash.toLowerCase() === posted) this.drop("bound", k, at(d, l));
           const a = l.args as { proofHash: Hex; poster: Address };
           const bytes = await this.postedProof(d, a.proofHash, a.poster);
           if (bytes) await this.deliverProof(bytes);
@@ -445,7 +646,6 @@ export class Monitor {
         const blobs = await d.chain.getContractEvents({ address: pd, abi: postingsAbi, eventName: "BlobsPosted", args: { id: d.delegation }, ...range });
         for (const l of blobs) await this.postedBlobs(d, l.args as { root: Hex; blobsHash: Hex; poster: Address });
       }
-      this.from.set(d.name, head + 1n);
     }
   }
 
@@ -558,6 +758,7 @@ export class Monitor {
       if (r) this.challenged.set(key(r), e.args.deadline);
     }
     for (const r of open) if (!this.challenged.has(key(r))) throw new Error(`challenge of ${key(r)} left no event`);
+    this.track(d, receipt, "challenged", open.map(key));
   }
 
   /**
@@ -596,6 +797,7 @@ export class Monitor {
       : parseEventLogs({ abi: disputeAbi, logs: receipt.logs, eventName: "Challenged" }).find((e) => e.args.digest === r.digest)?.args.deadline;
     if (deadline === undefined) throw new Error(`challenge of ${key(r)} left no event`);
     this.challenged.set(key(r), deadline);
+    this.track(d, receipt, "challenged", [key(r)]);
     if (joined) {
       const c = await d.chain.readContract({ address: dispute, abi: disputeAbi, functionName: "challengeOf", args: [d.delegation, r.digest], blockNumber: receipt.blockNumber });
       if (c.status === ANSWERED) {
@@ -635,6 +837,7 @@ export class Monitor {
         });
         const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
         if (receipt.status !== "success") continue;
+        this.track(d, receipt, "paid", [b]);
       } catch {
         // Past the delivery wait after the request, the payment is refused
         // and the request lapses; step 3 still freezes if nothing came.
@@ -685,6 +888,7 @@ export class Monitor {
       });
       const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
       if (receipt.status !== "success") return false;
+      this.track(d, receipt, "cancelled", [key(r)]);
     } catch {
       return false;
     }
@@ -707,6 +911,7 @@ export class Monitor {
         const receipt = await d.chain.waitForTransactionReceipt({ hash: await d.wallet.writeContract(request) });
         if (receipt.status === "success") {
           for (const r of rs) this.cancelled.add(key(r));
+          this.track(d, receipt, "cancelled", rs.map(key));
           return rs;
         }
       } catch {
@@ -744,7 +949,8 @@ export class Monitor {
             account: d.wallet.account, address: d.reserve, abi: reserveAbi, functionName: "claim", args: [d.delegation, [secret[0], secret[1]]],
           });
           const hash = await d.wallet.writeContract(request);
-          await d.chain.waitForTransactionReceipt({ hash });
+          const receipt = await d.chain.waitForTransactionReceipt({ hash });
+          this.track(d, receipt, "claimed");
           any = true;
         } catch {
           continue;
@@ -758,14 +964,24 @@ export class Monitor {
     return false;
   }
 
+  /** The announced fee fork the delegation must be frozen for now, if one is within the lead. */
+  private async forkDue(): Promise<bigint | undefined> {
+    const forks = this.settings.feeForks ?? [];
+    if (forks.length === 0 || this.domains.length === 0) return undefined;
+    const now = await this.now(this.domains[0]);
+    const lead = this.settings.forkLead ?? 0n;
+    return forks.find((f) => now < f && now + lead >= f);
+  }
+
   private async freezeAll(): Promise<void> {
     await Promise.all(
       this.domains.map(async (d) => {
         const hash = await d.wallet.writeContract({ address: d.reserve, abi: reserveAbi, functionName: "freeze", args: [d.delegation] });
-        await d.chain.waitForTransactionReceipt({ hash });
+        this.track(d, await d.chain.waitForTransactionReceipt({ hash }), "frozen");
       }),
     );
     this.frozen = true;
+    this.frozeBy = "freeze";
   }
 
   /**
@@ -778,6 +994,7 @@ export class Monitor {
    * freezes the delegation on every domain.
    */
   async poll(): Promise<{ total: bigint; challenged: Record[]; froze: boolean; reasons: string[] }> {
+    await this.recheck();
     await this.read();
     const total = this.total();
     const challenged: Record[] = [];
@@ -787,9 +1004,17 @@ export class Monitor {
       this.reasons.push(...reasons);
       const was = this.frozen;
       this.frozen = true;
+      if (!was) this.frozeBy = "claim";
       return { total, challenged, froze: !was, reasons };
     }
     if (this.frozen) return { total, challenged, froze: false, reasons };
+    const fork = await this.forkDue();
+    if (fork !== undefined) {
+      reasons.push(`an Ethereum fork that changes fee rules comes at ${fork}: frozen before it`);
+      await this.freezeAll();
+      this.reasons.push(...reasons);
+      return { total, challenged, froze: true, reasons };
+    }
     const backed = await this.backedSet();
     const breaches = await this.breaches(backed);
     const over = this.overBudget(backed);
@@ -835,7 +1060,7 @@ export class Monitor {
         const deadline = this.challenged.get(k) as bigint;
         if (deadline !== 0n && now > deadline) {
           const hash = await d.wallet.writeContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "expire", args: [d.delegation, r.digest] });
-          await d.chain.waitForTransactionReceipt({ hash });
+          this.track(d, await d.chain.waitForTransactionReceipt({ hash }), "expired", [k]);
           this.expired.add(k);
           reasons.push(`${k}: challenged and not answered`);
           freeze = true;
@@ -889,7 +1114,7 @@ export class Monitor {
         from: [...this.from], records: [...this.records], openings: [...this.openings], backing: [...this.backing],
         challenged: [...this.challenged], answered: [...this.answered], expired: [...this.expired], joinedAnswered: [...this.joinedAnswered],
         requested: [...this.requested], cancelled: [...this.cancelled], bound: [...this.bound], paid: [...this.paid],
-        claimed: this.claimed, frozen: this.frozen,
+        claimed: this.claimed, frozen: this.frozen, frozeBy: this.frozeBy, pending: this.pending, tentative: this.tentative,
       },
       (_k, v) => (typeof v === "bigint" ? { $n: v.toString() } : v),
     );
@@ -920,6 +1145,9 @@ export class Monitor {
     loadSet(this.paid, j.paid);
     this.claimed = j.claimed;
     this.frozen = j.frozen;
+    this.frozeBy = j.frozeBy ?? null;
+    this.pending = j.pending ?? [];
+    this.tentative = j.tentative ?? [];
   }
 
   /** How many payments' fields the principal holds in the clear. */

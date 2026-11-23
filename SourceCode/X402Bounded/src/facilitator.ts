@@ -44,11 +44,20 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
   /** Sends from the one signer go out in order, so concurrent settlements do not share a nonce. */
   private sending: Promise<unknown> = Promise.resolve();
 
+  /**
+   * The head a settlement must reach before the payee is told it is paid.
+   * "latest" answers as soon as the settlement is in a block, which the
+   * domain's sequencer can still replace until its data is on Ethereum; the
+   * payee then bears that. "safe" waits until it is, and sends the same
+   * signed settlement again if it left the chain on the way, so the agent's
+   * unit is spent by that payment alone.
+   */
   constructor(
     private readonly wallet: Wallet,
     private readonly chain: PublicClient,
     reserves: readonly `0x${string}`[],
     private readonly genuine: GenuineReserve,
+    private readonly settled: { head: "latest" | "safe" | "finalized"; pollMs: number; tries: number } = { head: "latest", pollMs: 2000, tries: 3 },
   ) {
     this.reserves = new Set(reserves.map((r) => getAddress(r)));
   }
@@ -91,16 +100,48 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
       return { success: false, errorReason: checked.invalidReason, errorMessage: checked.invalidMessage, transaction: "", network: req.network };
     }
     const p = checked.p;
-    const sent = this.sending.then(() =>
-      this.wallet.writeContract({ address: p.reserve, abi: reserveAbi, functionName: "settleLogged", args: this.args(p) }),
-    );
-    this.sending = sent.catch(() => undefined);
-    let hash: `0x${string}`;
-    try {
-      hash = await sent;
-    } catch (e) {
-      return { success: false, errorReason: "reserve_refused", errorMessage: revertName(e), transaction: "", network: req.network, payer: checked.payer };
+    for (let tries = 0; ; tries++) {
+      const sent = this.sending.then(() =>
+        this.wallet.writeContract({ address: p.reserve, abi: reserveAbi, functionName: "settleLogged", args: this.args(p) }),
+      );
+      this.sending = sent.catch(() => undefined);
+      let hash: `0x${string}`;
+      try {
+        hash = await sent;
+      } catch (e) {
+        return { success: false, errorReason: "reserve_refused", errorMessage: revertName(e), transaction: "", network: req.network, payer: checked.payer };
+      }
+      const out = await this.recorded(hash, p, req, checked.payer);
+      if (!out.success || this.settled.head === "latest") return out;
+      const at = (await this.chain.getTransactionReceipt({ hash })).blockNumber;
+      if (await this.reachesHead(hash)) return out;
+      // The sequencer may have put the same settlement back in another block.
+      const back = await this.chain.getContractEvents({
+        address: p.reserve, abi: reserveAbi, eventName: "Settled", args: { id: BigInt(p.delegation) }, fromBlock: at > 64n ? at - 64n : 0n,
+      });
+      const same = back.find((l) => l.args.digest === BigInt(p.digest));
+      if (same && (await this.reachesHead(same.transactionHash))) return { ...out, transaction: same.transactionHash };
+      if (tries + 1 >= this.settled.tries) return { ...out, success: false, errorReason: "settlement_undone" };
+      const again = await this.check(payment, req);
+      if ("invalidReason" in again) return { success: false, errorReason: "settlement_undone", errorMessage: again.invalidMessage, transaction: hash, network: req.network, payer: checked.payer };
     }
+  }
+
+  /** Waits until the transaction's block is at or below the settled head; false if the transaction left the chain first. */
+  private async reachesHead(hash: `0x${string}`): Promise<boolean> {
+    for (;;) {
+      const r = await this.chain.getTransactionReceipt({ hash }).catch(() => undefined);
+      if (!r || r.status !== "success") return false;
+      const head = (await this.chain.getBlock({ blockTag: this.settled.head })).number as bigint;
+      if (r.blockNumber <= head) {
+        const b = await this.chain.getBlock({ blockNumber: r.blockNumber });
+        return b.hash === r.blockHash;
+      }
+      await new Promise((ok) => setTimeout(ok, this.settled.pollMs));
+    }
+  }
+
+  private async recorded(hash: `0x${string}`, p: BoundedPayload, req: PaymentRequirements, payer: string): Promise<SettleResponse> {
     const receipt = await this.chain.waitForTransactionReceipt({ hash });
     const settled = parseEventLogs({ abi: reserveAbi, eventName: "Settled", logs: receipt.logs }).some(
       (l) =>
@@ -111,9 +152,9 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
         getAddress(l.args.payee) === p.payee,
     );
     if (receipt.status !== "success" || !settled) {
-      return { success: false, errorReason: "settlement_not_recorded", transaction: hash, network: req.network, payer: checked.payer };
+      return { success: false, errorReason: "settlement_not_recorded", transaction: hash, network: req.network, payer };
     }
-    return { success: true, transaction: hash, network: req.network, payer: checked.payer, amount: p.amount };
+    return { success: true, transaction: hash, network: req.network, payer, amount: p.amount };
   }
 
   private args(p: BoundedPayload) {

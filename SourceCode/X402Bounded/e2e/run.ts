@@ -256,6 +256,47 @@ async function main() {
   await chain.request({ method: "evm_mine" as never, params: [] as never });
   const next = await paid("/data");
   check("a new rate window settles again", next.status === 200);
+
+  // A settlement the sequencer drops before its data reaches Ethereum. A
+  // facilitator that waits for the safe head sends the same signed payment
+  // again, so the agent's unit is spent by that one payment alone.
+  const safeScheme = new BoundedEvmFacilitator(facWallet, chain, [reserve], { build, permit2: ZERO }, { head: "safe", pollMs: 50, tries: 3 });
+  const askR = await fetch(url);
+  const requiredR = decodePaymentRequiredHeader(askR.headers.get("PAYMENT-REQUIRED") ?? "");
+  await askR.text();
+  const pr = await client.createPaymentPayload(requiredR);
+  const digestR = BigInt((pr.payload as { digest: string }).digest);
+  const formed = source.openings.length;
+  const settledR = async () =>
+    (await chain.getContractEvents({ address: reserve, abi: reserveFull, eventName: "Settled", args: { id }, fromBlock: 0n })).filter(
+      (l) => (l.args as { digest: bigint }).digest === digestR,
+    );
+  let done = false;
+  const going = safeScheme.settle(pr, pr.accepted as PaymentRequirements).finally(() => {
+    done = true;
+  });
+  let landed: bigint | null = null;
+  let firstHash = "";
+  while (landed === null) {
+    const l = await settledR();
+    if (l.length > 0) {
+      landed = l[0].blockNumber;
+      firstHash = l[0].transactionHash;
+    }
+    else await new Promise((ok) => setTimeout(ok, 20));
+  }
+  const tip = await chain.getBlockNumber({ cacheTime: 0 });
+  await chain.request({ method: "anvil_reorg" as never, params: [Number(tip - landed + 1n), []] as never });
+  const gone = (await settledR()).length === 0;
+  while (!done) {
+    await chain.request({ method: "evm_mine" as never, params: [] as never });
+    await new Promise((ok) => setTimeout(ok, 10));
+  }
+  const out = await going;
+  const after = await settledR();
+  check("a settlement dropped before the safe head is sent again unchanged and settles once, with no new payment formed",
+    gone && out.success && after.length === 1 && after[0].transactionHash !== firstHash && source.openings.length === formed,
+    `${out.errorReason ?? "settled"} by a second transaction, ${after.length} on chain`);
   await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "freeze", args: [id] }));
   const frozen = await paid("/data");
   check("after the principal's freeze, refused", frozen.status === 402, lastReason());

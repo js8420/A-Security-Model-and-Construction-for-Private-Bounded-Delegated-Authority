@@ -56,6 +56,12 @@ W_RATE = DAY
 # margin, so it still covers an answer if ether falls to 1 / MARGIN of its
 # price at deployment.
 VCPU_HOUR_64 = 3.616
+# The low-memory setting needs 64 GB. The m5d with 64 GiB, m5d.4xlarge, has
+# 8 physical cores, fewer than the 20 that setting kept busy, so its time
+# there is not known; the smallest m5d with both, m5d.12xlarge, has 24
+# cores and 192 GiB. On-demand, US East, Amazon's price list.
+HOUR_4X = 0.904
+HOUR_12X = 2.712
 CURRENCY_MARGIN = 2.0
 # The most settlements of one batch, so the most deliveries one batch's
 # deposit refunds.
@@ -148,6 +154,7 @@ RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
+LOW_SECONDS = max(p for _, _, p, low in RUNS if low)
 # The proving bond the contract is deployed with, in ether, read from the
 # deployment library so the paper and the contract cannot differ. Ether's price
 # moves, so the run reports the margin the deployed bond gives at today's price
@@ -458,6 +465,8 @@ if __name__ == "__main__":
     print("THE CHALLENGER'S BOND AND THE BOUNTY")
     print("=" * 78)
     print(f"  proving one answer, the slower default run, {PROVE_SECONDS:.1f} s at {VCPU_HOUR_64} USD an hour {PROVING:10.4f} USD")
+    print(f"  the low-memory setting, {LOW_SECONDS:.1f} s, on m5d.12xlarge at {HOUR_12X} USD an hour {HOUR_12X * LOW_SECONDS / 3600:10.4f} USD")
+    print(f"  the m5d with 64 GiB, m5d.4xlarge, at {HOUR_4X} USD an hour: {HOUR_4X * LOW_SECONDS / 3600:.4f} USD for the same time, which its 8 cores would not keep")
     print(f"  proving bond as deployed {PROVING_BOND_ETH:.6f} ETH = {BOUNTY:.4f} USD at {ETH_USD} USD an ether")
     print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
     print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")

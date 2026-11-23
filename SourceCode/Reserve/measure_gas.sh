@@ -41,6 +41,14 @@ for rpc in ${L1_RPC:-} https://ethereum-rpc.publicnode.com https://eth.drpc.org 
         break
     fi
 done
+# The reserve against USDC's own code on a fork of Base, beside the plain
+# token, and what the issuer's blacklist does to a reserve and a payee.
+for rpc in ${L2_RPC:-} https://base-rpc.publicnode.com https://mainnet.base.org https://base.drpc.org https://1rpc.io/base; do
+    if L2_FORK=$rpc forge test --match-contract UsdcForkGas -vv > "$hist/run_${tag}_usdc.txt" 2>&1; then
+        grep -E "fork block|Open|Settle|plain token|USDC|blacklisted" "$hist/run_${tag}_usdc.txt"
+        break
+    fi
+done
 grep -E "Suite result|^Ran |FAIL|rror" "$hist/run_${tag}_forge.txt" || { echo "forge test printed no results:"; tail -20 "$hist/run_${tag}_forge.txt"; exit 1; }
 
 key=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80

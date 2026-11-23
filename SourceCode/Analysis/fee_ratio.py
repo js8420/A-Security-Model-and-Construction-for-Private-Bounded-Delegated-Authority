@@ -16,6 +16,8 @@ blob base fee in the posting window. The fee factors are chosen from these.
                                            how often the excess is above the stake less the bounty
   python3 fee_ratio.py london DATA_DIR     the bond's factor on Ethereum from London to Dencun,
                                            August 2021 to March 2024, which fetch also downloads
+  python3 fee_ratio.py settings DATA_DIR   Base's factor in each period between the changes
+                                           Base made to its fee settings
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
@@ -23,6 +25,7 @@ analysis is the result. The first fetch fixes the last block and records it.
 The oos and blobs modes also look up, once, the block at the split time and
 the time of one Ethereum block in every 900, and record them in DATA_DIR.
 """
+import bisect
 import heapq
 import json
 import math
@@ -36,18 +39,24 @@ from array import array
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
-START_TIME = 1710374400  # 2024-03-14 00:00 UTC, after Dencun on both chains
 CHUNK = 1024
 CHAINS = {
     "ethereum": {
         "rpcs": ["https://ethereum-rpc.publicnode.com", "https://eth.drpc.org", "https://eth.llamarpc.com", "https://1rpc.io/eth"],
         "block_seconds": 12,
         "blob": True,
+        # From 14 March 2024, after Dencun on both chains.
+        "first": 19_429_556,
+        "last": 26_348_992,
     },
     "base": {
         "rpcs": ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org", "https://1rpc.io/base"],
         "block_seconds": 2,
         "blob": False,
+        # Base made its blocks 200 ms long from block 53,556,127 (Denim, 5
+        # November 2026); the history stops before it, at two-second blocks.
+        "first": 11_792_527,
+        "last": 53_549_834,
     },
     # Ethereum from the London upgrade, the first block with a base fee, to
     # the block before the Dencun-era data above begins.
@@ -157,12 +166,8 @@ def fetch(data):
         if os.path.exists(meta_path):
             meta = json.load(open(meta_path))
         else:
-            if "first" in c:
-                first = c["first"]
-                last = json.load(open(paths(data, c["until"])[1]))["first"] - 1
-            else:
-                first = block_at(c["rpcs"], START_TIME)
-                last = int(rpc(c["rpcs"], "eth_blockNumber", []), 16)
+            first = c["first"]
+            last = c["last"] if "last" in c else json.load(open(paths(data, c["until"])[1]))["first"] - 1
             meta = {"first": first, "last": last, "fixed_at": int(time.time())}
             json.dump(meta, open(meta_path, "w"))
         first, last = meta["first"], meta["last"]
@@ -719,8 +724,63 @@ def blobs(data, eth_usd=None, stake_usd=None, bounty_usd=None):
     print()
 
 
+# Base changed its fee settings through its system configuration, not by a
+# fork: the minimum base fee and the EIP-1559 denominator and elasticity,
+# per Base's configuration changelog. Each date, at 00:00 UTC, starts a
+# period. Denim, on 5 November 2026, comes after the fetched history.
+BASE_GENESIS_TIME = 1686789347
+BASE_SETTINGS = [
+    ("2025-12-04", 1764806400, "minimum base fee 0.0002 gwei"),
+    ("2025-12-18", 1766016000, "minimum base fee 0.0005 gwei"),
+    ("2026-01-22", 1769040000, "minimum base fee 0.001 gwei"),
+    ("2026-02-02", 1769990400, "minimum base fee 0.002 gwei"),
+    ("2026-02-04", 1770163200, "denominator 125"),
+    ("2026-02-19", 1771459200, "minimum base fee 0.005 gwei"),
+    ("2026-03-25", 1774396800, "denominator 100, elasticity 5"),
+]
+
+
+def settings(data):
+    """The gas pool and the posting deposit in each period between Base's
+    fee-setting changes: every gas pool window, overlapping, and the deposit's
+    windows that do not overlap, each by the period its window starts in."""
+    meta, fee, _ = load(data, "base")
+    bs = CHAINS["base"]["block_seconds"]
+    floor, factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
+    starts = [0] + [(t - BASE_GENESIS_TIME) // bs - meta["first"] for _, t, _ in BASE_SETTINGS]
+    names = ["from Dencun"] + [f"from {d}, {what}" for d, _, what in BASE_SETTINGS]
+
+    def period(i):
+        return bisect.bisect_right(starts, i) - 1
+
+    print("THE BASE FACTOR IN EACH PERIOD BETWEEN BASE'S FEE-SETTING CHANGES")
+    print("=" * 78)
+    print(f"  blocks {meta['first']:,} to {meta['last']:,}; floor {floor / 1e9:g} gwei, deployed factor {factor}")
+    a = math.ceil(T_ANS_HOURS * 3600 / bs)
+    b = math.ceil(W_A_HOURS * 3600 / bs)
+    gas = [[0, 0.0, 0] for _ in starts]
+    for r, i in every(fee, a, b, 0, floor):
+        g = gas[period(i)]
+        g[0] += 1
+        g[2] += r > factor
+        g[1] = max(g[1], r)
+    b2 = math.ceil(W_P_HOURS * 3600 / bs)
+    dep = [[0, 0.0, 0] for _ in starts]
+    for i, r, _ in disjoint(fee, bs, 0, b2, 0, CHUNKS, floor):
+        g = dep[period(i)]
+        g[0] += 1
+        g[2] += r > factor
+        g[1] = max(g[1], r)
+    for n, (name, g, d) in enumerate(zip(names, gas, dep)):
+        first = meta["first"] + starts[n]
+        print(f"  {name}, block {first:,}:")
+        print(f"    gas pool, every window: {g[0]:,} windows, largest {g[1]:.3f}, above the factor {g[2]:,}")
+        print(f"    posting deposit, windows that do not overlap: {d[0]:,}, largest {d[1]:.3f}, above the factor {d[2]:,}")
+    print()
+
+
 if __name__ == "__main__":
-    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london}
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london, "settings": settings}
     if len(sys.argv) < 3 or sys.argv[1] not in modes or (len(sys.argv) != 3 and sys.argv[1] != "blobs") or len(sys.argv) not in (3, 6):
         raise SystemExit(__doc__)
     modes[sys.argv[1]](*sys.argv[2:])

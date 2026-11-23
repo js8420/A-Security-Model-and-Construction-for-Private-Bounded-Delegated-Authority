@@ -8,7 +8,6 @@
 set -euo pipefail
 tag=${1:?tag}
 data=${2:?data dir}
-[ -f "$data/ethereum/meta.json" ] && [ -f "$data/base/meta.json" ] || { echo "no fetched fee history in $data"; exit 1; }
 here=$(cd "$(dirname "$0")" && pwd)
 hist=$(cd "$here/../../WorkingHistory" && pwd)
 cd "$here"
@@ -16,8 +15,10 @@ price=$(grep -E 'ETH / USD, Chainlink' "$hist/run_${tag}_posting.txt" | awk '{pr
 stake=$(grep -oE 'is less by the stake, [0-9]+\.[0-9]+' "$hist/run_${tag}_bond.txt" | awk '{print $NF}')
 bounty=$(grep -oE 'bond plus the bounty, [0-9]+\.[0-9]+;' "$hist/run_${tag}_bond.txt" | tr -d ';' | awk '{print $NF}')
 [ -n "$price" ] && [ -n "$stake" ] && [ -n "$bounty" ] || { echo "no price, stake or bounty in run_${tag}_posting.txt and run_${tag}_bond.txt"; exit 1; }
+mkdir -p "$data"
 python3 fee_ratio.py fetch "$data"
-for mode in floors oos london; do
+[ -f "$data/ethereum/meta.json" ] && [ -f "$data/base/meta.json" ] || { echo "no fetched fee history in $data"; exit 1; }
+for mode in floors oos london settings; do
     python3 fee_ratio.py $mode "$data" | tee "$hist/run_${tag}_$mode.txt"
 done
 python3 fee_ratio.py blobs "$data" "$price" "$stake" "$bounty" | tee "$hist/run_${tag}_blobs.txt"
