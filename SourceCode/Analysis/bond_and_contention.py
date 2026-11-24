@@ -41,11 +41,11 @@ W_D = 8.0
 # forced transaction sent at once lands inside it, plus the margin.
 W_P = 30.0
 # Forced inclusion: the twelve-hour sequencing window, then two hours for the
-# deposit to be included on Ethereum and for that block to be finalized, two
-# epochs of 32 slots, since only a block derived from finalized Ethereum data
-# cannot be undone.
+# deposit to be included on Ethereum and for that block to be finalized, at
+# most three epochs of 32 slots after it, since only a block derived from
+# finalized Ethereum data cannot be undone.
 DELTA_F = 12.0 + 2.0
-FINALITY_SLOTS = 64
+FINALITY_SLOTS = 96
 MARGIN_SLOTS = int(2 * 3600 / 12) - FINALITY_SLOTS
 SIGMA_X = 12.0 + 0.5
 THETA = 1.0

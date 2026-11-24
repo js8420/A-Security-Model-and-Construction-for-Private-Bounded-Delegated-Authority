@@ -139,20 +139,20 @@ ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
 
 PROPOSERS THAT EXCLUDE A FORCED TRANSACTION
 ==============================================================================
-   including share        P(out for 536 slots)   slots for 2^-40   minutes
-             0.540                   1.73e-181                36       7.2
-             0.210                    1.34e-55               118      23.6
-             0.100                    2.98e-25               264      52.8
-             0.052                    3.71e-13               520     104.0
+   including share        P(out for 504 slots)   slots for 2^-40   minutes
+             0.540                   1.07e-170                36       7.2
+             0.210                    2.54e-52               118      23.6
+             0.100                    8.67e-24               264      52.8
+             0.052                    2.05e-12               520     104.0
 
 BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN
 ==============================================================================
-  blocks in the margin, less the 64 that finalize the inclusion: 536
+  blocks in the margin, less the 96 that finalize the inclusion: 504
     adversary gains, USD    tip that makes it unprofitable, USD
-                   43.20                                 0.0806
-                  432.00                                 0.8060
-                4,320.00                                 8.0597
-               43,200.00                                80.5970
+                   43.20                                 0.0857
+                  432.00                                 0.8571
+                4,320.00                                 8.5714
+               43,200.00                                85.7143
   A block built by anyone the bribe does not reach includes it at once,
   so every such block only shortens the delay.
 
@@ -160,13 +160,13 @@ BRIBING BUILDERS TO EXCLUDE A BATCH POSTED AS BLOBS: 83 BLOBS IN 14 TRANSACTIONS
 ==============================================================================
   Keeping any one of the 14 transactions out keeps the posting incomplete, so each
   carries the tip T and the answerer pays 14 T once they land. Posting with the same
-  536 blocks to spare, each tip must exceed the gain over 536.
+  504 blocks to spare, each tip must exceed the gain over 504.
     adversary gains, USD   tip on each, USD   all 14 tips, USD
-                    7.54             0.0141             0.1969
-                   43.20             0.0806             1.1284
-                  432.00             0.8060            11.2836
-                4,320.00             8.0597           112.8358
-               43,200.00            80.5970         1,128.3582
+                    7.54             0.0150             0.2094
+                   43.20             0.0857             1.2000
+                  432.00             0.8571            12.0000
+                4,320.00             8.5714           120.0000
+               43,200.00            85.7143         1,200.0000
   Excluding the postings slashes the answerer's stake, which burns but for the bounty,
   7.54: that bounty is all an adversary outside the agent's side gains.
 
