@@ -1,0 +1,8 @@
+THE BASE FACTOR ON 200 MS BLOCKS, FROM DENIM
+==============================================================================
+  blocks 53,556,127 to 61,407,701, 18.2 days; floor 0.01 gwei, deployed factor 4
+  gas pool, every window: 7,275,575 windows, largest 0.500, above the factor 0
+  posting deposit, windows that do not overlap: 14, largest 0.500, above the factor 0
+  blocks with the base fee at or below the floor: 98.9%
+  base fee: lowest 0.005 gwei, highest 0.0406072 gwei
+

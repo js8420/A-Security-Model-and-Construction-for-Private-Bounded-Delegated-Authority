@@ -1,0 +1,10 @@
+BASE FEE SETTINGS FROM THE NEWEST BLOCK
+==============================================================================
+  block 61732183, extra data 0x01000003e80000000500000000004c4b40
+  denominator 1000, elasticity 5, minimum base fee 5000000 wei
+  blocks a second over the last 300 blocks 5.000
+  fastest rise a second 2.016%, tested 2.02%
+  block gas limit 40000000, largest dispute transaction 14462812
+  L1Block: base fee scalar 2269, blob base fee scalar 1055762,
+           operator fee scalar 0, operator fee constant 0, DA footprint gas scalar 148
+  verdict: within what the factors were tested on

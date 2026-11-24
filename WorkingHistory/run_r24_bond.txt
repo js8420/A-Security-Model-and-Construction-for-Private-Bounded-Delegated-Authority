@@ -1,0 +1,172 @@
+THE GROTH16 RUNS, SECONDS
+==============================================================================
+  out_s9_batch_a               default      setup    23.3  prove    6000.0
+  out_s9_batch_b               default      setup    23.3  prove    5990.1
+  out_s9_batch_low_a           low memory   setup    23.1  prove    9674.6
+  out_s9_batch_low_b           low memory   setup    23.1  prove    9667.3
+  out_s9m16_a                  default      setup    26.0  prove    5982.3
+  out_s9m16_b                  default      setup    26.0  prove    6012.8
+  out_s9m16_c                  default      setup    26.0  prove    5999.7
+  one answer for two batch proofs:
+  out_s9_agg_a                 default      setup    22.6  prove   11319.4
+  out_s9_agg_b                 default      setup    22.3  prove   11345.9
+  the second batch adds 5333.1 s to the slower default run, 88.7% of one answer
+
+THE CHALLENGER'S BOND AND THE BOUNTY
+==============================================================================
+  proving one answer, the slower default run, 6012.8 s at 3.616 USD an hour     6.0395 USD
+  low-memory on 24 cores and 192 GiB, as m5d.12xlarge: 3 runs, proving 10959.1 to 11004.0 s, slowest with setup 3.06 h; at 2.712 USD an hour 8.2897 USD; fits the slot 4 h and w_a 32 h
+  low-memory on 8 cores and 64 GiB, as m5d.4xlarge: 2 runs, proving 23574.6 to 23574.8 s, slowest with setup 6.56 h; at 0.904 USD an hour 5.9199 USD; does not fit the slot 4 h and w_a 32 h
+  proving bond as deployed, the proving part of a third party's bond, in the reserve's token     7.5400 USD
+  proving cost as deployed, paid for the principal's challenges in the reserve's token     7.5400 USD
+  that is 1.2484 x the proving, whatever ether's price; a late agent gains at most 1.5005 USD a batch
+  the bounty a slash pays out of the stake, in the token, is the proving cost, 7.54 USD
+  sending the answer on Base, measured                                      0.0042 USD
+  forcing it in through Ethereum: 572,345 L1 gas, measured on a fork
+  bond at a challenge, proving bond + 10 x forcing at the Ethereum base fee then, read no lower than 2 gwei:
+    at    1 gwei:     26.66 USD; forcing at 1 gwei costs     0.96
+    at   10 gwei:    103.13 USD; forcing at 10 gwei costs     9.56
+    at   50 gwei:    485.48 USD; forcing at 50 gwei costs    47.79
+    at  200 gwei:   1919.31 USD; forcing at 200 gwei costs   191.18
+  An answer pays whenever the Ethereum base fee when it lands is at most 10 times the fee at
+  the challenge, read no lower than the floor.
+
+THE GAS POOL AT THE PRINCIPAL'S CHALLENGE, AND THE POSTING DEPOSIT AFTER THE ANSWER
+==============================================================================
+  gas pool for one batch's challenges, 4 x (600,000 + k x 60,000 gas at the domain fee, read no lower
+  than 0.01 gwei, plus k x 1,024 bytes at the data fee):
+    k =   1: 0.00002656 ETH = 0.0444 USD
+    k =   8: 0.00004447 ETH = 0.0743 USD
+    k =  32: 0.00010589 ETH = 0.1768 USD
+    k = 256: 0.00067910 ETH = 1.1342 USD
+  posting the batch proof and 256 sealed openings on Base, measured, USD     4.7269
+  the proof's postings: 106 transactions, 10,386,344 bytes of call data
+  the deposit, the domain way: 4 x (476,240,418 gas at the domain fee, read no lower than 0.01 gwei, plus the data fee)
+    at the measured fee, 0.005001 gwei: 0.020734 ETH = 34.63 USD
+    at 0.1 gwei: 0.192180 ETH = 320.96 USD
+    at 1 gwei: 1.906646 ETH = 3184.33 USD
+  the principal's float for one batch, gas pool and deposit, fees at or below the floors: 35.76 USD
+  A posting as blobs is refunded no more than the domain way costs when its report arrives;
+  fee_ratio.py blobs gives how often, and by how much, the blob way costs more.
+  Under censorship the answerer posts as blobs on Ethereum; forcing the domain way in
+  instead would cost it, beyond the call data:
+  portal's L1 gas beyond call data, measured: one chunk 4,158,189, one answer 510,225, one delivery 310,520
+  forcing every chunk and 256 deliveries in, L1 gas         960,069,554
+    at    1 gwei: 0.9601 ETH = 1,603.43 USD
+    at   10 gwei: 9.6007 ETH = 16,034.31 USD
+
+WINDOWS ON BASE, HOURS
+==============================================================================
+  delivery w_d                                    8.0
+  posting wait w_p >= Delta_f + sigma_x + m      30.0
+  forced inclusion Delta_f                       16.0
+  clock bound sigma_x                            12.5
+  signed-time tolerance theta                     1.0
+  monitor's margin m                              1.0
+  acceptance window w = w_d + theta + m + Delta_f + sigma_x  38.5
+  decision time after the signed time, w - Delta_f - sigma_x 10.0
+  rate window W                                  24.0
+  windows a bond covers, ceil((w+theta)/W)+1        3
+  slowest proving run, setup included              2.69
+  answer window w_a >= t_ans + Delta_f + sigma_x   31.2, set to 32
+  slot eta >= t_ans                                2.69, set to 4
+  one challenge forfeits by w_a + 2 eta             40.0
+  a dispute priced before a freeze runs after it at most w + w_a + 2 eta + 2 w_p + 12 = 150.5
+  fork lead 168; the rest, 17.5, holds 2 more batches in one principal's queue
+
+BOND AS A SHARE OF THE BUDGET, RATE WINDOW W = 1 DAY, ONE PAYMENT A MINUTE
+==============================================================================
+                                        B, USD    bonds  with stake  stake adds
+  Steady, one price, 30 days            432.00    10.0%       21.7%       11.7
+  Peak 5x mean, 30 days                 432.00    50.0%      101.7%       51.7
+  Three prices, 30 days                 864.00    25.0%       50.9%       25.9
+  One day, one price                     14.40   300.0%      652.4%      352.4
+  One day, expiry 300 days               14.40   300.0%      652.4%      352.4
+  One day, 5x peak, 3 prices             28.80  3750.0%     7526.2%     3776.2
+  That task, 30-day delegation          864.00   125.0%      250.9%      125.9
+  The stake is the bond plus the bounty, 7.54 USD, on each domain; the
+  bounty is fixed in the token, so it weighs more as the budget falls.
+  A declared expiry longer than the task changes none of these: the bond
+  follows the rate the task needs and the life it actually spends.
+
+HIDING FACTOR AND THE CAPITAL IT TAKES: ONE PAYMENT A MINUTE AT 0.01 USD
+FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
+==============================================================================
+  declared expiry       f   bonds   stake  gas pool  deposit  funding fB     total  total/B
+  1 x the task       1.03   43.20   50.74      1.13    34.63      446.40    576.10     1.33
+  2 x the task       2.03   43.20   50.74      1.13    34.63      878.40   1008.10     2.33
+  5 x the task       5.03   43.20   50.74      1.13    34.63     2174.40   2304.10     5.33
+  10 x the task     10.03   43.20   50.74      1.13    34.63     4334.40   4464.10    10.33
+  The stake is the bond plus the bounty, 7.54; without an answerer the total
+  is less by the stake, 50.74. The gas pool and the deposit are the ether the principal
+  holds in the dispute contracts for one batch it challenged: the gas pool its challenges add, and
+  the posting deposit it pays after the answer, at fees at or below the floors; both come back once
+  nothing is due. The proving cost, 7.54, is set aside from the funding fB. The total
+  adds the two as printed, to the cent.
+  Carrying the stake for the task costs 0.0417 USD per percentage
+  point of annual interest on it.
+  The same f reached by a short declared life instead needs bonds of
+    f =  1.03: about   10.3% of B in bonds, plus funding fB
+    f =  2.03: about   20.3% of B in bonds, plus funding fB
+    f =  5.03: about   50.3% of B in bonds, plus funding fB
+    f = 10.03: about  100.3% of B in bonds, plus funding fB
+
+ONE-DAY TASK, ONE PRICE, UNDER A LONG DECLARED EXPIRY
+==============================================================================
+  declared   1 days: f =    2.00, bonds / B = 300.0%, funding fB =     28.80 USD
+  declared  30 days: f =   31.00, bonds / B = 300.0%, funding fB =    446.40 USD
+  declared 300 days: f =  301.00, bonds / B = 300.0%, funding fB =   4334.40 USD
+
+ETHEREUM BLOCKS AN ADVERSARY CAN KEEP A FORCED TRANSACTION OUT
+==============================================================================
+   budget, ETH  L1 base fee, gwei  by filling L1  by filling deposits  minutes, worse
+            10                  1             26                    8             5.2
+            10                 10              9                    8             1.8
+            10                 50              2                    8             1.6
+           100                  1             45                   11             9.0
+           100                 10             26                   11             5.2
+           100                 50             13                   11             2.6
+          1000                  1             64                   14            12.8
+          1000                 10             45                   14             9.0
+          1000                 50             31                   14             6.2
+         10000                  1             84                   17            16.8
+         10000                 10             64                   17            12.8
+         10000                 50             51                   17            10.2
+
+  The monitor tips nothing here; any priority fee it pays makes the adversary
+  outbid it on every slot of every block, so the delay only shrinks. The last
+  column is the longer of the two routes.
+
+PROPOSERS THAT EXCLUDE A FORCED TRANSACTION
+==============================================================================
+   including share        P(out for 600 slots)   slots for 2^-40   minutes
+             0.540                   4.52e-203                36       7.2
+             0.210                    3.77e-62               118      23.6
+             0.100                    3.51e-28               264      52.8
+             0.052                    1.22e-14               520     104.0
+
+BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN
+==============================================================================
+  blocks in the two hours of inclusion, with the finality bound of 2 h apart: 600
+    adversary gains, USD    tip that makes it unprofitable, USD
+                   43.20                                 0.0720
+                  432.00                                 0.7200
+                4,320.00                                 7.2000
+               43,200.00                                72.0000
+  A block built by anyone the bribe does not reach includes it at once,
+  so every such block only shortens the delay.
+
+BRIBING BUILDERS TO EXCLUDE A BATCH POSTED AS BLOBS: 83 BLOBS IN 14 TRANSACTIONS
+==============================================================================
+  Keeping any one of the 14 transactions out keeps the posting incomplete, so each
+  carries the tip T and the answerer pays 14 T once they land. Posting with the same
+  600 blocks to spare, each tip must exceed the gain over 600.
+    adversary gains, USD   tip on each, USD   all 14 tips, USD
+                    7.54             0.0126             0.1759
+                   43.20             0.0720             1.0080
+                  432.00             0.7200            10.0800
+                4,320.00             7.2000           100.8000
+               43,200.00            72.0000         1,008.0000
+  Excluding the postings slashes the answerer's stake, which burns but for the bounty,
+  7.54: that bounty is all an adversary outside the agent's side gains.
+

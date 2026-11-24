@@ -1,0 +1,14 @@
+THE POSTING DEPOSIT WITH THE L1 DATA FEE, BASE'S TWO-SECOND HISTORY
+==============================================================================
+  Base blocks 11,792,527 to 53,549,834; 476,240,418 gas and 10,805,160 bytes a batch; floor 0.01 gwei, deployed factor 4
+  data-fee scalars (base fee, blob base fee), each from its first block:
+    from block 11,792,528: (684000, 0)
+    from block 11,793,148: (1101, 659851)
+    from block 16,366,242: (1418, 659851)
+    from block 16,920,282: (2269, 1055762)
+  posting waits that do not overlap: 773
+  largest ratio with the data fee 0.982, from block 13,304,555; above the factor: 0 of 773, 0.00000 (95% CI 0.00000 to 0.00476)
+  largest ratio without it, as the settings and oos modes measure it: 1.011
+  the data fee's share of the deposit's basis: median 0.0466, largest 0.9992
+  weeks with a window above the factor: 0 of 138, 0.00000 (95% CI 0.00000 to 0.02638)
+
