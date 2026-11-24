@@ -124,17 +124,21 @@ contract ValidityDisputeOnChain is Script {
         t.answerer = me;
         id = acc.register(t);
         _accept(me);
-        acc.stakeAnswerer{value: 1 ether}(id);
+        acc.stakeAnswerer(id, TermsOf.BOND + Deployment.PROVING_COST);
     }
 
     /// The agent's acceptance, sent from the agent's own key: the broadcast
-    /// pauses, the agent is funded for its bond, and accepts.
+    /// pauses, the agent is funded for its gas and its bond in the token, and
+    /// accepts.
     function _accept(address me) internal {
         address agent = vm.addr(AGENT_PK);
-        payable(agent).transfer(TermsOf.BOND + 0.01 ether);
+        payable(agent).transfer(0.01 ether);
+        token.mint(agent, TermsOf.BOND);
         vm.stopBroadcast();
-        vm.broadcast(AGENT_PK);
-        acc.accept{value: TermsOf.BOND}(id);
+        vm.startBroadcast(AGENT_PK);
+        token.approve(address(acc), type(uint256).max);
+        acc.accept(id);
+        vm.stopBroadcast();
         vm.startBroadcast(me);
     }
 

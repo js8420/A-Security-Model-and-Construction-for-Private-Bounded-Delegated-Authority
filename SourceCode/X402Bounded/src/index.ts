@@ -4,7 +4,7 @@ export { BoundedEvmFacilitator } from "./facilitator.js";
 export { deploymentRefusal, publishedBuild, sameBuild, type Deployment, type GenuineReserve, type PublishedBuild } from "./reserveCode.js";
 export { reserveAbi, disputeAbi, postingsAbi } from "./abi.js";
 export { BLOB_BYTES, anvilBlobs, beaconBlobs, blobPayload, payloadOf, blobPostingAbi, blobsHash, blobsOf, ethereumBlobs, loadKzg, postBlobs, readPayload, versionedHash, type BlobFetch, type BlobSource, type Kzg } from "./blobs.js";
-export { Monitor, extractSecret, forkRefusal, type Domain, type Policy, type Record, type Settings } from "./monitor.js";
+export { Monitor, extractSecret, forkRefusal, decodeFeeExtra, feeSettingsRefusal, headerFeeSettings, type Domain, type FeeSettings, type Policy, type Record, type Settings } from "./monitor.js";
 export { Answerer, CHUNK, proofChunks, proofHash, sealedTree, type Sealed } from "./answerer.js";
 export { commitOpening, decodeOpening, encodeOpening, unitsOf, type Opening } from "./opening.js";
 export { seal, sealingKeyOf, unseal, type Binding } from "./seal.js";

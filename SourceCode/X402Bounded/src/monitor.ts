@@ -53,22 +53,81 @@ export interface Settings {
   /** The key openings are sealed to, when the agent hands them to an answerer. */
   sealKey?: Hex;
   /**
-   * The head the monitor takes as settled, "safe" on an OP Stack chain: the
-   * blocks whose data is on Ethereum, which the sequencer can no longer
-   * replace. The monitor reads and acts on the newest blocks as well, but
+   * The head the monitor takes as settled, "finalized" on an OP Stack chain:
+   * the blocks derived from finalized Ethereum data, which neither the
+   * sequencer nor a reorganisation of Ethereum can undo. "safe" blocks have
+   * their data on Ethereum, but in blocks Ethereum may still reorganise.
+   * The monitor reads and acts on the newest blocks as well, but
    * what it read above the settled head it reads again on every poll, and a
    * transaction of its own that left the chain it sends again. "latest"
    * takes every block as settled at once.
    */
   settled?: "latest" | "safe" | "finalized";
   /**
-   * The times of announced Ethereum forks that change its fee rules, and how
-   * long before each the monitor freezes the delegation, so that every
-   * dispute it could still open ends before the fee factors meet rules they
-   * were not tested on.
+   * The times of announced Ethereum forks that change its fee rules: the
+   * base fee's update rule, or the gas of any call whose gas the deployment
+   * fixes, such as forcing an answer in. Forks that change only blob
+   * parameters are not among them. The monitor freezes the delegation the
+   * lead before each, so every dispute it could still open is priced under
+   * the rules the deployment was measured on; the delegation's declared
+   * expiry is untouched.
    */
   feeForks?: readonly bigint[];
   forkLead?: bigint;
+  /**
+   * The fastest rise of the domain's base fee per second, as a fraction, in
+   * any fee-setting period the deployment's factors were tested on: 0.0202
+   * for Base, 4% a two-second block from 25 March 2026 and 0.4% a 200 ms
+   * block since 5 November 2026. A domain's fee settings can change without
+   * a fork, by whoever owns its settings contract, and every block header
+   * carries them; the monitor freezes the delegation once a change lets the
+   * fee rise faster than this, or puts the minimum base fee above what the
+   * gas pool and the posting deposit cover at the floor. Unset, no check.
+   */
+  testedRise?: number;
+  /** Reads a domain's newest fee settings; by default from its block headers. */
+  feeSettingsOf?: (d: Domain) => Promise<FeeSettings | undefined>;
+}
+
+/** An OP Stack domain's fee settings as its newest block carries them, and its block rate. */
+export interface FeeSettings {
+  denominator: number;
+  elasticity: number;
+  minBaseFee: bigint;
+  blocksPerSecond: number;
+}
+
+/**
+ * The EIP-1559 settings in an OP Stack block's extra data: version 0
+ * (Holocene) holds the denominator and the elasticity as big-endian u32 at
+ * bytes 1 to 9, version 1 (Jovian) the minimum base fee as a u64 after them.
+ * Anything else carries no settings.
+ */
+export function decodeFeeExtra(extra: Hex): { denominator: number; elasticity: number; minBaseFee: bigint } | undefined {
+  const b = hexToBytes(extra);
+  if (!((b.length === 9 && b[0] === 0) || (b.length === 17 && b[0] === 1))) return undefined;
+  const u32 = (i: number) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+  let min = 0n;
+  if (b[0] === 1) for (let i = 9; i < 17; i++) min = (min << 8n) | BigInt(b[i]);
+  const denominator = u32(1);
+  const elasticity = u32(5);
+  if (denominator === 0 || elasticity === 0) return undefined;
+  return { denominator, elasticity, minBaseFee: min };
+}
+
+/**
+ * Why the domain's fee settings leave the deployment's factors untested, or
+ * "" if they do not: a base fee that can rise faster a second than in any
+ * period the factors were tested on, or a minimum base fee above the floor
+ * times the factor, which is what the gas pool and the posting deposit are
+ * sized at on an idle chain. A full block raises the fee by (elasticity - 1)
+ * / denominator.
+ */
+export function feeSettingsRefusal(s: FeeSettings, testedRise: number, factor: bigint, floor: bigint): string {
+  const rise = Math.pow(1 + (s.elasticity - 1) / s.denominator, s.blocksPerSecond) - 1;
+  if (rise > testedRise * 1.0001) return `the domain's fee can now rise ${(100 * rise).toFixed(2)}% a second, above the ${(100 * testedRise).toFixed(2)}% tested`;
+  if (s.minBaseFee > factor * floor) return `the domain's minimum base fee is now ${s.minBaseFee} wei, above the ${factor * floor} wei the pool and deposit cover`;
+  return "";
 }
 
 /** One entry the monitor read above the settled head: the table, the key, and what the table held there before. */
@@ -214,19 +273,24 @@ export function extractSecret(settled: readonly { digest: bigint; domain: bigint
  * wait after the request has passed. An answer to the monitor's own
  * challenge is such a request, dated when the answer landed.
  */
-/**
- * Why a delegation must not be opened to run this long: the first announced
- * Ethereum fork that changes fee rules and comes before its end, plus the
- * lead the monitor freezes it by, or "" if there is none. The fee factors
- * were tested on the rules in force; a delegation stops before new ones.
- */
 function at(d: Domain, l: { blockNumber: bigint; blockHash: Hex }): Where {
   return { d: d.name, block: l.blockNumber, hash: l.blockHash };
 }
 
-export function forkRefusal(start: bigint, end: bigint, forks: readonly bigint[], lead: bigint): string {
-  const f = [...forks].sort((a, b) => (a < b ? -1 : 1)).find((x) => x > start && end + lead >= x);
-  return f === undefined ? "" : `the delegation runs to ${end}, within ${lead} s of the fee fork at ${f}`;
+/**
+ * Why a delegation must not be opened now under a deployment whose fixed gas
+ * and fee factors were measured for the fee rules in force at `measuredFor`,
+ * or "" if it may. It may not once an announced fee fork is within the lead,
+ * since the monitor would freeze it at once, nor once a fee fork has passed
+ * since the deployment was measured. Its declared expiry does not enter: a
+ * fork ends the delegation's settlement, not its terms.
+ */
+export function forkRefusal(now: bigint, forks: readonly bigint[], lead: bigint, measuredFor: bigint): string {
+  const sorted = [...forks].sort((a, b) => (a < b ? -1 : 1));
+  const passed = sorted.find((f) => f > measuredFor && f <= now);
+  if (passed !== undefined) return `the deployment was measured before the fee fork at ${passed}`;
+  const near = sorted.find((f) => now < f && now + lead >= f);
+  return near === undefined ? "" : `the fee fork at ${near} is within the ${lead} s lead`;
 }
 
 export class Monitor {
@@ -383,7 +447,7 @@ export class Monitor {
 
   private async settledHead(d: Domain): Promise<bigint> {
     const latest = await d.chain.getBlockNumber({ cacheTime: 0 });
-    const tag = this.settings.settled ?? "safe";
+    const tag = this.settings.settled ?? "finalized";
     if (tag === "latest") return latest;
     const n = (await d.chain.getBlock({ blockTag: tag })).number as bigint;
     return n < latest ? n : latest;
@@ -391,7 +455,7 @@ export class Monitor {
 
   /** Records a transaction of the monitor's, to undo what it recorded if the transaction leaves the chain before it settles. */
   private track(d: Domain, receipt: { transactionHash: Hex; blockHash: Hex; blockNumber: bigint }, kind: Pending["kind"], keys: string[] = []): void {
-    if ((this.settings.settled ?? "safe") === "latest") return;
+    if ((this.settings.settled ?? "finalized") === "latest") return;
     this.pending.push({ domain: d.name, hash: receipt.transactionHash, blockHash: receipt.blockHash, block: receipt.blockNumber, kind, keys });
   }
 
@@ -973,6 +1037,22 @@ export class Monitor {
     return forks.find((f) => now < f && now + lead >= f);
   }
 
+  /** The first domain whose fee settings leave the factors untested, with why. */
+  private async settingsDue(): Promise<string> {
+    const tested = this.settings.testedRise;
+    if (tested === undefined) return "";
+    for (const d of this.domains) {
+      if (!d.dispute) continue;
+      const s = await (this.settings.feeSettingsOf ?? ((x: Domain) => headerFeeSettings(x.chain as unknown as HeaderReader)))(d);
+      if (!s) continue;
+      const factor = (await d.chain.readContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "l2Factor" })) as bigint;
+      const floor = (await d.chain.readContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "l2FeeFloor" })) as bigint;
+      const why = feeSettingsRefusal(s, tested, factor, floor);
+      if (why) return `${d.name}: ${why}`;
+    }
+    return "";
+  }
+
   private async freezeAll(): Promise<void> {
     await Promise.all(
       this.domains.map(async (d) => {
@@ -1011,6 +1091,13 @@ export class Monitor {
     const fork = await this.forkDue();
     if (fork !== undefined) {
       reasons.push(`an Ethereum fork that changes fee rules comes at ${fork}: frozen before it`);
+      await this.freezeAll();
+      this.reasons.push(...reasons);
+      return { total, challenged, froze: true, reasons };
+    }
+    const settings = await this.settingsDue();
+    if (settings) {
+      reasons.push(`${settings}: frozen`);
       await this.freezeAll();
       this.reasons.push(...reasons);
       return { total, challenged, froze: true, reasons };
@@ -1156,4 +1243,23 @@ export class Monitor {
     for (const r of this.records.values()) if (this.openings.has(r.opening)) n += 1;
     return n;
   }
+}
+
+/**
+ * A domain's fee settings from its newest block header, and its block rate
+ * over the last 300 blocks, since an OP Stack header keeps whole-second
+ * timestamps however short its blocks.
+ */
+export interface HeaderReader {
+  getBlock(a?: { blockNumber: bigint }): Promise<{ number: bigint | null; timestamp: bigint; extraData: Hex }>;
+}
+
+export async function headerFeeSettings(chain: HeaderReader): Promise<FeeSettings | undefined> {
+  const top = await chain.getBlock();
+  const s = decodeFeeExtra(top.extraData);
+  if (!s || top.number === null || top.number < 300n) return undefined;
+  const back = await chain.getBlock({ blockNumber: top.number - 300n });
+  const dt = Number(top.timestamp - back.timestamp);
+  if (dt <= 0) return undefined;
+  return { ...s, blocksPerSecond: 300 / dt };
 }

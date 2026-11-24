@@ -55,10 +55,12 @@ contract TranscriptGas is Fixture {
         uint256 g0 = gasleft();
         uint256 id = acc.register(t);
         console.log("Open, deposit", g0 - gasleft());
-        vm.deal(agent, agent.balance + 2 * TermsOf.BOND);
+        token.mint(agent, 2 * TermsOf.BOND);
+        vm.prank(agent);
+        token.approve(address(acc), type(uint256).max);
         vm.prank(agent);
         uint256 ga = gasleft();
-        acc.accept{value: TermsOf.BOND}(id);
+        acc.accept(id);
         console.log("Accept, first from this principal", ga - gasleft());
         t.funding = Reserve.Funding.Permit2;
         t.deposit = 0;
@@ -68,7 +70,7 @@ contract TranscriptGas is Fixture {
         console.log("Open, permit2", g1 - gasleft());
         vm.prank(agent);
         ga = gasleft();
-        acc.accept{value: TermsOf.BOND}(id2);
+        acc.accept(id2);
         console.log("Accept, a principal already served", ga - gasleft());
 
         _settle(id, 1, _elems(64, 1), true);
@@ -270,17 +272,17 @@ contract TranscriptGas is Fixture {
         acc.close(id);
         vm.warp(block.timestamp + 1);
         uint256 tokens = token.balanceOf(principal);
-        uint256 bond = agent.balance;
+        uint256 bond = token.balanceOf(agent);
         acc.close(id);
         assertEq(token.balanceOf(principal), tokens + BUDGET - 14 * Statement.UNIT);
-        assertEq(acc.credit(agent), 1 ether);
-        assertEq(agent.balance, bond);
+        assertEq(acc.tokenCredit(agent), TermsOf.BOND);
+        assertEq(token.balanceOf(agent), bond);
         vm.prank(agent);
-        acc.withdraw();
-        assertEq(agent.balance, bond + 1 ether);
+        acc.withdrawToken();
+        assertEq(token.balanceOf(agent), bond + TermsOf.BOND);
         vm.prank(agent);
         vm.expectRevert(Reserve.NothingToWithdraw.selector);
-        acc.withdraw();
+        acc.withdrawToken();
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(id);
         vm.expectRevert(Reserve.BondAlreadyPaid.selector);

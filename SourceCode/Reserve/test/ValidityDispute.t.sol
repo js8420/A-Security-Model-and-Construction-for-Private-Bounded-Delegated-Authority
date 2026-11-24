@@ -28,7 +28,7 @@ contract ValidityDisputeTest is Groth16Result {
     uint64 constant CAP = 1_000_000;
     uint64 constant BUDGET = 100_000_000;
     uint256 constant AGENT_PK = 0xA6E47;
-    uint256 constant AGENT_BOND = 1 ether;
+    uint256 constant AGENT_BOND = TermsOf.BOND;
     uint256 constant CHALLENGER_BOND = 0.01 ether;
     uint64 constant ACCEPT = 1 days;
     uint64 constant WINDOW = 1 days;
@@ -91,9 +91,11 @@ contract ValidityDisputeTest is Groth16Result {
     function _register(bytes32 com) internal returns (uint256 r) {
         vm.prank(principal);
         r = acc.register(TermsOf.make(agent, CAP, 1_000, 86_400, Reserve.Funding.Deposit, BUDGET, com, _root0(), uint64(block.timestamp) + 30 days));
-        vm.deal(agent, agent.balance + AGENT_BOND);
-        vm.prank(agent);
-        acc.accept{value: AGENT_BOND}(r);
+        token.mint(agent, AGENT_BOND);
+        vm.startPrank(agent);
+        token.approve(address(acc), type(uint256).max);
+        acc.accept(r);
+        vm.stopPrank();
     }
 
     function _settle(uint256 r, uint256 i, uint64[] memory e, uint64 amount) internal returns (Settlement memory s) {
@@ -163,13 +165,13 @@ contract ValidityDisputeTest is Groth16Result {
     function testNoAnswerForfeitsTheAgentBond() public {
         _open(id, 0, recs[0]);
         vm.warp(vd.challengeOf(id, _digest(0)).deadline + 1);
-        uint256 principalBefore = principal.balance;
+        uint256 principalBefore = token.balanceOf(principal);
         uint256 challengerBefore = challenger.balance;
         vd.expire(id, _digest(0));
-        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
         vm.prank(principal);
-        acc.withdraw();
-        assertEq(principal.balance, principalBefore + AGENT_BOND);
+        acc.withdrawToken();
+        assertEq(token.balanceOf(principal), principalBefore + AGENT_BOND);
         vm.prank(challenger);
         vd.withdraw();
         assertEq(challenger.balance, challengerBefore + CHALLENGER_BOND);
@@ -190,7 +192,7 @@ contract ValidityDisputeTest is Groth16Result {
         _answer(other, 5, s, 5);
         vm.warp(vd.challengeOf(other, _digest(5)).deadline + 1);
         vd.expire(other, _digest(5));
-        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
     }
 
     /// The same proof cannot answer for a settlement that paid more for the

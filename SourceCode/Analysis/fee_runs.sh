@@ -18,7 +18,7 @@ bounty=$(grep -oE 'bond plus the bounty, [0-9]+\.[0-9]+;' "$hist/run_${tag}_bond
 mkdir -p "$data"
 python3 fee_ratio.py fetch "$data"
 [ -f "$data/ethereum/meta.json" ] && [ -f "$data/base/meta.json" ] || { echo "no fetched fee history in $data"; exit 1; }
-for mode in floors oos london settings; do
+for mode in floors oos london settings denim; do
     python3 fee_ratio.py $mode "$data" | tee "$hist/run_${tag}_$mode.txt"
 done
 python3 fee_ratio.py blobs "$data" "$price" "$stake" "$bounty" | tee "$hist/run_${tag}_blobs.txt"

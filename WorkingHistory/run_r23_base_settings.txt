@@ -1,0 +1,7 @@
+BASE FEE SETTINGS FROM THE NEWEST HEADER
+==============================================================================
+  block 61408025, extra data 0x01000003e80000000500000000004c4b40
+  denominator 1000, elasticity 5, minimum base fee 5000000 wei
+  blocks a second over the last 300 blocks 5.000
+  fastest rise a second 2.016%, tested 2.02%
+  verdict: within what the factors were tested on

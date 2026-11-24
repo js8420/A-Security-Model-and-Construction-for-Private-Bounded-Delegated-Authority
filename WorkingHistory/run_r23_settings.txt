@@ -1,0 +1,28 @@
+THE BASE FACTOR IN EACH PERIOD BETWEEN BASE'S FEE-SETTING CHANGES
+==============================================================================
+  blocks 11,792,527 to 53,549,834; floor 0.01 gwei, deployed factor 4
+  from Dencun, block 11,792,527:
+    gas pool, every window: 27,215,999 windows, largest 3.850, above the factor 0
+    posting deposit, windows that do not overlap: 504, largest 1.011, above the factor 0
+  from 2025-12-04, minimum base fee 0.0002 gwei, block 39,008,526:
+    gas pool, every window: 604,800 windows, largest 0.050, above the factor 0
+    posting deposit, windows that do not overlap: 12, largest 0.050, above the factor 0
+  from 2025-12-18, minimum base fee 0.0005 gwei, block 39,613,326:
+    gas pool, every window: 1,512,000 windows, largest 0.220, above the factor 0
+    posting deposit, windows that do not overlap: 28, largest 0.212, above the factor 0
+  from 2026-01-22, minimum base fee 0.001 gwei, block 41,125,326:
+    gas pool, every window: 475,200 windows, largest 0.498, above the factor 0
+    posting deposit, windows that do not overlap: 8, largest 0.371, above the factor 0
+  from 2026-02-02, minimum base fee 0.002 gwei, block 41,600,526:
+    gas pool, every window: 86,400 windows, largest 0.210, above the factor 0
+    posting deposit, windows that do not overlap: 2, largest 0.200, above the factor 0
+  from 2026-02-04, denominator 125, block 41,686,926:
+    gas pool, every window: 648,000 windows, largest 0.289, above the factor 0
+    posting deposit, windows that do not overlap: 12, largest 0.226, above the factor 0
+  from 2026-02-19, minimum base fee 0.005 gwei, block 42,334,926:
+    gas pool, every window: 1,468,800 windows, largest 0.500, above the factor 0
+    posting deposit, windows that do not overlap: 27, largest 0.500, above the factor 0
+  from 2026-03-25, denominator 100, elasticity 5, block 43,803,726:
+    gas pool, every window: 9,688,509 windows, largest 0.500, above the factor 0
+    posting deposit, windows that do not overlap: 180, largest 0.500, above the factor 0
+

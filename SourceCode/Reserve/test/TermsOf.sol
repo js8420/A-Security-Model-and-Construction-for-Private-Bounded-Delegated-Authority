@@ -8,8 +8,9 @@ import {Statement} from "./Statement.sol";
 /// H(s) are the exported payment's, so a delegation registered here is one
 /// the exported proof can speak for.
 library TermsOf {
-    /// The bond every test delegation asks its agent for.
-    uint256 internal constant BOND = 1 ether;
+    /// The bond every test delegation asks its agent for, in the token:
+    /// 43.20 at six decimals.
+    uint256 internal constant BOND = 43_200_000;
 
     function make(
         address agent,

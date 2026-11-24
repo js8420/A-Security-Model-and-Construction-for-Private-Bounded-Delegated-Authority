@@ -112,7 +112,8 @@ interface IPostings {
 /// If a challenge against a settlement in that batch then expires, and the
 /// receipt left the answerer a full answer window, the receipt and the
 /// settlement's path to the root burn the answerer's stake, less a bounty of
-/// the proving bond to whoever brings them. A stake of at least the agent's
+/// the proving cost to whoever brings them. Stake, bond and bounty are all in
+/// the reserve's token. A stake of at least the agent's
 /// bond plus that bounty leaves a principal nothing to pay an answerer to
 /// stay silent with, and burning the rest leaves nobody a reason to silence
 /// one.
@@ -191,12 +192,11 @@ contract ValidityDispute {
     /// What proving one answer takes, with margin.
     uint64 public immutable slot;
     /// The price of proving one answer, in ether, with the margin the
-    /// deployment chose: the bond's fixed part for anyone but the principal,
-    /// and the bounty a slash pays.
+    /// deployment chose: the bond's fixed part for anyone but the principal.
     uint256 public immutable provingBond;
     /// The price of proving one answer, in the reserve's token, without
     /// margin: what an answer to the principal's challenges is paid for each
-    /// batch it proves.
+    /// batch it proves, and the bounty a slash pays out of the stake.
     uint256 public immutable provingCost;
     /// The time an honest agent has to deliver a batch from its first
     /// payment, so the batches a set of settlements can fall in is bounded by
@@ -404,7 +404,7 @@ contract ValidityDispute {
     /// ask, with the slash bounty to its caller.
     function slashFor(uint256 id, address caller) external {
         if (msg.sender != address(postings)) revert NotPrincipal();
-        reserve.slashAnswerer(id, caller, provingBond);
+        reserve.slashAnswerer(id, caller, provingCost);
     }
 
     /// The root a challenge's answer proved, or zero before the answer.
@@ -771,7 +771,7 @@ contract ValidityDispute {
         if (uint256(r.receivedAt) + answerWindow > c.deadline) revert ReceiptTooLate();
         if (!postings.receiptSigned(id, rootOf(id, digest, s, index, path), r)) revert BadReceipt();
         emit AnswererSlashed(id, digest);
-        reserve.slashAnswerer(id, msg.sender, provingBond);
+        reserve.slashAnswerer(id, msg.sender, provingCost);
     }
 
     function withdraw() external {

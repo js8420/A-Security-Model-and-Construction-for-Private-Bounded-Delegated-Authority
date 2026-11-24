@@ -9,7 +9,8 @@ export const reserveAbi = parseAbi([
   "function domain() view returns (uint64)",
   "function frozenOf(uint256 id) view returns (bool frozen, uint32 holds)",
   "function claim(uint256 id, uint64[2] secret)",
-  "function credit(address) view returns (uint256)",
+  "function settled(uint256 id, uint64 digest) view returns (bytes32)",
+  "function maxAge() view returns (uint64)",
   "error BondAlreadyPaid()",
   "error SecretDoesNotOpen()",
   "function epochOf(uint256 id) view returns (uint64)",
@@ -18,7 +19,7 @@ export const reserveAbi = parseAbi([
   "function commitmentOf(uint256 id) view returns (bytes32)",
   "function termsOf(uint256 id) view returns (uint64 unitSize, uint64 rangeBase, uint64 rangeLen, bytes32 secretHash)",
   "function freeze(uint256 id)",
-  "function accept(uint256 id) payable",
+  "function accept(uint256 id)",
   "function acceptanceOf(uint256 id) view returns (bool accepted, uint256 bond)",
   "function earmarked(uint256 id) view returns (uint256)",
   "function tokenCredit(address) view returns (uint256)",
@@ -41,6 +42,8 @@ export const reserveAbi = parseAbi([
 
 /** The calls of ValidityDispute.sol the monitor makes. */
 export const disputeAbi = parseAbi([
+  "function l2Factor() view returns (uint256)",
+  "function l2FeeFloor() view returns (uint256)",
   "struct Settlement { bytes32 elems; uint64 amount; address payee; uint64 time; uint64 epoch; }",
   "function open(uint256 id, uint64 digest, Settlement s) payable",
   "function openMany(uint256 id, uint64[] digests, Settlement[] s) payable",

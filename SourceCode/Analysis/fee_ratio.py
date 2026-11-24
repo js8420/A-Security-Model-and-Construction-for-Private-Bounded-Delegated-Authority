@@ -18,6 +18,8 @@ blob base fee in the posting window. The fee factors are chosen from these.
                                            August 2021 to March 2024, which fetch also downloads
   python3 fee_ratio.py settings DATA_DIR   Base's factor in each period between the changes
                                            Base made to its fee settings
+  python3 fee_ratio.py denim DATA_DIR      Base's factor on its 200 ms blocks, from Denim to
+                                           the head the first fetch of them recorded
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
@@ -57,6 +59,15 @@ CHAINS = {
         # November 2026); the history stops before it, at two-second blocks.
         "first": 11_792_527,
         "last": 53_549_834,
+    },
+    # Base's 200 ms blocks, from Denim to the head at the first fetch of
+    # them, which is then recorded and fixed.
+    "base_denim": {
+        "rpcs": ["https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org", "https://1rpc.io/base"],
+        "block_seconds": 0.2,
+        "blob": False,
+        "first": 53_556_127,
+        "last": "head",
     },
     # Ethereum from the London upgrade, the first block with a base fee, to
     # the block before the Dencun-era data above begins.
@@ -167,7 +178,11 @@ def fetch(data):
             meta = json.load(open(meta_path))
         else:
             first = c["first"]
-            last = c["last"] if "last" in c else json.load(open(paths(data, c["until"])[1]))["first"] - 1
+            if c.get("last") == "head":
+                # A thousand blocks below the head, so every block is past reorganisation.
+                last = int(rpc(c["rpcs"], "eth_blockNumber", []), 16) - 1000
+            else:
+                last = c["last"] if "last" in c else json.load(open(paths(data, c["until"])[1]))["first"] - 1
             meta = {"first": first, "last": last, "fixed_at": int(time.time())}
             json.dump(meta, open(meta_path, "w"))
         first, last = meta["first"], meta["last"]
@@ -779,8 +794,39 @@ def settings(data):
     print()
 
 
+def denim(data):
+    """The gas pool and the posting deposit on Base's 200 ms blocks, as the
+    settings mode measures them in each period before: every gas pool
+    window, overlapping, the deposit's windows that do not overlap, and the
+    days the deposit's windows start in."""
+    meta, fee, _ = load(data, "base_denim")
+    bs = CHAINS["base_denim"]["block_seconds"]
+    floor, factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
+    print("THE BASE FACTOR ON 200 MS BLOCKS, FROM DENIM")
+    print("=" * 78)
+    days = (meta["last"] - meta["first"] + 1) * bs / 86400
+    print(f"  blocks {meta['first']:,} to {meta['last']:,}, {days:.1f} days; floor {floor / 1e9:g} gwei, deployed factor {factor}")
+    a = math.ceil(T_ANS_HOURS * 3600 / bs)
+    b = math.ceil(W_A_HOURS * 3600 / bs)
+    n = top = over = 0
+    for ratio, _ in every(fee, a, b, 0, floor):
+        n += 1
+        over += ratio > factor
+        top = max(top, ratio)
+    print(f"  gas pool, every window: {n:,} windows, largest {top:.3f}, above the factor {over:,}")
+    b2 = math.ceil(W_P_HOURS * 3600 / bs)
+    rows = disjoint(fee, bs, 0, b2, 0, CHUNKS, floor)
+    dtop = max((r for _, r, _ in rows), default=0.0)
+    dover = sum(r > factor for _, r, _ in rows)
+    print(f"  posting deposit, windows that do not overlap: {len(rows):,}, largest {dtop:.3f}, above the factor {dover:,}")
+    at_floor = sum(f <= floor for f in fee) / len(fee)
+    print(f"  blocks with the base fee at or below the floor: {100 * at_floor:.1f}%")
+    print(f"  base fee: lowest {min(fee) / 1e9:g} gwei, highest {max(fee) / 1e9:g} gwei")
+    print()
+
+
 if __name__ == "__main__":
-    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london, "settings": settings}
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london, "settings": settings, "denim": denim}
     if len(sys.argv) < 3 or sys.argv[1] not in modes or (len(sys.argv) != 3 and sys.argv[1] != "blobs") or len(sys.argv) not in (3, 6):
         raise SystemExit(__doc__)
     modes[sys.argv[1]](*sys.argv[2:])

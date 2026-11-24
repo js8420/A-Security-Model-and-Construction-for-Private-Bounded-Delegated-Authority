@@ -1,0 +1,38 @@
+No files changed, compilation skipped
+
+Ran 4 tests for test/UsdcForkGas.t.sol:UsdcForkGas
+[PASS] testAgainstThePlainToken() (gas: 10857627)
+Logs:
+  fork block 61395538
+  Open, deposit
+    plain token 304873
+    USDC 312602
+    USDC minus plain 7729
+  Open, permit2
+    plain token 237171
+    USDC 237171
+    USDC minus plain 0
+  Settle logged, 64 units, deposit
+    plain token 180735
+    USDC 184324
+    USDC minus plain 3589
+  Settle logged, 64 units, permit2
+    plain token 182588
+    USDC 186814
+    USDC minus plain 4226
+
+[PASS] testBlacklistedPayeeIsRefused() (gas: 3876864)
+Logs:
+  a settlement to a blacklisted payee reverts
+
+[PASS] testBlacklistedReserveCannotPay() (gas: 3871700)
+Logs:
+  a settlement through a blacklisted reserve reverts
+
+[PASS] testForfeitCreditsUnderABlacklistedReserve() (gas: 4074513)
+Logs:
+  a claim against a blacklisted reserve credits the bond; its withdrawal reverts
+
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 3.10s (4.48s CPU time)
+
+Ran 1 test suite in 3.12s (3.10s CPU time): 4 tests passed, 0 failed, 0 skipped (4 total tests)

@@ -53,10 +53,13 @@ contract ValidityDisputeBatchOnChain is Script {
             uint256 k = 1 << (j / 2);
             bool cancelled = j % 2 == 1;
             uint256 id = acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));
-            payable(vm.addr(AGENT_PK)).transfer(TermsOf.BOND + 0.01 ether);
+            payable(vm.addr(AGENT_PK)).transfer(0.01 ether);
+            token.mint(vm.addr(AGENT_PK), TermsOf.BOND);
             vm.stopBroadcast();
-            vm.broadcast(AGENT_PK);
-            acc.accept{value: TermsOf.BOND}(id);
+            vm.startBroadcast(AGENT_PK);
+            if (j == 0) token.approve(address(acc), type(uint256).max);
+            acc.accept(id);
+            vm.stopBroadcast();
             vm.startBroadcast(pk);
             uint256[] memory ids = new uint256[](k);
             uint64[] memory ds = new uint64[](k);

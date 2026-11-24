@@ -103,10 +103,6 @@ contract Reserve {
         uint256 answererStake;
     }
 
-    /// Ether owed to an address: a forfeited bond to the principal, a returned
-    /// bond to the agent, a bounty to whoever brought a slash. Withdrawn by its
-    /// owner, never pushed, so no recipient can block a forfeit or a close.
-    mapping(address => uint256) public credit;
     /// When each delegation closed; the answerer's stake waits a further
     /// close delay, two delivery waits and the inclusion wait, so that every
     /// slash can still land.
@@ -114,8 +110,12 @@ contract Reserve {
     /// The principal's funds set aside for proving answers to its challenges,
     /// out of the agent's reach, by delegation.
     mapping(uint256 => uint256) public earmarked;
-    /// Tokens owed to an address: a proving payment, or what was set aside
-    /// once the delegation closed. Withdrawn, never pushed.
+    /// Tokens owed to an address: a forfeited bond to the principal, a
+    /// returned bond to the agent, a stake returned to its answerer, a bounty
+    /// to whoever brought a slash, a proving payment, or what was set aside
+    /// once the delegation closed. The bond is in the token the loss it repays
+    /// is in, so no exchange rate stands between them. Withdrawn by its owner,
+    /// never pushed, so no recipient can block a forfeit or a close.
     mapping(address => uint256) public tokenCredit;
 
     struct Window {
@@ -199,7 +199,7 @@ contract Reserve {
     mapping(address => uint32) public capacityOf;
     mapping(address => uint32) public servedCount;
     mapping(address => mapping(address => bool)) public serves;
-    /// Answerer stakes slashed, held here for good.
+    /// Answerer stakes slashed, in the token, held here for good.
     uint256 public burnt;
 
     error IndexAlreadySettled();
@@ -228,7 +228,6 @@ contract Reserve {
     error OverCapacity();
     error NotAgent();
     error NotAcceptable();
-    error WrongBond();
     error NotAccepted();
 
     /// `opening` is the agent's commitment to the payment's hidden fields,
@@ -317,14 +316,14 @@ contract Reserve {
         }
     }
 
-    /// The agent accepts a delegation by posting the bond it names, which
-    /// takes its principal on. An agent that declared a capacity accepts a new
-    /// principal only within it.
-    function accept(uint256 id) external payable {
+    /// The agent accepts a delegation by posting the bond it names, in the
+    /// token, which takes its principal on. An agent that declared a capacity
+    /// accepts a new principal only within it.
+    function accept(uint256 id) external {
         Delegation storage d = delegations[id];
         if (msg.sender != d.agent) revert NotAgent();
         if (d.accepted || d.frozen || d.closed) revert NotAcceptable();
-        if (msg.value != d.bond) revert WrongBond();
+        if (d.bond != 0) require(token.transferFrom(msg.sender, address(this), d.bond), "bond");
         if (!serves[msg.sender][d.principal]) {
             if (capacityOf[msg.sender] != 0 && servedCount[msg.sender] >= capacityOf[msg.sender]) revert OverCapacity();
             serves[msg.sender][d.principal] = true;
@@ -332,7 +331,7 @@ contract Reserve {
             emit Serves(msg.sender, d.principal);
         }
         d.accepted = true;
-        emit Accepted(id, msg.value);
+        emit Accepted(id, d.bond);
     }
 
     /// One payment, transcript stored. Called by whoever delivers the service,
@@ -515,13 +514,14 @@ contract Reserve {
         if (!delegations[id].bondPaid) _forfeit(id);
     }
 
-    /// The answerer's stake, held until the delegation closes.
-    function stakeAnswerer(uint256 id) external payable {
+    /// The answerer's stake, in the token, held until the delegation closes.
+    function stakeAnswerer(uint256 id, uint256 amount) external {
         Delegation storage d = delegations[id];
         if (d.answerer == address(0) || msg.sender != d.answerer) revert NotAnswerer();
         if (d.closed) revert NotClosable();
-        d.answererStake += msg.value;
-        emit AnswererStaked(id, msg.value);
+        require(token.transferFrom(msg.sender, address(this), amount), "stake");
+        d.answererStake += amount;
+        emit AnswererStaked(id, amount);
     }
 
     /// An answerer that acknowledged a batch and let a challenge against it
@@ -539,7 +539,7 @@ contract Reserve {
         uint256 paid = bounty < amount ? bounty : amount;
         burnt += amount - paid;
         emit AnswererSlashed(id, amount);
-        credit[caller] += paid;
+        tokenCredit[caller] += paid;
     }
 
     /// Pulled rather than paid at close, so an answerer cannot block a close,
@@ -561,10 +561,7 @@ contract Reserve {
         if (block.timestamp <= uint256(closedAt[id]) + closeDelay + wait) revert NotClosed();
         uint256 amount = d.answererStake;
         d.answererStake = 0;
-        if (amount != 0) {
-            (bool ok, ) = payable(msg.sender).call{value: amount}("");
-            require(ok, "stake");
-        }
+        tokenCredit[msg.sender] += amount;
     }
 
     /// Sets the principal's own funds aside for proving answers to its
@@ -681,16 +678,7 @@ contract Reserve {
         d.bond = 0;
         emit Closed(id, dep, bond);
         if (dep != 0) require(token.transfer(d.principal, dep), "deposit");
-        credit[d.agent] += bond;
-    }
-
-    /// Pays out the caller's credits.
-    function withdraw() external {
-        uint256 amount = credit[msg.sender];
-        if (amount == 0) revert NothingToWithdraw();
-        credit[msg.sender] = 0;
-        (bool ok, ) = payable(msg.sender).call{value: amount}("");
-        require(ok, "withdraw");
+        tokenCredit[d.agent] += bond;
     }
 
     function _forfeit(uint256 id) private {
@@ -700,7 +688,7 @@ contract Reserve {
         uint256 amount = d.accepted ? d.bond : 0;
         d.bond = 0;
         emit BondForfeited(id, d.principal, amount);
-        credit[d.principal] += amount;
+        tokenCredit[d.principal] += amount;
     }
 
     /// The principal computes the accumulator's new root off chain and the

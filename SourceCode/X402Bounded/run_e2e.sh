@@ -67,3 +67,14 @@ done
 RPC_URL=http://127.0.0.1:8547 npx tsx e2e/run.ts | tee "$hist/run_${tag}_x402.txt"
 CONSTRAINTS="$circuits/target/constraints.dag" PROOF_SMALL="$work/small.bin" CIRCUIT_BIN="$bin" \
     npx tsx e2e/monitor.ts | tee "$hist/run_${tag}_monitor.txt"
+# Base's fee settings from its newest mainnet header, as the monitor reads them:
+# the first endpoint that answers.
+read_settings=""
+for rpc in ${L2_RPC:-} https://mainnet.base.org https://base-rpc.publicnode.com https://base.drpc.org https://1rpc.io/base; do
+    if npx tsx e2e/base_settings.ts "$rpc" > "$hist/run_${tag}_base_settings.txt" 2>&1; then
+        cat "$hist/run_${tag}_base_settings.txt"
+        read_settings=yes
+        break
+    fi
+done
+[ -n "$read_settings" ] || { echo "no Base endpoint answered:"; cat "$hist/run_${tag}_base_settings.txt"; exit 1; }

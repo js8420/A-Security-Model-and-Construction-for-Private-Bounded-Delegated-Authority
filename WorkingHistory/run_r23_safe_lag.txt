@@ -1,0 +1,5 @@
+HOW FAR BASE'S SAFE AND FINALIZED HEADS TRAIL ITS NEWEST BLOCK, SECONDS
+==============================================================================
+  120 samples every 30 s over 60 min, blocks 61601242 to 61619164
+  safe       least 8, median 34, 90th percentile 55, 99th 66, most 69
+  finalized  least 841, median 1041, 90th percentile 1198, 99th 1230, most 1234

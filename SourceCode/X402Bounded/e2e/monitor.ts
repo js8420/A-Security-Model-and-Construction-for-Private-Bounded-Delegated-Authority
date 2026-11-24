@@ -18,7 +18,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, anvilBlobs, ethereumBlobs, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
   loadKzg, postBlobs, postingsAbi, proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
-  deploymentRefusal, publishedBuild, forkRefusal,
+  deploymentRefusal, publishedBuild, forkRefusal, decodeFeeExtra, feeSettingsRefusal,
   type Check, type Deployment, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
@@ -68,6 +68,8 @@ const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
 const BOND = parseEther("0.01");
+/** The agent's bond, in the token the payments are in. */
+const AGENT_BOND = 43_200_000n;
 /** What an answer to the principal's challenges is paid for each batch, in the reserve's token: 7.54 at six decimals. */
 const PROVING_COST = 7_540_000n;
 /**
@@ -137,6 +139,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
   const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, 2n ** 256n - 1n] }));
+  // The agent posts its bond, and the answerer its stake, in the token.
+  for (const w of [accepting, answering]) {
+    await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [w.account.address, 10n ** 12n] }));
+    await done(await w.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, 2n ** 256n - 1n] }));
+  }
 
   /** A delegation under these terms, and this domain as the monitor sees it. */
   const delegate = async (t: Terms): Promise<Domain> => {
@@ -146,11 +153,11 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
       agent: agent.address, cap: t.cap, velocityN: 20n, windowW: 86_400n, secretHash: t.secretHash, funding: 0,
       deposit: 10n ** 12n, commitment: t.commitment, revocationRoot: t.revocationRoot, expiry: now + 30n * 86_400n,
       unitSize: t.unitSize, rangeBase: t.rangeBase, rangeLen: t.rangeLen, monitor: ZERO, answerer: t.answerer ? answererKey.address : ZERO,
-      openOnRequest: t.openOnRequest ?? false, bond: parseEther("0.1"),
+      openOnRequest: t.openOnRequest ?? false, bond: AGENT_BOND,
     };
     await done(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms] }));
-    await done(await accepting.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id], value: parseEther("0.1") }));
-    if (t.answerer) await done(await answering.writeContract({ address: reserve, abi: reserveFull, functionName: "stakeAnswerer", args: [id], value: parseEther("0.2") }));
+    await done(await accepting.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id] }));
+    if (t.answerer) await done(await answering.writeContract({ address: reserve, abi: reserveFull, functionName: "stakeAnswerer", args: [id, AGENT_BOND + PROVING_COST] }));
     return { name, chain: pub, wallet: principal, reserve, delegation: id, dispute: vd };
   };
 
@@ -238,7 +245,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     const out = (await pub.readContract({ address: poseidon, abi: artifact("Poseidon2Goldilocks.sol", "Poseidon2Goldilocks").abi, functionName: "permute", args: [st] })) as readonly bigint[];
     return `0x${(out[2] | (out[3] << 64n) | (out[4] << 128n) | (out[5] << 192n)).toString(16).padStart(64, "0")}` as Hex;
   };
-  const principalCredit = async () => (await pub.readContract({ address: reserve, abi: reserveFull, functionName: "credit", args: [principal.account.address] })) as bigint;
+  const principalCredit = async () => (await pub.readContract({ address: reserve, abi: reserveFull, functionName: "tokenCredit", args: [principal.account.address] })) as bigint;
   /** What the dispute contract owes an address: bonds credited back or won. */
   const disputeCredit = async (who: Address) => (await pub.readContract({ address: vd, abi: disputeAbi, functionName: "credit", args: [who] })) as bigint;
   const principalAddress = principal.account.address;
@@ -877,7 +884,7 @@ async function main() {
     const sent = [await A.settle(dA, one), await B.settle(dB, two)];
     const r = await m.poll();
     const after = [await A.principalCredit(), await B.principalCredit()];
-    const paid = after[0] - before[0] === parseEther("0.1") && after[1] - before[1] === parseEther("0.1");
+    const paid = after[0] - before[0] === AGENT_BOND && after[1] - before[1] === AGENT_BOND;
     const frozen = (await A.state(dA)).frozen && (await B.state(dB)).frozen;
     check("the monitor recovers the secret from the two shares at once, before any decision time, and claims the bond on both domains, which freezes both", sent.every((x) => x === "settled") && r.froze && paid && frozen && r.challenged.length === 0, r.reasons.join("; "));
     const wrong = extractSecret([{ digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }, { digest: 7_001n, domain: 8453n, elems: share(7_001n, 8453n) }]);
@@ -942,7 +949,7 @@ async function main() {
     kept.restore(copy);
     const rKept = await kept.poll();
     const after = [await A.principalCredit(), await B.principalCredit()];
-    const paid = after[0] - before[0] === parseEther("0.1") && after[1] - before[1] === parseEther("0.1");
+    const paid = after[0] - before[0] === AGENT_BOND && after[1] - before[1] === AGENT_BOND;
     check("the monitor restored from its own copy sets the later settlement against the earlier one, recovers the secret and claims the bond on both domains, which freezes both",
       kept.all().length === 2 && rKept.froze && paid && (await A.state(dA)).frozen && (await B.state(dB)).frozen, rKept.reasons.join("; "));
   }
@@ -989,13 +996,48 @@ async function main() {
     const lead = 3n * 86400n;
     const m = new Monitor([dA], policy(1_000_000n), { ...proving(null), feeForks: [fork], forkLead: lead });
     const r0 = await m.poll();
-    const longRun = forkRefusal(now, now + 30n * 86400n, [fork], lead);
-    const shortRun = forkRefusal(now, now + 3n * 86400n, [fork], lead);
+    const measured = now - 86400n;
+    const before = forkRefusal(now, [fork], lead, measured);
+    const inLead = forkRefusal(now + 5n * 86400n, [fork], lead, measured);
+    const afterOld = forkRefusal(fork + 1n, [fork], lead, measured);
+    const afterNew = forkRefusal(fork + 1n, [fork], lead, fork);
     await A.advance(Number(4n * 86400n) + 10);
     const r1 = await m.poll();
-    check("the principal's check refuses a delegation that runs into the fork's lead, and passes one that ends before it", longRun !== "" && shortRun === "", longRun);
-    check("the monitor freezes the delegation once the fork is within its lead, and not before",
+    check("the principal's check opens a delegation of any declared expiry before the fork's lead, refuses one within the lead, refuses the old deployment after the fork and passes one measured for the new rules",
+      before === "" && inLead !== "" && afterOld !== "" && afterNew === "", `${inLead}; ${afterOld}`);
+    check("the monitor freezes the 30-day delegation once the fork is within its lead, and not before",
       !r0.froze && r1.froze && (await A.state(dA)).frozen, r1.reasons.join("; "));
+  }
+
+  section("a change to the domain's fee settings, made without a fork");
+  {
+    // Extra data as Base's headers carry it: version, denominator, elasticity, minimum base fee.
+    const extra = (d: number, e: number, min: bigint) =>
+      `0x01${d.toString(16).padStart(8, "0")}${e.toString(16).padStart(8, "0")}${min.toString(16).padStart(16, "0")}` as Hex;
+    const tested = 0.0202;
+    const floor = 10_000_000n;
+    const settings = (x: Hex, bps: number) => ({ ...decodeFeeExtra(x)!, blocksPerSecond: bps });
+    const march = settings(extra(100, 5, 5_000_000n), 0.5);
+    const denim = settings(extra(1000, 5, 5_000_000n), 5);
+    const faster = settings(extra(50, 5, 5_000_000n), 0.5);
+    const blocksOnly = settings(extra(100, 5, 5_000_000n), 5);
+    const dearMin = settings(extra(1000, 5, 50_000_000n), 5);
+    const passes = [march, denim].map((s) => feeSettingsRefusal(s, tested, 4n, floor));
+    const refuses = [faster, blocksOnly, dearMin].map((s) => feeSettingsRefusal(s, tested, 4n, floor));
+    check("the settings Base runs since March 2026, at 2 s blocks and at 200 ms with the denominator raised tenfold, pass; a lower denominator, 200 ms blocks without it and a minimum base fee above four floors are each refused",
+      passes.every((x) => x === "") && refuses.every((x) => x !== "") && decodeFeeExtra("0x" as Hex) === undefined, refuses.join("; "));
+    // The local deployment's floor is zero, so here the minimum base fee is zero too.
+    const dA = await A.delegate(plain);
+    const at = (d: number, bps: number) => settings(extra(d, 5, 0n), bps);
+    let now = at(100, 0.5);
+    const m = new Monitor([dA], policy(1_000_000n), { ...proving(null), testedRise: tested, feeSettingsOf: async () => now });
+    const r0 = await m.poll();
+    now = at(1000, 5);
+    const r1 = await m.poll();
+    now = at(50, 0.5);
+    const r2 = await m.poll();
+    check("the monitor keeps the delegation through a change that keeps the tested rate, and freezes it once a change lets the fee rise faster",
+      !r0.froze && !r1.froze && r2.froze && (await A.state(dA)).frozen, r2.reasons.join("; "));
   }
 
   section("the chain shows the same whatever the cause: an adversary with the agent's key and no proof");

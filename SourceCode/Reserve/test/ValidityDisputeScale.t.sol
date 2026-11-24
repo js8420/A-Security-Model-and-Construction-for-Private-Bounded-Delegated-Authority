@@ -62,7 +62,7 @@ contract ValidityDisputeScaleTest is Test {
     uint64 constant DOMAIN = 8453;
     uint256 constant AGENT_PK = 0xA6E47;
     uint256 constant OTHER_PK = 0xB0B;
-    uint256 constant AGENT_BOND = 1 ether;
+    uint256 constant AGENT_BOND = TermsOf.BOND;
     uint256 constant BOND = 0.01 ether;
     /// What an answer to the principal's challenges is paid for each batch,
     /// in the reserve's token.
@@ -150,13 +150,27 @@ contract ValidityDisputeScaleTest is Test {
         acc.setDispute(address(vd));
     }
 
-    /// The agent accepts the delegation, posting the bond it names.
+    /// The agent accepts the delegation, posting the bond it names in the token.
     function _accepted(uint256 r) internal returns (uint256) {
         address a = acc.agentOf(r);
-        vm.deal(a, a.balance + AGENT_BOND);
+        _fund(a, AGENT_BOND);
         vm.prank(a);
-        acc.accept{value: AGENT_BOND}(r);
+        acc.accept(r);
         return r;
+    }
+
+    /// Mints `amount` of the token to `who` and lets the reserve pull it.
+    function _fund(address who, uint256 amount) internal {
+        token.mint(who, amount);
+        vm.prank(who);
+        token.approve(address(acc), type(uint256).max);
+    }
+
+    /// The answerer stakes `amount` of the token.
+    function _stake(address ans, uint256 r, uint256 amount) internal {
+        _fund(ans, amount);
+        vm.prank(ans);
+        acc.stakeAnswerer(r, amount);
     }
 
     function _register(uint256 pk, uint256 tag) internal returns (uint256 r) {
@@ -525,7 +539,7 @@ contract ValidityDisputeScaleTest is Test {
         uint256 before = principal.balance;
         vd.expire(r, 42);
         assertEq(principal.balance, before);
-        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
         assertEq(vd.credit(address(bad)), BOND);
     }
 
@@ -545,8 +559,8 @@ contract ValidityDisputeScaleTest is Test {
         acc.close(r);
         vd.expire(r, 5);
         acc.close(r);
-        assertEq(acc.credit(agent), 0);
-        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(agent), 0);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
     }
 
     function testCloseAfterAnAnsweredChallengeReturnsTheBond() public {
@@ -557,7 +571,7 @@ contract ValidityDisputeScaleTest is Test {
         _answerAlone(r, 5);
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
         acc.close(r);
-        assertEq(acc.credit(agent), AGENT_BOND);
+        assertEq(acc.tokenCredit(agent), AGENT_BOND);
     }
 
     /// M1: an unanswered challenge forfeits the bond and freezes the
@@ -617,7 +631,7 @@ contract ValidityDisputeScaleTest is Test {
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         address agent = vm.addr(AGENT_PK);
         acc.close(r);
-        assertEq(acc.credit(agent), AGENT_BOND);
+        assertEq(acc.tokenCredit(agent), AGENT_BOND);
     }
 
     /// A principal that is a contract wallet monitors from an EOA: that
@@ -666,8 +680,7 @@ contract ValidityDisputeScaleTest is Test {
         t.answerer = ans;
         vm.prank(principal);
         r = _accepted(acc.register(t));
-        vm.prank(ans);
-        acc.stakeAnswerer{value: AGENT_BOND}(r);
+        _stake(ans, r, AGENT_BOND + COST);
     }
 
     /// Stands for the root of a batch's sealed openings in tests that do not deliver one.
@@ -771,24 +784,24 @@ contract ValidityDisputeScaleTest is Test {
         _openBy(principal, r, 5);
         vm.warp(_deadline(r, 5) + 1);
         vd.expire(r, 5);
-        assertEq(acc.credit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
         address agent = vm.addr(AGENT_PK);
         vm.prank(challenger);
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
-        assertEq(acc.credit(agent), 0);
-        assertEq(acc.credit(principal), AGENT_BOND);
-        assertEq(acc.credit(challenger), BOND);
+        assertEq(acc.tokenCredit(agent), 0);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
+        assertEq(acc.tokenCredit(challenger), COST);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
-        assertEq(acc.burnt(), AGENT_BOND - BOND);
+        assertEq(acc.burnt(), AGENT_BOND);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         acc.close(r);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 2 * DELIVERY + 1);
-        uint256 b0 = ans.balance;
+        uint256 b0 = acc.tokenCredit(ans);
         vm.prank(ans);
         acc.unstakeAnswerer(r);
-        assertEq(ans.balance, b0);
-        assertGe(address(acc).balance, acc.burnt() + acc.credit(principal) + acc.credit(challenger));
+        assertEq(acc.tokenCredit(ans), b0);
+        assertGe(token.balanceOf(address(acc)), acc.burnt() + acc.tokenCredit(principal) + acc.tokenCredit(challenger));
     }
 
     function testSlashBeforeExpiryRefused() public {
@@ -1007,16 +1020,16 @@ contract ValidityDisputeScaleTest is Test {
         pd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
         vm.warp(block.timestamp + DELIVERY + 1);
         address agent = vm.addr(AGENT_PK);
-        uint256 a0 = agent.balance;
+        uint256 a0 = acc.tokenCredit(agent);
         vm.prank(challenger);
         uint256 g0 = gasleft();
         pd.slashWithholding(r, 5, s, 0, new bytes32[](0), rc);
         console.log("slash for withholding, batch of one", g0 - gasleft());
-        assertEq(acc.credit(challenger), BOND);
-        assertEq(agent.balance, a0);
+        assertEq(acc.tokenCredit(challenger), COST);
+        assertEq(acc.tokenCredit(agent), a0);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
-        assertEq(acc.burnt(), AGENT_BOND - BOND);
+        assertEq(acc.burnt(), AGENT_BOND);
     }
 
     /// An answerer handed the batch only after the answer is not to blame.
@@ -1078,10 +1091,9 @@ contract ValidityDisputeScaleTest is Test {
     /// after the close.
     function testAnswererStakeLifecycle() public {
         (uint256 r, address ans) = _registerWithAnswerer();
-        vm.deal(challenger, 10 ether);
         vm.prank(challenger);
         vm.expectRevert(Reserve.NotAnswerer.selector);
-        acc.stakeAnswerer{value: 1}(r);
+        acc.stakeAnswerer(r, 1);
         vm.prank(ans);
         vm.expectRevert(Reserve.NotClosed.selector);
         acc.unstakeAnswerer(r);
@@ -1100,13 +1112,13 @@ contract ValidityDisputeScaleTest is Test {
         vm.expectRevert(Reserve.NotClosed.selector);
         acc.unstakeAnswerer(r);
         vm.warp(block.timestamp + 1);
-        uint256 b0 = ans.balance;
+        uint256 b0 = acc.tokenCredit(ans);
         vm.prank(ans);
         acc.unstakeAnswerer(r);
-        assertEq(ans.balance, b0 + AGENT_BOND);
+        assertEq(acc.tokenCredit(ans), b0 + AGENT_BOND + COST);
         vm.prank(ans);
         vm.expectRevert(Reserve.NotClosable.selector);
-        acc.stakeAnswerer{value: 1}(r);
+        acc.stakeAnswerer(r, 1);
     }
 
     /// Gas of the answerer's two calls: staking, and the slash a silent
@@ -1118,9 +1130,10 @@ contract ValidityDisputeScaleTest is Test {
         t.answerer = ans;
         vm.prank(principal);
         uint256 r = _accepted(acc.register(t));
+        _fund(ans, AGENT_BOND + COST);
         vm.prank(ans);
         uint256 g0 = gasleft();
-        acc.stakeAnswerer{value: AGENT_BOND}(r);
+        acc.stakeAnswerer(r, AGENT_BOND + COST);
         console.log("stake answerer", g0 - gasleft());
         _settle(AGENT_PK, r, 5);
         Settlement memory s = _rec(r, 5);
@@ -1147,7 +1160,7 @@ contract ValidityDisputeScaleTest is Test {
         assertLt(vd.credit(vm.addr(AGENT_PK)), 0.002 ether);
         vm.prank(address(0));
         vm.expectRevert(Reserve.NotAnswerer.selector);
-        acc.stakeAnswerer(r);
+        acc.stakeAnswerer(r, 1);
     }
 
     function testReclaimNeedsAFreeze() public {
@@ -1860,18 +1873,20 @@ contract ValidityDisputeScaleTest is Test {
         this.settleAgain(AGENT_PK, r, 5);
         vm.prank(principal);
         vm.expectRevert(Reserve.NotAgent.selector);
-        acc.accept{value: AGENT_BOND}(r);
-        vm.deal(agent, 3 ether);
+        acc.accept(r);
+        _fund(agent, AGENT_BOND - 1);
         vm.prank(agent);
-        vm.expectRevert(Reserve.WrongBond.selector);
-        acc.accept{value: AGENT_BOND - 1}(r);
+        vm.expectRevert();
+        acc.accept(r);
         assertFalse(acc.serves(agent, principal));
+        token.mint(agent, 1);
         vm.prank(agent);
-        acc.accept{value: AGENT_BOND}(r);
+        acc.accept(r);
         assertTrue(acc.serves(agent, principal));
+        assertEq(token.balanceOf(agent), 0);
         vm.prank(agent);
         vm.expectRevert(Reserve.NotAcceptable.selector);
-        acc.accept{value: AGENT_BOND}(r);
+        acc.accept(r);
         _settle(AGENT_PK, r, 5);
     }
 
@@ -1894,10 +1909,10 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(acc.servedCount(agent), 1);
         vm.prank(address(0xB0B5));
         uint256 other = acc.register(t);
-        vm.deal(agent, 2 ether);
+        _fund(agent, AGENT_BOND);
         vm.prank(agent);
         vm.expectRevert(Reserve.OverCapacity.selector);
-        acc.accept{value: AGENT_BOND}(other);
+        acc.accept(other);
         vm.prank(agent);
         vm.expectRevert(Reserve.OverCapacity.selector);
         acc.declareCapacity(0);
@@ -1919,10 +1934,10 @@ contract ValidityDisputeScaleTest is Test {
         acc.declareCapacity(2);
         vm.prank(address(0xCAFE));
         uint256 third = acc.register(TermsOf.make(agent, 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 0, bytes32(uint256(1)), bytes32(uint256(2)), uint64(block.timestamp) + LIFE));
-        vm.deal(agent, 2 ether);
+        _fund(agent, AGENT_BOND);
         vm.prank(agent);
         vm.expectRevert(Reserve.OverCapacity.selector);
-        acc.accept{value: AGENT_BOND}(third);
+        acc.accept(third);
     }
 
     /// The principal cancels its own open challenge once the late batch has
@@ -2159,7 +2174,7 @@ contract ValidityDisputeScaleTest is Test {
         vd.slashAnswerer(r, 5, s, 0, new bytes32[](0), rc);
         (, uint256 left) = acc.answererOf(r);
         assertEq(left, 0);
-        assertEq(acc.credit(challenger), BOND);
+        assertEq(acc.tokenCredit(challenger), COST);
     }
 
     /// The same for a delivery that falls due after an answer: an answer ends
@@ -2202,8 +2217,8 @@ contract ValidityDisputeScaleTest is Test {
         assertGt(_deadline(o, 6), _deadline(r, 50) + 8 * SLOT);
     }
 
-    /// The reserve credits ether rather than sending it, so an agent that
-    /// refuses ether cannot block the close that returns the deposit.
+    /// The reserve credits the bond rather than sending it, so an agent that
+    /// cannot receive cannot block the close that returns the deposit.
     function testAgentThatRefusesEtherCannotBlockClose() public {
         RefusesEther bad = new RefusesEther();
         vm.prank(principal);
@@ -2212,7 +2227,7 @@ contract ValidityDisputeScaleTest is Test {
         uint256 before = token.balanceOf(principal);
         acc.close(r);
         assertEq(token.balanceOf(principal), before + 100_000_000);
-        assertEq(acc.credit(address(bad)), AGENT_BOND);
+        assertEq(acc.tokenCredit(address(bad)), AGENT_BOND);
     }
 
     /// One late batch: the principal's challenges of all its settlements, in

@@ -69,8 +69,13 @@ contract UsdcForkGas is Test {
         uint256 g = gasleft();
         id = r.register(t);
         used = g - gasleft();
-        vm.prank(agent);
-        r.accept{value: TermsOf.BOND}(id);
+        address tk = address(r.token());
+        if (tk == USDC) IUsdc(USDC).mint(agent, TermsOf.BOND);
+        else MockToken(tk).mint(agent, TermsOf.BOND);
+        vm.startPrank(agent);
+        IUsdc(tk).approve(address(r), type(uint256).max);
+        r.accept(id);
+        vm.stopPrank();
     }
 
     function _elems(uint256 cover, uint256 salt) internal pure returns (uint64[] memory e) {
@@ -132,6 +137,23 @@ contract UsdcForkGas is Test {
         vm.expectRevert();
         r.settleLogged(id, payee, Statement.UNIT, 9, t, e, OPENING, abi.encodePacked(rr, s, v));
         console.log("a settlement through a blacklisted reserve reverts");
+    }
+
+    /// The bond is a credit in the token: a claim after the issuer has
+    /// blacklisted the reserve still credits it to the principal, and only
+    /// the withdrawal waits on the issuer, as the deposit's does.
+    function testForfeitCreditsUnderABlacklistedReserve() public {
+        Reserve r = _reserve(USDC);
+        (uint256 id,) = _open(r, Reserve.Funding.Deposit);
+        IUsdc u = IUsdc(USDC);
+        vm.prank(u.blacklister());
+        u.blacklist(address(r));
+        r.claim(id, [Statement.SECRET0, Statement.SECRET1]);
+        assertEq(r.tokenCredit(principal), TermsOf.BOND);
+        vm.prank(principal);
+        vm.expectRevert();
+        r.withdrawToken();
+        console.log("a claim against a blacklisted reserve credits the bond; its withdrawal reverts");
     }
 
     /// The issuer blacklists a payee: a settlement to it reverts, and the

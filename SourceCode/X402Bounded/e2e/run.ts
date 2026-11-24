@@ -15,7 +15,6 @@ import {
   encodePacked,
   http,
   keccak256,
-  parseEther,
   type Abi,
   type Hex,
 } from "viem";
@@ -36,6 +35,8 @@ const KEYS = {
 const UNIT = 10_000n;
 const CAP = 50_000n;
 const RATE = 5n;
+/** The agent's bond, in the token. */
+const BOND = 43_200_000n;
 const P = 0xffffffff00000001n;
 
 function artifact(file: string, name: string): { abi: Abi; bytecode: Hex } {
@@ -121,11 +122,13 @@ async function main() {
     commitment: keccak256("0x02"), revocationRoot: keccak256("0x03"), expiry: now + 30n * 86_400n,
     unitSize: UNIT, rangeBase: 0n, rangeLen: 1024n,
     monitor: "0x0000000000000000000000000000000000000000", answerer: "0x0000000000000000000000000000000000000000",
-    openOnRequest: false, bond: parseEther("0.1"),
+    openOnRequest: false, bond: BOND,
   };
   const id = 0n;
   await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "register", args: [terms] }));
-  await send(await agentWallet.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id], value: parseEther("0.1") }));
+  await send(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [agent.address, BOND] }));
+  await send(await agentWallet.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, BOND] }));
+  await send(await agentWallet.writeContract({ address: reserve, abi: reserveFull, functionName: "accept", args: [id] }));
 
   // The published build of Reserve.sol, as the facilitator holds it, and
   // two contracts at addresses the facilitator is told to settle through:
@@ -185,8 +188,9 @@ async function main() {
   const delegations = new Map([[reserve, id]]);
   const source = new DemoSource();
   const controls = { allowedAssets: [{ network: NETWORK, asset: token, maxAmountPerPayment: "100000" }] };
+  const agentScheme = new BoundedEvmClient(agent, chain, delegations, source);
   const client = new x402Client()
-    .register("eip155:*", new BoundedEvmClient(agent, chain, delegations, source))
+    .register("eip155:*", agentScheme)
     .setSpendControls(controls);
   const pay = wrapFetchWithPayment(fetch, client);
   const balance = (who: Hex) => chain.readContract({ address: token, abi: tokenAbi, functionName: "balanceOf", args: [who] }) as Promise<bigint>;
@@ -297,6 +301,26 @@ async function main() {
   check("a settlement dropped before the safe head is sent again unchanged and settles once, with no new payment formed",
     gone && out.success && after.length === 1 && after[0].transactionHash !== firstHash && source.openings.length === formed,
     `${out.errorReason ?? "settled"} by a second transaction, ${after.length} on chain`);
+  // A facilitator that answers at once: the payee serves, the sequencer
+  // replaces the block, and the facilitator does nothing more. The agent's
+  // client sends its own signed payment again, and forms no new one.
+  const servedAtOnce = await paid("/data");
+  const all = await chain.getContractEvents({ address: reserve, abi: reserveFull, eventName: "Settled", args: { id }, fromBlock: 0n });
+  const lastOne = all[all.length - 1];
+  const digestK = (lastOne.args as { digest: bigint }).digest;
+  const formedK = source.openings.length;
+  await agentScheme.keep(agentWallet);
+  const tipK = await chain.getBlockNumber({ cacheTime: 0 });
+  await chain.request({ method: "anvil_reorg" as never, params: [Number(tipK - lastOne.blockNumber + 1n), []] as never });
+  const onK = async () =>
+    (await chain.getContractEvents({ address: reserve, abi: reserveFull, eventName: "Settled", args: { id }, fromBlock: 0n })).filter(
+      (l) => (l.args as { digest: bigint }).digest === digestK,
+    ).length;
+  const goneK = (await onK()) === 0;
+  const resent = await agentScheme.keep(agentWallet);
+  check("a settlement the payee was answered for at once, then dropped by the sequencer: the agent's client sends that same payment again, it settles once, and no new payment is formed",
+    servedAtOnce.status === 200 && goneK && resent.length === 1 && resent[0] === digestK && (await onK()) === 1 && source.openings.length === formedK,
+    `${resent.length} sent again`);
   await send(await principal.writeContract({ address: reserve, abi: reserveFull, functionName: "freeze", args: [id] }));
   const frozen = await paid("/data");
   check("after the principal's freeze, refused", frozen.status === 402, lastReason());

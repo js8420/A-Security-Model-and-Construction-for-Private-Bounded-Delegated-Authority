@@ -50,7 +50,8 @@ export class BoundedEvmFacilitator implements SchemeNetworkFacilitator {
    * domain's sequencer can still replace until its data is on Ethereum; the
    * payee then bears that. "safe" waits until it is, and sends the same
    * signed settlement again if it left the chain on the way, so the agent's
-   * unit is spent by that payment alone.
+   * unit is spent by that payment alone; "finalized" waits further, until
+   * the Ethereum data it was derived from is final.
    */
   constructor(
     private readonly wallet: Wallet,
