@@ -29,7 +29,10 @@ contract ValidityDisputeTest is Groth16Result {
     uint64 constant BUDGET = 100_000_000;
     uint256 constant AGENT_PK = 0xA6E47;
     uint256 constant AGENT_BOND = TermsOf.BOND;
-    uint256 constant CHALLENGER_BOND = 0.01 ether;
+    /// A third party's bond: the proving part in the token, and the ether
+    /// for forcing the answer in at the floor fee times the factor.
+    uint256 constant PROVING_TOKEN = 10_000;
+    uint256 constant CHALLENGER_BOND = 2 * 572_345 * 1 gwei;
     uint64 constant ACCEPT = 1 days;
     uint64 constant WINDOW = 1 days;
     uint64 constant SLOT = 2 hours;
@@ -64,12 +67,12 @@ contract ValidityDisputeTest is Groth16Result {
                 slot: SLOT,
                 deliveryWait: 8 hours,
                 deliveryTime: 8 hours,
-                provingBond: CHALLENGER_BOND,
-                provingCost: CHALLENGER_BOND / 2,
+                provingBond: PROVING_TOKEN,
+                provingCost: PROVING_TOKEN / 2,
                 forceGas: 572_345,
                 l1Factor: 2,
                 l2Factor: 2,
-                l1FeeFloor: 0,
+                l1FeeFloor: 1 gwei,
                 l2FeeFloor: 0
             })
         );
@@ -80,6 +83,9 @@ contract ValidityDisputeTest is Groth16Result {
         token.mint(principal, 1e15);
         token.mint(_payee(0), 1);
         vm.prank(principal);
+        token.approve(address(acc), type(uint256).max);
+        token.mint(challenger, 1e12);
+        vm.prank(challenger);
         token.approve(address(acc), type(uint256).max);
 
         id = _register(_com());
@@ -135,6 +141,7 @@ contract ValidityDisputeTest is Groth16Result {
         uint256 agentBefore = agent.balance;
         _answer(id, 77, recs[77], 77);
         assertEq(vd.credit(agent), CHALLENGER_BOND);
+        assertEq(acc.tokenCredit(agent), PROVING_TOKEN);
         assertEq(uint256(vd.challengeOf(id, _digest(77)).status), uint256(ValidityDispute.Status.Answered));
         vm.prank(agent);
         vd.withdraw();
@@ -159,6 +166,7 @@ contract ValidityDisputeTest is Groth16Result {
             assertEq(uint256(vd.challengeOf(id, ds[i]).status), uint256(ValidityDispute.Status.Answered));
         }
         assertEq(vd.credit(agent), n * CHALLENGER_BOND);
+        assertEq(acc.tokenCredit(agent), n * PROVING_TOKEN);
         assertEq(vd.openCount(id), 0);
     }
 
@@ -175,6 +183,7 @@ contract ValidityDisputeTest is Groth16Result {
         vm.prank(challenger);
         vd.withdraw();
         assertEq(challenger.balance, challengerBefore + CHALLENGER_BOND);
+        assertEq(acc.tokenCredit(challenger), PROVING_TOKEN);
         assertEq(uint256(vd.challengeOf(id, _digest(0)).status), uint256(ValidityDispute.Status.Expired));
     }
 

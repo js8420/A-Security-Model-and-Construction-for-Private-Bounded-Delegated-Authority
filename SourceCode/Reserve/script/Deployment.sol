@@ -10,10 +10,10 @@ import {Postings} from "../src/Postings.sol";
 /// measured on that instance. The proving cost, what an answer to the
 /// principal's challenges is paid for each batch, is that price with a
 /// margin of a quarter, rounded up to the cent, in the reserve's token, USDC
-/// with six decimals, so the price of ether does not move it. The proving bond, the fixed part of a third
-/// party's bond, is twice that price in ether at the last measured ether
-/// price, $2,339.10, rounded up to the microether; bond_and_contention.py
-/// reads it and reports the margin it gives at the price on the day it runs.
+/// with six decimals, so the price of ether does not move it. The proving
+/// bond, the part of a third party's bond that pays for the proving, is the
+/// same amount in the same token; the rest of that bond is ether, for the gas
+/// of forcing the answer in.
 /// The forced answer's L1 gas was measured on a fork of
 /// Ethereum mainnet. The fee factors and floors come from the base fees of
 /// Ethereum and Base since Dencun (fee_ratio.py floors): with each fee read no
@@ -24,8 +24,8 @@ import {Postings} from "../src/Postings.sol";
 /// deposit is sized to that domain way alone: a posting as blobs is refunded
 /// no more than the domain way costs when its report arrives.
 library Deployment {
-    uint256 internal constant PROVING_BOND = 0.005153 ether;
     uint256 internal constant PROVING_COST = 7_540_000;
+    uint256 internal constant PROVING_BOND = 7_540_000;
     uint64 internal constant DELIVERY_TIME = 8 hours;
     uint256 internal constant FORCE_GAS = 572_345;
     uint256 internal constant L1_FACTOR = 10;

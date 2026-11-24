@@ -20,6 +20,9 @@ blob base fee in the posting window. The fee factors are chosen from these.
                                            Base made to its fee settings
   python3 fee_ratio.py denim DATA_DIR      Base's factor on its 200 ms blocks, from Denim to
                                            the head the first fetch of them recorded
+  python3 fee_ratio.py datafee DATA_DIR    the posting deposit's factor with the L1 data fee
+                                           included, at Base's data-fee scalars as they were,
+                                           over the two-second history
 
 Only block headers are read, through eth_feeHistory with no reward percentiles,
 so a full node serves every block. The data are fixed once fetched, so one
@@ -825,8 +828,129 @@ def denim(data):
     print()
 
 
+# The first transaction of every OP Stack block is the L1 attributes deposit.
+# From Ecotone on it carries the two data-fee scalars as big-endian u32 right
+# after its selector; the Bedrock form, in the first Ecotone block, does not.
+BEDROCK_L1_INFO = "015d8eb9"
+# Base activated Fjord at this time: from it the data fee is charged on a
+# FastLZ estimate of the size, 0.8365 times the compressed bytes, and the
+# contracts read it through getL1FeeUpperBound, which takes the compressed
+# bytes as at most 1 + 1/255 of the bytes; before it, on 16 gas a non-zero
+# byte, which for data that does not compress is the bytes themselves. Both
+# the deposit and the cost are priced on that bound here.
+FJORD_TIME = 1720627201
+FJORD_SIZE = 0.8365 * (1 + 1 / 255)
+SCALAR_STEP = 43_200
+
+
+def scalar_at(urls, n):
+    tx = rpc(urls, "eth_getTransactionByBlockNumberAndIndex", [hex(n), "0x0"])
+    data = tx["input"][2:]
+    if data[:8] == BEDROCK_L1_INFO:
+        return None
+    return int(data[8:16], 16), int(data[16:24], 16)
+
+
+def base_scalars(data, meta):
+    """Base's base-fee and blob-base-fee scalars over the fetched history: read
+    from the L1 attributes deposit at one block a day, and at every change
+    between two reads found by bisection. Returns the blocks at which each
+    value starts, as places in the fee array."""
+    urls = CHAINS["base"]["rpcs"]
+
+    def look():
+        first = meta["first"] + 1
+        pts = list(range(first, meta["last"], SCALAR_STEP)) + [meta["last"]]
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            vals = list(pool.map(lambda n: scalar_at(urls, n), pts))
+        starts = [[pts[0], vals[0]]]
+        for (a, va), (b, vb) in zip(zip(pts, vals), zip(pts[1:], vals[1:])):
+            lo, hi, vlo = a, b, va
+            while vb != vlo:
+                # the first block in (lo, hi] whose scalars differ from vlo
+                while hi - lo > 1:
+                    mid = (lo + hi) // 2
+                    if scalar_at(urls, mid) == vlo:
+                        lo = mid
+                    else:
+                        hi = mid
+                vlo = scalar_at(urls, hi)
+                starts.append([hi, vlo])
+                lo, hi = hi, b
+        return {"step": SCALAR_STEP, "first": first, "last": meta["last"], "starts": starts}
+
+    v = recorded(data, "scalars_base.json", look)
+    if v["first"] != meta["first"] + 1 or v["last"] != meta["last"]:
+        raise SystemExit(f"{data}/scalars_base.json does not match the fetched blocks")
+    return [(n - meta["first"], tuple(s)) for n, s in v["starts"]]
+
+
+def datafee(data):
+    """The posting deposit with the L1 data fee in it. The deposit is the
+    factor times what posting the batch on Base costs at the payment: its gas
+    at the base fee read no lower than the floor, and its bytes at the data
+    fee of the moment, which follows Ethereum's base fee and blob base fee
+    through Base's two scalars and has no floor. The refund is what the
+    postings cost where they land. In posting waits that do not overlap, the
+    batch's chunks in the cheapest Base blocks of the wait, each priced at its
+    gas and its data fee there, over the deposit's basis at the payment. Each
+    Base block takes the fees of the Ethereum block current at its time; its
+    L1 origin trails that by a few blocks."""
+    eth_meta, eth_fee, blob = load(data, "ethereum")
+    base_meta, base_fee, _ = load(data, "base")
+    times = eth_times(data, eth_meta)
+    base_t0 = recorded(data, "time_base_first.json", lambda: block_time(CHAINS["base"]["rpcs"], base_meta["first"]))
+    gas, nbytes = deployed("POSTING_GAS"), deployed("POSTING_BYTES")
+    floor, factor = deployed("L2_FEE_FLOOR"), deployed("L2_FACTOR")
+    starts = base_scalars(data, base_meta)
+    # The history starts at Ecotone; a block before it priced its data fee by
+    # another rule, which this formula would not price.
+    if any(s is None for _, s in starts):
+        raise SystemExit("a block in the history predates Ecotone's data fee")
+    print("THE POSTING DEPOSIT WITH THE L1 DATA FEE, BASE'S TWO-SECOND HISTORY")
+    print("=" * 78)
+    print(f"  Base blocks {base_meta['first']:,} to {base_meta['last']:,}; {gas:,} gas and {nbytes:,} bytes a batch; floor {floor / 1e9:g} gwei, deployed factor {factor}")
+    print(f"  data-fee scalars (base fee, blob base fee), each from its first block:")
+    for j, s in starts:
+        print(f"    from block {base_meta['first'] + j:,}: {s}")
+    n = len(base_fee)
+    unit = array("d", bytes(8 * n))
+    data_part = array("d", bytes(8 * n))
+    k = 0
+    for j in range(n):
+        while k + 1 < len(starts) and starts[k + 1][0] <= j:
+            k += 1
+        s = starts[k][1]
+        t = base_t0 + 2 * j
+        e = eth_index(times, t)
+        if e >= len(eth_fee):
+            n = j
+            break
+        size = nbytes * (FJORD_SIZE if t >= FJORD_TIME else 1.0)
+        df = size * (16 * s[0] * eth_fee[e] + s[1] * blob[e]) / 1e6
+        data_part[j] = df
+        unit[j] = gas * base_fee[j] + df
+    L = math.ceil(W_P_HOURS * 3600 / 2)
+    rows = []
+    for i in range(0, n - L, L + 1):
+        basis = gas * max(base_fee[i], floor) + data_part[i]
+        cost = sum(heapq.nsmallest(CHUNKS, unit[i:i + L + 1])) / CHUNKS
+        no_data = sum(heapq.nsmallest(CHUNKS, base_fee[i:i + L + 1])) / CHUNKS / max(base_fee[i], floor)
+        rows.append((i, cost / basis, data_part[i] / basis, no_data))
+    top = max(rows, key=lambda x: x[1])
+    over = sum(r > factor for _, r, _, _ in rows)
+    shares = sorted(x[2] for x in rows)
+    print(f"  posting waits that do not overlap: {len(rows):,}")
+    print(f"  largest ratio with the data fee {top[1]:.3f}, from block {base_meta['first'] + top[0]:,}; above the factor: {share(over, len(rows))}")
+    print(f"  largest ratio without it, as the settings and oos modes measure it: {max(x[3] for x in rows):.3f}")
+    print(f"  the data fee's share of the deposit's basis: median {shares[len(shares) // 2]:.4f}, largest {shares[-1]:.4f}")
+    kw, nw = weeks([(i, r, 0) for i, r, _, _ in rows], 2, factor)
+    print(f"  weeks with a window above the factor: {share(kw, nw)}")
+    print()
+
+
 if __name__ == "__main__":
-    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london, "settings": settings, "denim": denim}
+    modes = {"fetch": fetch, "analyze": analyze, "floors": floors, "oos": oos, "blobs": blobs, "london": london, "settings": settings, "denim": denim, "datafee": datafee}
     if len(sys.argv) < 3 or sys.argv[1] not in modes or (len(sys.argv) != 3 and sys.argv[1] != "blobs") or len(sys.argv) not in (3, 6):
         raise SystemExit(__doc__)
     modes[sys.argv[1]](*sys.argv[2:])

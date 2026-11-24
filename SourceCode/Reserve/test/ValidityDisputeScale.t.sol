@@ -63,7 +63,10 @@ contract ValidityDisputeScaleTest is Test {
     uint256 constant AGENT_PK = 0xA6E47;
     uint256 constant OTHER_PK = 0xB0B;
     uint256 constant AGENT_BOND = TermsOf.BOND;
-    uint256 constant BOND = 0.01 ether;
+    /// A third party's bond: the proving part in the token, and the ether for
+    /// forcing the answer in, at the floor fee of 1 gwei times the factor.
+    uint256 constant PROVING_TOKEN = 5_000_000;
+    uint256 constant BOND = 2 * 572_345 * 1 gwei;
     /// What an answer to the principal's challenges is paid for each batch,
     /// in the reserve's token.
     uint256 constant COST = 4_000_000;
@@ -109,6 +112,7 @@ contract ValidityDisputeScaleTest is Test {
         token.mint(payee, 1);
         vm.prank(principal);
         token.approve(address(acc), type(uint256).max);
+        _fund(challenger, 1e12);
     }
 
     function _params(uint64 w, uint64 wa, uint64 eta, uint64 wp) internal pure returns (ValidityDispute.Params memory) {
@@ -118,12 +122,12 @@ contract ValidityDisputeScaleTest is Test {
             slot: eta,
             deliveryWait: wp,
             deliveryTime: WD,
-            provingBond: BOND,
+            provingBond: PROVING_TOKEN,
             provingCost: COST,
             forceGas: FORCE_GAS,
             l1Factor: FACTOR,
             l2Factor: FACTOR,
-            l1FeeFloor: 0,
+            l1FeeFloor: 1 gwei,
             l2FeeFloor: 0
         });
     }
@@ -201,6 +205,7 @@ contract ValidityDisputeScaleTest is Test {
         Settlement memory s = _rec(r, d);
         bool own = who == acc.principalOf(r) || who == acc.monitorOf(r);
         uint256 value = own ? vd.principalPrice(r, 1, s.time, s.time) : BOND;
+        if (!own) _fund(who, PROVING_TOKEN);
         vm.prank(who);
         vd.open{value: value}(r, d, s);
     }
@@ -534,6 +539,7 @@ contract ValidityDisputeScaleTest is Test {
         uint256 r = _register(AGENT_PK, 10);
         Settlement memory s = _settle(AGENT_PK, r, 42);
         RefusesEther bad = new RefusesEther();
+        _fund(address(bad), PROVING_TOKEN);
         bad.openOn{value: BOND}(vd, r, 42, s);
         vm.warp(_deadline(r, 42) + 1);
         uint256 before = principal.balance;
@@ -541,6 +547,7 @@ contract ValidityDisputeScaleTest is Test {
         assertEq(principal.balance, before);
         assertEq(acc.tokenCredit(principal), AGENT_BOND);
         assertEq(vd.credit(address(bad)), BOND);
+        assertEq(acc.tokenCredit(address(bad)), PROVING_TOKEN);
     }
 
     function testWithdrawWithNoCreditFails() public {
@@ -558,9 +565,12 @@ contract ValidityDisputeScaleTest is Test {
         vm.expectRevert(Reserve.NotClosable.selector);
         acc.close(r);
         vd.expire(r, 5);
+        assertEq(acc.tokenCredit(principal), AGENT_BOND);
         acc.close(r);
         assertEq(acc.tokenCredit(agent), 0);
-        assertEq(acc.tokenCredit(principal), AGENT_BOND);
+        // The forfeited bond and the deposit left: the funding less the one
+        // payment and the proving cost the challenge set aside.
+        assertEq(acc.tokenCredit(principal), AGENT_BOND + 100_000_000 - 1 - COST);
     }
 
     function testCloseAfterAnAnsweredChallengeReturnsTheBond() public {
@@ -571,7 +581,9 @@ contract ValidityDisputeScaleTest is Test {
         _answerAlone(r, 5);
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
         acc.close(r);
-        assertEq(acc.tokenCredit(agent), AGENT_BOND);
+        // The bond comes back, beside the third party's proving bond the
+        // answer already credited.
+        assertEq(acc.tokenCredit(agent), AGENT_BOND + PROVING_TOKEN);
     }
 
     /// M1: an unanswered challenge forfeits the bond and freezes the
@@ -1174,7 +1186,7 @@ contract ValidityDisputeScaleTest is Test {
         _settle(pk, r, d);
     }
 
-    /// The windows the paper sets for Base: w = 36.5 h, theta = 1 h,
+    /// The windows the paper sets for Base: w = 38.5 h, theta = 1 h,
     /// w_a = 32 h, eta = 4 h and w_p = 30 h. The monitor's challenge at its
     /// decision time, ten hours after the signed time, is admitted; another
     /// party's at w is too, and one a second later is refused. The principal's
@@ -1183,7 +1195,7 @@ contract ValidityDisputeScaleTest is Test {
     /// then, which starts a posting wait of w_p, and once that wait has
     /// passed with nothing posted the receipt slashes the stake. Another party's challenge left unanswered expires and freezes.
     function testWindowsOfTheBaseDeployment() public {
-        uint64 w = 36 hours + 30 minutes;
+        uint64 w = 38 hours + 30 minutes;
         uint64 wa = 32 hours;
         uint64 eta = 4 hours;
         uint64 wp = 30 hours;
@@ -1200,7 +1212,7 @@ contract ValidityDisputeScaleTest is Test {
         Settlement memory s5 = _rec(r, 5);
         BatchReceipt memory rc = _receiptOver(ANSWERER_PK, r, vd.leafHash(r, 5, s5), keccak256(_sealed(5)), signed);
 
-        vm.warp(signed + w - 14 hours - 12 hours - 30 minutes);
+        vm.warp(signed + w - 16 hours - 12 hours - 30 minutes);
         _openBy(principal, r, 5);
         uint64 opened = uint64(block.timestamp);
         uint64 due = _deadline(r, 5);
@@ -2106,7 +2118,7 @@ contract ValidityDisputeScaleTest is Test {
         _settle(AGENT_PK, r, 6);
         assertEq(vd.challengeBond(), BOND);
         vm.etch(0x4200000000000000000000000000000000000015, address(new FixedL1Block()).code);
-        uint256 bond = BOND + FACTOR * FORCE_GAS * 3 gwei;
+        uint256 bond = FACTOR * FORCE_GAS * 3 gwei;
         assertEq(vd.challengeBond(), bond);
         Settlement memory s = _rec(r, 5);
         vm.prank(challenger);
@@ -2224,9 +2236,8 @@ contract ValidityDisputeScaleTest is Test {
         vm.prank(principal);
         uint256 r = _accepted(acc.register(TermsOf.make(address(bad), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, bytes32(uint256(30)), bytes32(uint256(31)), uint64(block.timestamp) + LIFE)));
         vm.warp(block.timestamp + LIFE + ACCEPT + 1 hours + 1);
-        uint256 before = token.balanceOf(principal);
         acc.close(r);
-        assertEq(token.balanceOf(principal), before + 100_000_000);
+        assertEq(acc.tokenCredit(principal), 100_000_000);
         assertEq(acc.tokenCredit(address(bad)), AGENT_BOND);
     }
 
@@ -2369,12 +2380,13 @@ contract ValidityDisputeScaleTest is Test {
         acc.freeze(r);
         vm.warp(block.timestamp + ACCEPT + 1 hours + 1);
         acc.close(r);
+        uint256 c0 = acc.tokenCredit(principal);
         vd.returnProving(r);
-        assertEq(acc.tokenCredit(principal), COST);
+        assertEq(acc.tokenCredit(principal), c0 + COST);
         uint256 t0 = token.balanceOf(principal);
         vm.prank(principal);
         acc.withdrawToken();
-        assertEq(token.balanceOf(principal), t0 + COST);
+        assertEq(token.balanceOf(principal), t0 + c0 + COST);
     }
 
     /// The pool is returned only once no challenge of the principal is open.
@@ -2397,7 +2409,7 @@ contract ValidityDisputeScaleTest is Test {
         q.l2FeeFloor = 3 gwei;
         Postings g = new Postings(address(acc), address(f), q);
         vm.fee(1 wei);
-        assertEq(f.challengeBond(), BOND + FACTOR * FORCE_GAS * 2 gwei);
+        assertEq(f.challengeBond(), FACTOR * FORCE_GAS * 2 gwei);
         assertEq(g.postingDeposit(), 3 * POSTING);
         vm.fee(5 gwei);
         assertEq(g.postingDeposit(), 5 * POSTING);

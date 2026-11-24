@@ -50,6 +50,7 @@ contract ValidityDisputeBatchOnChain is Script {
         token.mint(Statement.payee(d, 0), 1);
         token.approve(address(acc), type(uint256).max);
         for (uint256 j = 0; j < 2 * _sizes(); ++j) {
+            // forge-lint: disable-next-line(incorrect-shift)
             uint256 k = 1 << (j / 2);
             bool cancelled = j % 2 == 1;
             uint256 id = acc.register(TermsOf.make(vm.addr(AGENT_PK), 1_000_000, 1_000, 86_400, Reserve.Funding.Deposit, 100_000_000, _lanes(d, 5), _lanes(d, 1), type(uint64).max >> 1));

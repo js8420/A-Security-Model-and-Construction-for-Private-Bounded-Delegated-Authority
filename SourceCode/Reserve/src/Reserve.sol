@@ -54,6 +54,8 @@ interface IAllowanceTransfer {
 /// not to the budget.
 contract Reserve {
     uint256 private constant PER_WORD = 4;
+    /// USDC's isBlacklisted(address).
+    bytes4 private constant IS_BLACKLISTED = 0xfe575a87;
 
     enum Funding { Deposit, Permit2 }
 
@@ -229,6 +231,7 @@ contract Reserve {
     error NotAgent();
     error NotAcceptable();
     error NotAccepted();
+    error ReserveBlocked();
 
     /// `opening` is the agent's commitment to the payment's hidden fields,
     /// which the agent opens to the principal alone.
@@ -469,8 +472,35 @@ contract Reserve {
             d.deposit -= amount;
             require(token.transfer(payee, amount), "transfer");
         } else {
+            // A Permit2 payment moves from the principal to the payee and
+            // not through the reserve, so the token would still carry it
+            // after its issuer blocked the reserve, while every bond the
+            // reserve credits waits on that block. A blocked reserve settles
+            // nothing, as it settles nothing from a deposit.
+            if (_blocked(address(this))) revert ReserveBlocked();
             permit2.transferFrom(d.principal, payee, uint160(amount), address(token));
         }
+    }
+
+    /// Whether the token's issuer has blocked `a`, for a token that keeps a
+    /// block list as USDC does; a token without one blocks no one.
+    function _blocked(address a) private view returns (bool) {
+        (bool ok, bytes memory r) = address(token).staticcall(abi.encodeWithSelector(IS_BLACKLISTED, a));
+        return ok && r.length >= 32 && abi.decode(r, (bool));
+    }
+
+    /// A third party's proving bond, in the token, taken from it when it
+    /// challenges and held here with every other credit.
+    function collectBond(address from, uint256 amount) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        if (amount != 0) require(token.transferFrom(from, address(this), amount), "bond");
+    }
+
+    /// Credits a proving bond the reserve holds: to whoever an answer pays,
+    /// or back to the challenger after an expiry.
+    function creditBond(address to, uint256 amount) external {
+        if (msg.sender != dispute) revert NotArbiter();
+        tokenCredit[to] += amount;
     }
 
     function _append(uint256 id, uint64[] calldata elems) private {
@@ -663,7 +693,9 @@ contract Reserve {
 
     /// After expiry, or after a freeze, and the delay, with no challenge open,
     /// the deposit left goes back to the principal and the bond to the agent.
-    /// Anyone may call it; the destinations are fixed.
+    /// Anyone may call it; the destinations are fixed. Both are credits, so a
+    /// principal the token's issuer has blocked cannot keep the agent's bond,
+    /// or the answerer's stake, which waits on the close, in the reserve.
     function close(uint256 id) external {
         Delegation storage d = delegations[id];
         uint256 end = d.frozen && d.frozenAt < d.expiry ? d.frozenAt : d.expiry;
@@ -677,7 +709,7 @@ contract Reserve {
         d.bondPaid = true;
         d.bond = 0;
         emit Closed(id, dep, bond);
-        if (dep != 0) require(token.transfer(d.principal, dep), "deposit");
+        tokenCredit[d.principal] += dep;
         tokenCredit[d.agent] += bond;
     }
 

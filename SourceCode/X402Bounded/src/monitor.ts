@@ -1,5 +1,5 @@
 import { decodeFunctionData, encodePacked, getAddress, hexToBytes, keccak256, parseEventLogs, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
-import { ANSWERED, disputeAbi, postingsAbi, reserveAbi } from "./abi.js";
+import { ANSWERED, L1_BLOCK, blockListAbi, disputeAbi, l1BlockAbi, postingsAbi, reserveAbi } from "./abi.js";
 import { commitOpening, unitsOf, type Opening } from "./opening.js";
 import { unseal } from "./seal.js";
 import { proofHash } from "./answerer.js";
@@ -75,6 +75,13 @@ export interface Settings {
   feeForks?: readonly bigint[];
   forkLead?: bigint;
   /**
+   * The time of the fee rules the deployment's gas and factors were measured
+   * for. A deployment measured for a fork's new rules as well, its fixed gas
+   * taken as the larger under either, is priced for that fork, and the
+   * monitor does not freeze its delegations for it. Unset, the start of time.
+   */
+  measuredFor?: bigint;
+  /**
    * The fastest rise of the domain's base fee per second, as a fraction, in
    * any fee-setting period the deployment's factors were tested on: 0.0202
    * for Base, 4% a two-second block from 25 March 2026 and 0.4% a 200 ms
@@ -85,8 +92,39 @@ export interface Settings {
    * gas pool and the posting deposit cover at the floor. Unset, no check.
    */
   testedRise?: number;
-  /** Reads a domain's newest fee settings; by default from its block headers. */
+  /**
+   * The smallest block gas limit the deployment's disputes fit in: the
+   * largest transaction they were measured to need, the batch answer of a
+   * whole batch. The same owner can lower the gas limit; below this the
+   * monitor freezes. Unset, no check.
+   */
+  minGasLimit?: bigint;
+  /**
+   * The domain's data-fee scalars, operator fee and DA footprint scalar the
+   * deployment was measured under. The same owner can raise each, and each
+   * raises what an answer or a posting costs; the monitor freezes once any is
+   * above its value here. Unset, no check.
+   */
+  measuredCosts?: FeeCosts;
+  /** Reads a domain's newest fee settings; by default from its block headers and its L1Block predeploy. */
   feeSettingsOf?: (d: Domain) => Promise<FeeSettings | undefined>;
+  /**
+   * Whether to read the token's block list for the reserve and the principal
+   * on every poll: a reserve the issuer blocked settles nothing, and a
+   * blocked principal could not withdraw the bond a forfeit credits it, so
+   * the monitor freezes. A token without a block list is skipped. On unless
+   * false.
+   */
+  blockList?: boolean;
+}
+
+/** The fee values of an OP Stack domain that its L1Block predeploy carries. */
+export interface FeeCosts {
+  baseFeeScalar: bigint;
+  blobBaseFeeScalar: bigint;
+  operatorFeeScalar: bigint;
+  operatorFeeConstant: bigint;
+  daFootprintGasScalar: bigint;
 }
 
 /** An OP Stack domain's fee settings as its newest block carries them, and its block rate. */
@@ -95,6 +133,8 @@ export interface FeeSettings {
   elasticity: number;
   minBaseFee: bigint;
   blocksPerSecond: number;
+  gasLimit?: bigint;
+  costs?: FeeCosts;
 }
 
 /**
@@ -123,11 +163,64 @@ export function decodeFeeExtra(extra: Hex): { denominator: number; elasticity: n
  * sized at on an idle chain. A full block raises the fee by (elasticity - 1)
  * / denominator.
  */
-export function feeSettingsRefusal(s: FeeSettings, testedRise: number, factor: bigint, floor: bigint): string {
-  const rise = Math.pow(1 + (s.elasticity - 1) / s.denominator, s.blocksPerSecond) - 1;
+export function feeSettingsRefusal(
+  s: FeeSettings,
+  testedRise: number,
+  factor: bigint,
+  floor: bigint,
+  limits: { minGasLimit?: bigint; measuredCosts?: FeeCosts } = {},
+): string {
+  const rise = maxRise(s);
   if (rise > testedRise * 1.0001) return `the domain's fee can now rise ${(100 * rise).toFixed(2)}% a second, above the ${(100 * testedRise).toFixed(2)}% tested`;
   if (s.minBaseFee > factor * floor) return `the domain's minimum base fee is now ${s.minBaseFee} wei, above the ${factor * floor} wei the pool and deposit cover`;
+  if (limits.minGasLimit !== undefined && s.gasLimit !== undefined && s.gasLimit < limits.minGasLimit) {
+    return `the domain's block gas limit is now ${s.gasLimit}, below the ${limits.minGasLimit} a dispute's largest transaction needs`;
+  }
+  const m = limits.measuredCosts;
+  if (m && s.costs) {
+    for (const k of Object.keys(m) as (keyof FeeCosts)[]) {
+      const now = k === "daFootprintGasScalar" ? daScalar(s.costs[k]) : s.costs[k];
+      const was = k === "daFootprintGasScalar" ? daScalar(m[k]) : m[k];
+      if (now > was) return `the domain's ${k} is now ${now}, above the ${was} the deployment was measured under`;
+    }
+  }
   return "";
+}
+
+/**
+ * How fast the base fee can rise a second under these settings: a full
+ * block raises it by (elasticity - 1) / denominator, compounded over the
+ * blocks of one second.
+ */
+export function maxRise(s: FeeSettings): number {
+  return Math.pow(1 + (s.elasticity - 1) / s.denominator, s.blocksPerSecond) - 1;
+}
+
+/** A DA footprint scalar of zero means the protocol's default of 400. */
+function daScalar(v: bigint): bigint {
+  return v === 0n ? 400n : v;
+}
+
+/**
+ * The fee values the L1Block predeploy carries. A getter the chain does not
+ * have yet reads as zero, which is what an OP Stack chain charges before the
+ * fork that adds it.
+ */
+export async function l1BlockCosts(chain: PublicClient): Promise<FeeCosts> {
+  const read = async (functionName: "baseFeeScalar" | "blobBaseFeeScalar" | "operatorFeeScalar" | "operatorFeeConstant" | "daFootprintGasScalar") => {
+    try {
+      return BigInt((await chain.readContract({ address: L1_BLOCK, abi: l1BlockAbi, functionName })) as number | bigint);
+    } catch {
+      return 0n;
+    }
+  };
+  return {
+    baseFeeScalar: await read("baseFeeScalar"),
+    blobBaseFeeScalar: await read("blobBaseFeeScalar"),
+    operatorFeeScalar: await read("operatorFeeScalar"),
+    operatorFeeConstant: await read("operatorFeeConstant"),
+    daFootprintGasScalar: await read("daFootprintGasScalar"),
+  };
 }
 
 /** One entry the monitor read above the settled head: the table, the key, and what the table held there before. */
@@ -280,17 +373,18 @@ function at(d: Domain, l: { blockNumber: bigint; blockHash: Hex }): Where {
 /**
  * Why a delegation must not be opened now under a deployment whose fixed gas
  * and fee factors were measured for the fee rules in force at `measuredFor`,
- * or "" if it may. It may not once an announced fee fork is within the lead,
- * since the monitor would freeze it at once, nor once a fee fork has passed
- * since the deployment was measured. Its declared expiry does not enter: a
+ * or "" if it may. It may not once an announced fee fork the deployment was
+ * not measured for is within the lead, since the monitor would freeze it at
+ * once, nor once such a fork has passed. A deployment measured for the
+ * fork's new rules as well opens before it and after it. Its declared expiry does not enter: a
  * fork ends the delegation's settlement, not its terms.
  */
 export function forkRefusal(now: bigint, forks: readonly bigint[], lead: bigint, measuredFor: bigint): string {
   const sorted = [...forks].sort((a, b) => (a < b ? -1 : 1));
   const passed = sorted.find((f) => f > measuredFor && f <= now);
   if (passed !== undefined) return `the deployment was measured before the fee fork at ${passed}`;
-  const near = sorted.find((f) => now < f && now + lead >= f);
-  return near === undefined ? "" : `the fee fork at ${near} is within the ${lead} s lead`;
+  const near = sorted.find((f) => f > measuredFor && now < f && now + lead >= f);
+  return near === undefined ? "" : `the fee fork at ${near} is within the ${lead} s lead and the deployment was not measured for it`;
 }
 
 export class Monitor {
@@ -1034,21 +1128,48 @@ export class Monitor {
     if (forks.length === 0 || this.domains.length === 0) return undefined;
     const now = await this.now(this.domains[0]);
     const lead = this.settings.forkLead ?? 0n;
-    return forks.find((f) => now < f && now + lead >= f);
+    const measured = this.settings.measuredFor ?? 0n;
+    return forks.find((f) => f > measured && now < f && now + lead >= f);
   }
 
   /** The first domain whose fee settings leave the factors untested, with why. */
   private async settingsDue(): Promise<string> {
     const tested = this.settings.testedRise;
     if (tested === undefined) return "";
+    const read = this.settings.feeSettingsOf ?? (async (x: Domain) => {
+      const s = await headerFeeSettings(x.chain as unknown as HeaderReader);
+      return s && { ...s, costs: await l1BlockCosts(x.chain) };
+    });
     for (const d of this.domains) {
       if (!d.dispute) continue;
-      const s = await (this.settings.feeSettingsOf ?? ((x: Domain) => headerFeeSettings(x.chain as unknown as HeaderReader)))(d);
+      const s = await read(d);
       if (!s) continue;
       const factor = (await d.chain.readContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "l2Factor" })) as bigint;
       const floor = (await d.chain.readContract({ address: d.dispute as Address, abi: disputeAbi, functionName: "l2FeeFloor" })) as bigint;
-      const why = feeSettingsRefusal(s, tested, factor, floor);
+      const why = feeSettingsRefusal(s, tested, factor, floor, { minGasLimit: this.settings.minGasLimit, measuredCosts: this.settings.measuredCosts });
       if (why) return `${d.name}: ${why}`;
+    }
+    return "";
+  }
+
+  /**
+   * The first domain whose token's issuer has blocked the reserve or the
+   * principal, with which. A token without a block list blocks no one.
+   */
+  private async blockDue(): Promise<string> {
+    if (this.settings.blockList === false) return "";
+    for (const d of this.domains) {
+      const token = (await d.chain.readContract({ address: d.reserve, abi: reserveAbi, functionName: "token" })) as Address;
+      const principal = (await d.chain.readContract({ address: d.reserve, abi: reserveAbi, functionName: "principalOf", args: [d.delegation] })) as Address;
+      for (const [who, a] of [["reserve", d.reserve], ["principal", principal]] as const) {
+        let blocked: boolean;
+        try {
+          blocked = (await d.chain.readContract({ address: token, abi: blockListAbi, functionName: "isBlacklisted", args: [a] })) as boolean;
+        } catch {
+          break;
+        }
+        if (blocked) return `${d.name}: the token's issuer has blocked the ${who}`;
+      }
     }
     return "";
   }
@@ -1098,6 +1219,13 @@ export class Monitor {
     const settings = await this.settingsDue();
     if (settings) {
       reasons.push(`${settings}: frozen`);
+      await this.freezeAll();
+      this.reasons.push(...reasons);
+      return { total, challenged, froze: true, reasons };
+    }
+    const blocked = await this.blockDue();
+    if (blocked) {
+      reasons.push(`${blocked}: frozen`);
       await this.freezeAll();
       this.reasons.push(...reasons);
       return { total, challenged, froze: true, reasons };
@@ -1251,7 +1379,7 @@ export class Monitor {
  * timestamps however short its blocks.
  */
 export interface HeaderReader {
-  getBlock(a?: { blockNumber: bigint }): Promise<{ number: bigint | null; timestamp: bigint; extraData: Hex }>;
+  getBlock(a?: { blockNumber: bigint }): Promise<{ number: bigint | null; timestamp: bigint; extraData: Hex; gasLimit: bigint }>;
 }
 
 export async function headerFeeSettings(chain: HeaderReader): Promise<FeeSettings | undefined> {
@@ -1261,5 +1389,5 @@ export async function headerFeeSettings(chain: HeaderReader): Promise<FeeSetting
   const back = await chain.getBlock({ blockNumber: top.number - 300n });
   const dt = Number(top.timestamp - back.timestamp);
   if (dt <= 0) return undefined;
-  return { ...s, blocksPerSecond: 300 / dt };
+  return { ...s, blocksPerSecond: 300 / dt, gasLimit: top.gasLimit };
 }

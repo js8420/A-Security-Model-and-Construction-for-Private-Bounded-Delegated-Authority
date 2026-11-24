@@ -49,6 +49,41 @@ contract TranscriptGas is Fixture {
         assertEq(token.balanceOf(payee), 1 + 4 * 64 * Statement.UNIT);
     }
 
+    /// The agent's acceptance with every storage slot of the reserve and the
+    /// token cold, as a first acceptance meets them: into a reserve that holds
+    /// no token yet, so the bond's credit to the reserve's balance writes a
+    /// fresh slot, and into one that already holds a deposit.
+    function testAcceptCold() public {
+        Reserve.Terms memory t = TermsOf.make(agent, CAP, VELOCITY, WINDOW, Reserve.Funding.Permit2, 0, COM, ROOT0, uint64(block.timestamp) + LIFE);
+        vm.prank(principal);
+        uint256 id = acc.register(t);
+        token.mint(agent, 2 * TermsOf.BOND);
+        vm.prank(agent);
+        token.approve(address(acc), type(uint256).max);
+        assertEq(token.balanceOf(address(acc)), 0);
+        vm.cool(address(acc));
+        vm.cool(address(token));
+        vm.prank(agent);
+        uint256 g = gasleft();
+        acc.accept(id);
+        console.log("Accept cold, into a reserve holding no token", g - gasleft());
+        // A second principal, so the acceptance is a first one again.
+        address other = address(0x0711E2);
+        token.mint(other, BUDGET);
+        vm.prank(other);
+        token.approve(address(acc), type(uint256).max);
+        t.funding = Reserve.Funding.Deposit;
+        t.deposit = BUDGET;
+        vm.prank(other);
+        uint256 id2 = acc.register(t);
+        vm.cool(address(acc));
+        vm.cool(address(token));
+        vm.prank(agent);
+        g = gasleft();
+        acc.accept(id2);
+        console.log("Accept cold, into a reserve holding a deposit", g - gasleft());
+    }
+
     function testAllOperationsOneWarming() public {
         Reserve.Terms memory t = TermsOf.make(agent, CAP, VELOCITY, WINDOW, Reserve.Funding.Deposit, BUDGET, COM, ROOT0, uint64(block.timestamp) + LIFE);
         vm.prank(principal);
@@ -274,6 +309,11 @@ contract TranscriptGas is Fixture {
         uint256 tokens = token.balanceOf(principal);
         uint256 bond = token.balanceOf(agent);
         acc.close(id);
+        // Both are credits: the deposit left waits for the principal too.
+        assertEq(token.balanceOf(principal), tokens);
+        assertEq(acc.tokenCredit(principal), BUDGET - 14 * Statement.UNIT);
+        vm.prank(principal);
+        acc.withdrawToken();
         assertEq(token.balanceOf(principal), tokens + BUDGET - 14 * Statement.UNIT);
         assertEq(acc.tokenCredit(agent), TermsOf.BOND);
         assertEq(token.balanceOf(agent), bond);

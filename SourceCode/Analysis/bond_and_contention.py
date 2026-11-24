@@ -4,10 +4,11 @@ on an OP Stack chain. Every figure is arithmetic on the paper's formulas and on
 protocol constants, so one run is the result.
 
 The challenger's bond is set when a challenge opens. Its fixed part, the
-proving bond, is the price of proving one answer, which the Groth16 runs on
-Pete measured, times a currency margin, converted to ether at deployment. Its variable part is what forcing the answer
-in through Ethereum costs at the Ethereum base fee the domain records then,
-read no lower than its floor, times the fee factor. The principal's challenges
+proving bond, is the proving cost: the price of proving one answer, which the
+Groth16 runs on Pete measured, plus a margin, in the reserve's token. Its
+variable part, in ether, is what forcing the answer in through Ethereum costs
+at the Ethereum base fee the domain records then, read no lower than its
+floor, times the fee factor. The principal's challenges
 carry no bond: an answer to them is paid the proving cost, fixed in the
 reserve's token at deployment, from the principal's funds the reserve sets
 aside, and the answer's gas from a gas pool each challenge tops up in ether.
@@ -40,13 +41,16 @@ W_D = 8.0
 # post after a challenge is answered: at least Delta_f + sigma_x, so that a
 # forced transaction sent at once lands inside it, plus the margin.
 W_P = 30.0
-# Forced inclusion: the twelve-hour sequencing window, then two hours for the
-# deposit to be included on Ethereum and for that block to be finalized, at
-# most three epochs of 32 slots after it, since only a block derived from
-# finalized Ethereum data cannot be undone.
-DELTA_F = 12.0 + 2.0
-FINALITY_SLOTS = 96
-MARGIN_SLOTS = int(2 * 3600 / 12) - FINALITY_SLOTS
+# Forced inclusion: the twelve-hour sequencing window, two hours for the
+# deposit to be included on Ethereum, and the finality bound F for that block
+# to be finalized, since only a block derived from finalized Ethereum data
+# cannot be undone. Ethereum finalizes a block two to three epochs after it in
+# normal operation, 96 slots at most; it lost finality for 3 epochs on 11 May
+# 2023 and for about an hour on 12 May 2023. F is an assumption, two hours.
+FINALITY_HOURS = 2.0
+DELTA_F = 12.0 + 2.0 + FINALITY_HOURS
+# The two hours of inclusion are all margin against a bribe to exclude.
+MARGIN_SLOTS = int(2 * 3600 / 12)
 SIGMA_X = 12.0 + 0.5
 THETA = 1.0
 # The monitor's margin: the decision time comes this long after the latest
@@ -59,17 +63,22 @@ MARGIN = 1.0
 # per slot, so eta covers the slowest proving time.
 W_A = 32.0
 SLOT = 4.0
+# The lead before an announced fee fork at which the monitor freezes a
+# delegation priced for the old rules: at least the longest a dispute priced
+# before the freeze can still run after it. A settlement just before the
+# freeze can be challenged up to w later; its answer is due w_a + 2 eta after
+# that; the postings the answer asks for are paid for within w_p and due w_p
+# after the payment; and a report of blobs lands within the sequencing window.
+SEQ_WINDOW = 12.0
+LEAD = 7 * 24.0
 W_RATE = DAY
 # The price of proving one answer: 64 vCPU at 3.616 USD an hour for the
-# measured proving time. The proving bond is that price times the currency
-# margin, so it still covers an answer if ether falls to 1 / MARGIN of its
-# price at deployment.
+# measured proving time.
 VCPU_HOUR_64 = 3.616
 # Smaller machines, measured on Pete with Slurm holding each run to the
 # machine's cores and memory: the folder prefix names the m5d it stands for,
 # its physical cores and its on-demand price an hour, US East.
 SMALL = {"out_s9m12_": ("m5d.12xlarge", 24, 192, 2.712), "out_s9m4_": ("m5d.4xlarge", 8, 64, 0.904)}
-CURRENCY_MARGIN = 2.0
 # The most settlements of one batch, so the most deliveries one batch's
 # deposit refunds.
 BATCH = 256
@@ -161,19 +170,8 @@ RUNS = runs(sys.argv[2])
 PROVE_SECONDS = max(p for _, _, p, low in RUNS if not low)
 T_ANS = max(st + p for _, st, p, _ in RUNS) / 3600
 PROVING = VCPU_HOUR_64 * PROVE_SECONDS / 3600
-# The proving bond the contract is deployed with, in ether, read from the
-# deployment library so the paper and the contract cannot differ. Ether's price
-# moves, so the run reports the margin the deployed bond gives at today's price
-# and refuses to go on if it no longer covers one answer.
-def deployed_bond():
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = open(os.path.join(here, "..", "Reserve", "script", "Deployment.sol"), encoding="utf8").read()
-    m = re.search(r"PROVING_BOND\s*=\s*([\d.]+)\s*ether", src)
-    if not m:
-        raise SystemExit("no PROVING_BOND in Deployment.sol")
-    return float(m.group(1))
-
-
+# The deployment's constants, read from its library so the paper and the
+# contract cannot differ.
 def deployed(name):
     """A constant of the deployment library, in wei for ether and gwei amounts."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -194,7 +192,6 @@ def dispute_constant(name):
     return int(m.group(1).replace("_", ""))
 
 
-PROVING_BOND_ETH = deployed_bond()
 L1_FACTOR, L1_FLOOR = deployed("L1_FACTOR"), deployed("L1_FEE_FLOOR")
 L2_FACTOR, L2_FLOOR = deployed("L2_FACTOR"), deployed("L2_FEE_FLOOR")
 BLOBS = int(deployed("BLOBS"))
@@ -204,13 +201,13 @@ PROVING_COST_USD = deployed("PROVING_COST") / 1e6
 ANSWER_GAS, ITEM_GAS, ITEM_BYTES = dispute_constant("ANSWER_GAS"), dispute_constant("ITEM_GAS"), dispute_constant("ITEM_BYTES")
 BLOBS_PER_TX = 6
 BLOB_TXS = math.ceil(BLOBS / BLOBS_PER_TX)
-PROVING_BOND_USD = PROVING_BOND_ETH * ETH_USD
+# The proving part of a third party's bond is the proving cost, in the same
+# token, so the price of ether does not move it either.
+if deployed("PROVING_BOND") != deployed("PROVING_COST"):
+    raise SystemExit("PROVING_BOND in Deployment.sol is not PROVING_COST")
+PROVING_BOND_USD = PROVING_COST_USD
 # The bounty a slash pays out of the answerer's stake, in the token.
 BOUNTY = PROVING_COST_USD
-MARGIN_NOW = PROVING_BOND_USD / PROVING
-NEEDED_ETH = math.ceil(CURRENCY_MARGIN * PROVING / ETH_USD * 1e6) / 1e6
-if MARGIN_NOW < 1:
-    raise SystemExit(f"the deployed proving bond {PROVING_BOND_ETH} ETH no longer covers one answer at {ETH_USD} USD; set it to {NEEDED_ETH}")
 if PROVING_COST_USD < PROVING:
     raise SystemExit(f"the deployed proving cost {PROVING_COST_USD} USDC is below the measured proving, {PROVING:.4f} USD")
 QUIET_POSTING = POSTING + BATCH * DELIVERING
@@ -293,6 +290,10 @@ def windows():
     print(f"  slot eta >= t_ans                              {T_ANS:6.2f}, set to {SLOT:.0f}")
     print(f"  one challenge forfeits by w_a + 2 eta           {W_A + 2 * SLOT:6.1f}")
     assert W_A >= w_a and SLOT >= T_ANS
+    after = w + W_A + 2 * SLOT + 2 * W_P + SEQ_WINDOW
+    print(f"  a dispute priced before a freeze runs after it at most w + w_a + 2 eta + 2 w_p + {SEQ_WINDOW:.0f} = {after:5.1f}")
+    print(f"  fork lead {LEAD:.0f}; the rest, {LEAD - after:.1f}, holds {int((LEAD - after) // (2 * SLOT))} more batches in one principal's queue")
+    assert LEAD >= after
     print()
     return k_w
 
@@ -437,7 +438,7 @@ def bribery():
     k = MARGIN_SLOTS
     print("BRIBING BUILDERS TO EXCLUDE ONE FORCED TRANSACTION FOR THE TWO-HOUR MARGIN")
     print("=" * 78)
-    print(f"  blocks in the margin, less the {FINALITY_SLOTS} that finalize the inclusion: {k}")
+    print(f"  blocks in the two hours of inclusion, with the finality bound of {FINALITY_HOURS:.0f} h apart: {k}")
     print(f"  {'adversary gains, USD':>22} {'tip that makes it unprofitable, USD':>38}")
     for gain in (43.20, 432.00, 4320.00, 43200.00):
         print(f"  {gain:>22,.2f} {gain / k:>38,.4f}")
@@ -483,9 +484,7 @@ if __name__ == "__main__":
             fits = "fits" if SLOT >= slow and W_A >= slow + DELTA_F + SIGMA_X else "does not fit"
             print(f"  low-memory on {cores} cores and {gib} GiB, as {kind}: {len(rs)} runs, proving {min(p for _, _, p, _ in rs):.1f} to {prove:.1f} s,"
                   f" slowest with setup {slow:.2f} h; at {hour} USD an hour {hour * prove / 3600:.4f} USD; {fits} the slot {SLOT:.0f} h and w_a {W_A:.0f} h")
-    print(f"  proving bond as deployed {PROVING_BOND_ETH:.6f} ETH = {PROVING_BOND_USD:.4f} USD at {ETH_USD} USD an ether")
-    print(f"  that is {MARGIN_NOW:.2f} x the proving; {CURRENCY_MARGIN:.0f} x at today's price would be {NEEDED_ETH:.6f} ETH")
-    print(f"  it covers the proving while ether stays above {PROVING / PROVING_BOND_ETH:.2f} USD")
+    print(f"  proving bond as deployed, the proving part of a third party's bond, in the reserve's token {PROVING_BOND_USD:10.4f} USD")
     print(f"  proving cost as deployed, paid for the principal's challenges in the reserve's token {PROVING_COST_USD:10.4f} USD")
     print(f"  that is {PROVING_COST_USD / PROVING:.4f} x the proving, whatever ether's price; a late agent gains at most {PROVING_COST_USD - PROVING:.4f} USD a batch")
     print(f"  the bounty a slash pays out of the stake, in the token, is the proving cost, {BOUNTY:.2f} USD")
@@ -496,7 +495,7 @@ if __name__ == "__main__":
         forced_usd = FORCED_ANSWER_GAS * g * 1e-9 * ETH_USD
         print(f"    at {g:>4} gwei: {bond_at(g):9.2f} USD; forcing at {g} gwei costs {forced_usd:8.2f}")
     print(f"  An answer pays whenever the Ethereum base fee when it lands is at most {L1_FACTOR:.0f} times the fee at")
-    print("  the challenge, read no lower than the floor, and ether has not fallen below the bound above.")
+    print("  the challenge, read no lower than the floor.")
     print()
     print("THE GAS POOL AT THE PRINCIPAL'S CHALLENGE, AND THE POSTING DEPOSIT AFTER THE ANSWER")
     print("=" * 78)

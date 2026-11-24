@@ -5,6 +5,7 @@ export const reserveAbi = parseAbi([
   "function settleLogged(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, uint64[] elems, bytes32 opening, bytes signature)",
   "function signedDigest(uint256 id, address payee, uint64 amount, uint64 digest, uint64 time, bytes32 elemsHash, bytes32 opening) view returns (bytes32)",
   "function agentOf(uint256 id) view returns (address)",
+  "function principalOf(uint256 id) view returns (address)",
   "function token() view returns (address)",
   "function domain() view returns (uint64)",
   "function frozenOf(uint256 id) view returns (bool frozen, uint32 holds)",
@@ -38,6 +39,24 @@ export const reserveAbi = parseAbi([
   "error Held()",
   "error WrongSlotCount()",
   "error NotAccepted()",
+  "error ReserveBlocked()",
+]);
+
+/** USDC's block list, which a plain token does not keep. */
+export const blockListAbi = parseAbi(["function isBlacklisted(address) view returns (bool)"]);
+
+/**
+ * The OP Stack L1Block predeploy's fee values, which the owner of the
+ * chain's settings contract on Ethereum can change and each block's first
+ * transaction sets.
+ */
+export const L1_BLOCK = "0x4200000000000000000000000000000000000015" as const;
+export const l1BlockAbi = parseAbi([
+  "function baseFeeScalar() view returns (uint32)",
+  "function blobBaseFeeScalar() view returns (uint32)",
+  "function operatorFeeScalar() view returns (uint32)",
+  "function operatorFeeConstant() view returns (uint64)",
+  "function daFootprintGasScalar() view returns (uint16)",
 ]);
 
 /** The calls of ValidityDispute.sol the monitor makes. */

@@ -17,6 +17,8 @@ interface IReserveV {
     function release(uint256 id) external;
     function earmark(uint256 id, uint256 target) external;
     function payProving(uint256 id, address to, uint256 amount) external;
+    function collectBond(address from, uint256 amount) external;
+    function creditBond(address to, uint256 amount) external;
     function releaseEarmark(uint256 id) external returns (uint256);
     function domain() external view returns (uint64);
     function commitmentOf(uint256 id) external view returns (bytes32);
@@ -191,12 +193,13 @@ contract ValidityDispute {
     uint64 public immutable answerWindow;
     /// What proving one answer takes, with margin.
     uint64 public immutable slot;
-    /// The price of proving one answer, in ether, with the margin the
-    /// deployment chose: the bond's fixed part for anyone but the principal.
+    /// The proving part of a bond for anyone but the principal, in the
+    /// reserve's token: the price of proving one answer with the margin the
+    /// deployment chose.
     uint256 public immutable provingBond;
-    /// The price of proving one answer, in the reserve's token, without
-    /// margin: what an answer to the principal's challenges is paid for each
-    /// batch it proves, and the bounty a slash pays out of the stake.
+    /// The price of proving one answer with the deployment's margin, in the
+    /// reserve's token: what an answer to the principal's challenges is paid
+    /// for each batch it proves, and the bounty a slash pays out of the stake.
     uint256 public immutable provingCost;
     /// The time an honest agent has to deliver a batch from its first
     /// payment, so the batches a set of settlements can fall in is bounded by
@@ -333,9 +336,14 @@ contract ValidityDispute {
         return GAS_PRICE_ORACLE.code.length != 0 ? IGasPriceOracle(GAS_PRICE_ORACLE).getL1FeeUpperBound(bytes_) : 0;
     }
 
-    /// The bond anyone but the principal must carry to open a challenge now.
+    /// The ether anyone but the principal must send to open a challenge
+    /// now: what forcing the answer in through Ethereum costs at the fee the
+    /// domain records, read no lower than its floor, times the factor. The
+    /// proving part of its bond, `provingBond`, is taken in the reserve's
+    /// token, the unit the proving is priced in, so the price of ether does
+    /// not move it.
     function challengeBond() public view returns (uint256) {
-        return provingBond + l1Factor * forceGas * _l1Fee();
+        return l1Factor * forceGas * _l1Fee();
     }
 
     /// The batches `count` settlements whose signed times span `first` to
@@ -436,6 +444,7 @@ contract ValidityDispute {
         uint256 bond = challengeBond();
         if (msg.value < bond) revert BondTooSmall();
         if (msg.value > bond) credit[msg.sender] += msg.value - bond;
+        reserve.collectBond(msg.sender, provingBond);
         address agent = reserve.agentOf(id);
         uint64 deadline = _next(agent, owner, false);
         _enter(agent, owner, false, deadline);
@@ -749,8 +758,12 @@ contract ValidityDispute {
         if (block.timestamp <= c.deadline) revert TooEarly();
         c.status = Status.Expired;
         openCount[id] -= 1;
-        if (c.byPrincipal && !c.joined) _closePrincipal(id);
-        else credit[c.challenger] += c.bond;
+        if (c.byPrincipal && !c.joined) {
+            _closePrincipal(id);
+        } else {
+            credit[c.challenger] += c.bond;
+            reserve.creditBond(c.challenger, provingBond);
+        }
         emit Expired(id, digest);
         if (c.byPrincipal) reserve.release(id);
         // Freezes the delegation and pays the bond if a claim has not already.
@@ -845,7 +858,9 @@ contract ValidityDispute {
             }
             ownAnswered += 1;
         } else {
-            credit[_payee(id)] += c.bond;
+            address payee = _payee(id);
+            credit[payee] += c.bond;
+            reserve.creditBond(payee, provingBond);
         }
         emit Answered(id, digest);
     }

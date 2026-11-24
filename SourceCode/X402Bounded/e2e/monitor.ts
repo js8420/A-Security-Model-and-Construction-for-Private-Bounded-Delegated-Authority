@@ -18,7 +18,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   Answerer, Monitor, ProofGate, anvilBlobs, ethereumBlobs, extractSecret, commitOpening, deployedVerifier, disputeAbi, encodeOpening, independentVerifier, loadConstraints,
   loadKzg, postBlobs, postingsAbi, proofChunks, proofHash, reserveAbi, seal, sealedTree, sealingKeyOf, statements, unitsOf, unseal,
-  deploymentRefusal, publishedBuild, forkRefusal, decodeFeeExtra, feeSettingsRefusal,
+  deploymentRefusal, publishedBuild, forkRefusal, decodeFeeExtra, feeSettingsRefusal, type FeeCosts,
   type Check, type Deployment, type Domain, type Opening, type Policy, type Record, type Sealed, type Statement,
 } from "../src/index.js";
 import { parse } from "../src/stark/proof.js";
@@ -67,6 +67,7 @@ const ACCEPT_WINDOW = 86_400n;
 const ANSWER_WINDOW = 3_600n;
 const SLOT = 60n;
 const WAIT = 600n;
+/** The ether a third party sends with its challenge, the forcing part of its bond; the proving part is in the token. */
 const BOND = parseEther("0.01");
 /** The agent's bond, in the token the payments are in. */
 const AGENT_BOND = 43_200_000n;
@@ -90,7 +91,7 @@ type Rc = { sealedRoot: Hex; proofHash: Hex; blobsHash: Hex; receivedAt: bigint;
  * deployed answer system would; a forged one passes it as an unsound one
  * would.
  */
-async function chain(name: string, rpc: string, chainId: number, domainId: bigint) {
+async function chain(name: string, rpc: string, chainId: number, domainId: bigint, tokenName = "MockToken") {
   const chainDef = defineChain({ id: chainId, name, nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc] } } });
   const pub = createPublicClient({ chain: chainDef, transport: http(rpc) }) as PublicClient;
   const principal = createWalletClient({ account: privateKeyToAccount(KEYS.principal), chain: chainDef, transport: http(rpc) });
@@ -108,14 +109,14 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     if (!r.contractAddress) throw new Error(`deploy ${cname}`);
     return r.contractAddress;
   };
-  const token = await deploy("MockToken.sol", "MockToken");
+  const token = await deploy("MockToken.sol", tokenName);
   const poseidon = await deploy("Poseidon2Goldilocks.sol", "Poseidon2Goldilocks");
   const reserve = await deploy("Reserve.sol", "Reserve", [domainId, token, ZERO, poseidon, 3600n, 2n * 86400n]);
   const vkey = keccak256("0x01");
   const echo = await deploy("ValidityDisputeScale.t.sol", "EchoVerifier", [vkey]);
   const params = {
     acceptWindow: ACCEPT_WINDOW, answerWindow: ANSWER_WINDOW, slot: SLOT, deliveryWait: WAIT, deliveryTime: 8n * 3600n,
-    provingBond: BOND, provingCost: PROVING_COST, forceGas: 572_345n, l1Factor: 2n, l2Factor: 2n, l1FeeFloor: 0n, l2FeeFloor: 0n,
+    provingBond: PROVING_COST, provingCost: PROVING_COST, forceGas: 572_345n, l1Factor: 2n, l2Factor: 2n, l1FeeFloor: 0n, l2FeeFloor: 0n,
   };
   const vd = await deploy("ValidityDispute.sol", "ValidityDispute", [reserve, echo, vkey, params]);
   const postingParams = {
@@ -136,11 +137,12 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     dispute: { verifier: echo, programVKey: vkey, ...params },
     postings: { ...postingParams },
   };
-  const tokenAbi = artifact("MockToken.sol", "MockToken").abi;
+  const tokenAbi = artifact("MockToken.sol", tokenName).abi;
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [principal.account.address, 10n ** 15n] }));
   await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, 2n ** 256n - 1n] }));
-  // The agent posts its bond, and the answerer its stake, in the token.
-  for (const w of [accepting, answering]) {
+  // The agent posts its bond, the answerer its stake, and a third party the
+  // proving part of its challenge bond, in the token.
+  for (const w of [accepting, answering, sender]) {
     await done(await principal.writeContract({ address: token, abi: tokenAbi, functionName: "mint", args: [w.account.address, 10n ** 12n] }));
     await done(await w.writeContract({ address: token, abi: tokenAbi, functionName: "approve", args: [reserve, 2n ** 256n - 1n] }));
   }
@@ -298,6 +300,7 @@ async function chain(name: string, rpc: string, chainId: number, domainId: bigin
     deploy, rootOf, bind, code: async (a: Address) => (await pub.getCode({ address: a })) as Hex, pub, reserve, deployment,
     delegate, settle, answer, state, now, advance, receipt, deliver, postProof, slashWithholding, stakeOf, challengeFirst, secretHashOf,
     principalCredit, disputeCredit, principalAddress, gasPool, earmarked, tokenCredit, postingCredit, trustBlobPoster, relay, postings: pd, answering,
+    token, tokenAbi, principal,
   };
 }
 
@@ -1001,12 +1004,16 @@ async function main() {
     const inLead = forkRefusal(now + 5n * 86400n, [fork], lead, measured);
     const afterOld = forkRefusal(fork + 1n, [fork], lead, measured);
     const afterNew = forkRefusal(fork + 1n, [fork], lead, fork);
+    const inLeadNew = forkRefusal(now + 5n * 86400n, [fork], lead, fork);
+    const dN = await A.delegate(plain);
+    const mN = new Monitor([dN], policy(1_000_000n), { ...proving(null), feeForks: [fork], forkLead: lead, measuredFor: fork });
     await A.advance(Number(4n * 86400n) + 10);
     const r1 = await m.poll();
-    check("the principal's check opens a delegation of any declared expiry before the fork's lead, refuses one within the lead, refuses the old deployment after the fork and passes one measured for the new rules",
-      before === "" && inLead !== "" && afterOld !== "" && afterNew === "", `${inLead}; ${afterOld}`);
-    check("the monitor freezes the 30-day delegation once the fork is within its lead, and not before",
-      !r0.froze && r1.froze && (await A.state(dA)).frozen, r1.reasons.join("; "));
+    const rN = await mN.poll();
+    check("the principal's check opens a delegation of any declared expiry before the fork's lead, refuses one within the lead and the old deployment after the fork, and passes a deployment measured for the new rules before the fork and after it",
+      before === "" && inLead !== "" && afterOld !== "" && afterNew === "" && inLeadNew === "", `${inLead}; ${afterOld}`);
+    check("the monitor freezes the 30-day delegation once the fork is within its lead, and not before, and leaves one under a deployment measured for the fork running",
+      !r0.froze && r1.froze && (await A.state(dA)).frozen && !rN.froze && !(await A.state(dN)).frozen, r1.reasons.join("; "));
   }
 
   section("a change to the domain's fee settings, made without a fork");
@@ -1038,6 +1045,62 @@ async function main() {
     const r2 = await m.poll();
     check("the monitor keeps the delegation through a change that keeps the tested rate, and freezes it once a change lets the fee rise faster",
       !r0.froze && !r1.froze && r2.froze && (await A.state(dA)).frozen, r2.reasons.join("; "));
+    // The other settings the same owner controls: the block gas limit, the
+    // data-fee scalars, the operator fee and the DA footprint scalar.
+    const minGasLimit = 14_462_812n;
+    const measured: FeeCosts = { baseFeeScalar: 2_269n, blobBaseFeeScalar: 1_055_762n, operatorFeeScalar: 0n, operatorFeeConstant: 0n, daFootprintGasScalar: 0n };
+    const limits = { minGasLimit, measuredCosts: measured };
+    const withCosts = (gasLimit: bigint, c: Partial<FeeCosts>) => ({ ...denim, gasLimit, costs: { ...measured, ...c } });
+    const keep = [
+      withCosts(150_000_000n, {}),
+      withCosts(minGasLimit, { baseFeeScalar: 2_000n }),
+      withCosts(150_000_000n, { daFootprintGasScalar: 400n }),
+    ].map((s) => feeSettingsRefusal(s, tested, 4n, floor, limits));
+    const stop = [
+      withCosts(minGasLimit - 1n, {}),
+      withCosts(150_000_000n, { baseFeeScalar: 2_270n }),
+      withCosts(150_000_000n, { blobBaseFeeScalar: 1_055_763n }),
+      withCosts(150_000_000n, { operatorFeeScalar: 1n }),
+      withCosts(150_000_000n, { operatorFeeConstant: 1n }),
+      withCosts(150_000_000n, { daFootprintGasScalar: 401n }),
+    ].map((s) => feeSettingsRefusal(s, tested, 4n, floor, limits));
+    check("a gas limit at the largest dispute transaction, lower scalars and the default DA footprint scalar pass; a gas limit below it and a rise of either data-fee scalar, of the operator fee's scalar or constant, or of the DA footprint scalar are each refused",
+      keep.every((x) => x === "") && stop.every((x) => x !== ""), stop.join("; "));
+    const dB2 = await A.delegate(plain);
+    let costs: FeeCosts = measured;
+    const m2 = new Monitor([dB2], policy(1_000_000n), {
+      ...proving(null), testedRise: tested, minGasLimit, measuredCosts: measured,
+      feeSettingsOf: async () => ({ ...at(1000, 5), gasLimit: 150_000_000n, costs }),
+    });
+    const s0 = await m2.poll();
+    costs = { ...measured, blobBaseFeeScalar: measured.blobBaseFeeScalar * 2n };
+    const s1 = await m2.poll();
+    check("the monitor keeps the delegation while the data-fee scalars stay as measured, and freezes it once the owner raises one",
+      !s0.froze && s1.froze && (await A.state(dB2)).frozen, s1.reasons.join("; "));
+  }
+
+  section("the token's issuer blocks the principal or the reserve");
+  {
+    const C = await chain("domain C", process.env.RPC_A ?? "http://127.0.0.1:8545", 31337, 8453n, "BlockListToken");
+    const d1 = await C.delegate(plain);
+    const d2 = await C.delegate(plain);
+    const m1 = new Monitor([d1], policy(1_000_000n), proving(null));
+    const m2 = new Monitor([d2], policy(1_000_000n), proving(null));
+    const plainToken = !(await new Monitor([await A.delegate(plain)], policy(1_000_000n), proving(null)).poll()).froze;
+    const b0 = await m1.poll();
+    const block = async (fn: "blacklist" | "unBlacklist", a: Address) => {
+      const h = await C.principal.writeContract({ address: C.token, abi: C.tokenAbi, functionName: fn, args: [a] });
+      await C.pub.waitForTransactionReceipt({ hash: h });
+    };
+    await block("blacklist", C.principalAddress);
+    const b1 = await m1.poll();
+    await block("unBlacklist", C.principalAddress);
+    await block("blacklist", C.reserve);
+    const b2 = await m2.poll();
+    check("a token with no block list blocks no one; with one, the monitor freezes the delegation once the issuer blocks its principal, and once it blocks the reserve",
+      plainToken && !b0.froze && b1.froze && (await C.state(d1)).frozen && b1.reasons.some((x) => x.includes("principal"))
+        && b2.froze && (await C.state(d2)).frozen && b2.reasons.some((x) => x.includes("reserve")),
+      `${b1.reasons.join("; ")} | ${b2.reasons.join("; ")}`);
   }
 
   section("the chain shows the same whatever the cause: an adversary with the agent's key and no proof");

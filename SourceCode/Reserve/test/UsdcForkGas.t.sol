@@ -123,10 +123,14 @@ contract UsdcForkGas is Test {
     }
 
     /// The issuer blacklists the reserve: nothing it holds can move, so no
-    /// settlement goes through, whatever its terms.
+    /// deposit-funded settlement goes through, and the reserve refuses a
+    /// Permit2 one, which would move from the principal to the payee and not
+    /// through it. The Permit2 delegation settled before the block.
     function testBlacklistedReserveCannotPay() public {
         Reserve r = _reserve(USDC);
         (uint256 id,) = _open(r, Reserve.Funding.Deposit);
+        (uint256 p2,) = _open(r, Reserve.Funding.Permit2);
+        _settle(r, p2, 1, 1);
         IUsdc u = IUsdc(USDC);
         vm.prank(u.blacklister());
         u.blacklist(address(r));
@@ -136,7 +140,11 @@ contract UsdcForkGas is Test {
         (uint8 v, bytes32 rr, bytes32 s) = vm.sign(AGENT_PK, h);
         vm.expectRevert();
         r.settleLogged(id, payee, Statement.UNIT, 9, t, e, OPENING, abi.encodePacked(rr, s, v));
-        console.log("a settlement through a blacklisted reserve reverts");
+        h = r.signedDigest(p2, payee, Statement.UNIT, 9, t, keccak256(abi.encodePacked(e)), OPENING);
+        (v, rr, s) = vm.sign(AGENT_PK, h);
+        vm.expectRevert(Reserve.ReserveBlocked.selector);
+        r.settleLogged(p2, payee, Statement.UNIT, 9, t, e, OPENING, abi.encodePacked(rr, s, v));
+        console.log("a settlement through a blacklisted reserve reverts, deposit-funded or through Permit2");
     }
 
     /// The bond is a credit in the token: a claim after the issuer has
