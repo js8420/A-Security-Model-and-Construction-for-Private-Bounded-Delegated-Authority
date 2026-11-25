@@ -1,0 +1,5 @@
+HOW FAR BASE'S SAFE AND FINALIZED HEADS TRAIL ITS NEWEST BLOCK, SECONDS
+==============================================================================
+  473 samples over 4.0 h, blocks 61902210 to 61974072
+  safe       least 8, median 39, 90th 61, 99th 76, 99.9th 88, most 88
+  finalized  least 823, median 1044, 90th 1199, 99th 1262, 99.9th 1298, most 1298
