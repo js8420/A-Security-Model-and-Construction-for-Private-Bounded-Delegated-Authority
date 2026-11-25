@@ -16,5 +16,5 @@ x402 BOUNDED SCHEME, END TO END ON A LOCAL CHAIN
   PASS  a settlement dropped before the safe head is sent again unchanged and settles once, with no new payment formed: settled by a second transaction, 1 on chain
   PASS  a settlement the payee was answered for at once, then dropped by the sequencer: the agent's client sends that same payment again, it settles once, and no new payment is formed: 1 sent again
   PASS  after the principal's freeze, refused: Frozen
-  settlements 6, gas each: 132,195, 97,732, 97,744, 97,732, 97,983, 97,744
+  settlements 6, gas each: 132,183, 97,744, 97,744, 97,732, 97,995, 97,744
   all checks pass

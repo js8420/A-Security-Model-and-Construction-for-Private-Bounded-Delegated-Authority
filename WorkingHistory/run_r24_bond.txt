@@ -105,6 +105,8 @@ FOR 30 DAYS, B = 432.00 USD, DEPOSIT MODE
   adds the two as printed, to the cent.
   Carrying the stake for the task costs 0.0417 USD per percentage
   point of annual interest on it.
+  A re-opening after a freeze holds the old bond and stake, 93.94, beside the new ones for
+  w + theta = 39.5 h, which costs 0.004236 USD per percentage point of annual interest.
   The same f reached by a short declared life instead needs bonds of
     f =  1.03: about   10.3% of B in bonds, plus funding fB
     f =  2.03: about   20.3% of B in bonds, plus funding fB

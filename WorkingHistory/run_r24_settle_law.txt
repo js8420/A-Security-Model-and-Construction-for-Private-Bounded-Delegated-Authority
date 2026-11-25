@@ -1,0 +1,10 @@
+SETTLEMENT GAS AGAINST UNITS
+==============================================================================
+    1 units   stored    65,979   logged  44,614   ratio 1.5
+    3 units   stored   115,835   logged  48,917   ratio 2.4
+    8 units   stored   195,116   logged  59,695   ratio 3.3
+   14 units   stored   322,076   logged  72,704   ratio 4.4
+   30 units   stored   630,490   logged 107,563   ratio 5.9
+   64 units   stored 1,275,299   logged 182,743   ratio 7.0
+  logged: 42,184 + 2,193 n, worst relative error 0.53%
+  stored, first to last unit: 19,196 a unit
