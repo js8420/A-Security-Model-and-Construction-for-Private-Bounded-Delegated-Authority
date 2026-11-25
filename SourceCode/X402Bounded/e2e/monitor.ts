@@ -1047,7 +1047,7 @@ async function main() {
       !r0.froze && !r1.froze && r2.froze && (await A.state(dA)).frozen, r2.reasons.join("; "));
     // The other settings the same owner controls: the block gas limit, the
     // data-fee scalars, the operator fee and the DA footprint scalar.
-    const minGasLimit = 14_462_812n;
+    const minGasLimit = 14_485_897n;
     const measured: FeeCosts = { baseFeeScalar: 2_269n, blobBaseFeeScalar: 1_055_762n, operatorFeeScalar: 0n, operatorFeeConstant: 0n, daFootprintGasScalar: 0n };
     const limits = { minGasLimit, measuredCosts: measured };
     const withCosts = (gasLimit: bigint, c: Partial<FeeCosts>) => ({ ...denim, gasLimit, costs: { ...measured, ...c } });

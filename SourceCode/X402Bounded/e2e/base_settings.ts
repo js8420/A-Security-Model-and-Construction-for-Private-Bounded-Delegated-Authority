@@ -13,7 +13,7 @@ const TESTED_RISE = 0.0202;
 const L2_FACTOR = 4n;
 const L2_FEE_FLOOR = 10_000_000n;
 /** The batch answer of a whole batch, the largest transaction a dispute was measured to need. */
-const MIN_GAS_LIMIT = 14_462_812n;
+const MIN_GAS_LIMIT = 14_485_897n;
 
 const url = process.argv[2];
 if (!url) throw new Error("usage: tsx e2e/base_settings.ts RPC_URL");

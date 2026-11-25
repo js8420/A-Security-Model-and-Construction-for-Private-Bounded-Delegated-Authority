@@ -362,6 +362,13 @@ def trade_off(k_w):
     print("  adds the two as printed, to the cent.")
     print(f"  Carrying the stake for the task costs {(bonds + BOUNTY) * (T_a / DAY) / 365 * 0.01:.4f} USD per percentage")
     print("  point of annual interest on it.")
+    # A re-opening after a freeze at a fork's lead: Reclaim returns the deposit
+    # at once, so only the old bond and stake are held beside the new ones,
+    # until the close, w + theta after the freeze.
+    w = W_D + THETA + MARGIN + DELTA_F + SIGMA_X
+    held = bonds + bonds + BOUNTY
+    print(f"  A re-opening after a freeze holds the old bond and stake, {held:.2f}, beside the new ones for")
+    print(f"  w + theta = {w + THETA:.1f} h, which costs {held * (w + THETA) / (DAY * 365) * 0.01:.6f} USD per percentage point of annual interest.")
     print("  The same f reached by a short declared life instead needs bonds of")
     for mult in (1, 2, 5, 10):
         f = hiding_factor(mult * T_a, T_a)
